@@ -110,6 +110,16 @@ h1 {
 .bar.boost { height: 7px; border-width: 1.5px; }
 .bar i { display: block; height: 100%; width: 100%; background: #fff; transition: width .15s; }
 .bar.boost i { background: #ffb33d; }
+.bar.boost { position: relative; height: 9px; }
+.bar.boost::after {
+  /* thresholds where boost heals faster and speeds you up: 25 / 50 / 87 */
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(90deg, transparent calc(25% - 1px), var(--ink) calc(25% - 1px) 25%, transparent 25% calc(50% - 1px), var(--ink) calc(50% - 1px) 50%, transparent 50% calc(87% - 1px), var(--ink) calc(87% - 1px) 87%, transparent 87%);
+}
+#boostTxt { font-size: .75rem; padding: 2px 8px; background: rgba(255, 179, 61, .9); color: var(--ink); }
+.slot span, .item span, .eq span, .am span { white-space: nowrap; }
+.bottom { flex-wrap: nowrap; }
+.side { min-width: 0; flex: 0 1 auto; }
 .bar.low i { background: var(--red); }
 .slots, .items, .equip, .ammo { display: flex; gap: 6px; }
 .side { display: flex; flex-direction: column; gap: 6px; }
@@ -122,6 +132,7 @@ h1 {
 .eq canvas { width: 30px; height: 30px; }
 .eq small { display: block; font-size: .66rem; opacity: .75; font-weight: 500; }
 .eq.none { opacity: .45; }
+button.eq { font-family: var(--display); text-align: left; }
 .eq.l1 { border-color: #d9dde3; } .eq.l2 { border-color: #5fb8f0; } .eq.l3 { border-color: #ffd45c; box-shadow: 0 0 0 2px var(--ink); }
 .ammo { background: rgba(35, 38, 74, .72); border: 2px solid var(--ink); border-radius: 12px; padding: 3px 6px; gap: 8px; }
 .am { display: flex; align-items: center; gap: 4px; color: var(--white); font-weight: 700; font-size: .78rem; font-variant-numeric: tabular-nums; line-height: 1; }
@@ -182,6 +193,11 @@ body.touch #ammoBig { font-size: 1.2rem; }
 body.touch .vitals { order: -1; width: 100%; }
 body.touch #mini { width: 110px; height: 110px; }
 body.touch #pauseBtn { top: calc(max(10px, env(safe-area-inset-top, 0px)) + 120px); }
+@media (max-width: 1180px) {
+  .bottom { flex-wrap: wrap; justify-content: space-between; align-items: flex-end; }
+  .vitals { order: -1; flex: 0 0 100%; }
+  .vitals .bar { max-width: 520px; }
+}
 @media (max-width: 640px) {
   .slot, .item { min-width: 0; font-size: .72rem; padding: 3px 6px; }
   #feed { top: calc(max(10px, env(safe-area-inset-top, 0px)) + 64px); left: 10px; transform: none; align-items: flex-start; width: 60vw; }
@@ -218,6 +234,7 @@ body.touch #pauseBtn { top: calc(max(10px, env(safe-area-inset-top, 0px)) + 120p
     </div>
     <div class="vitals">
       <div id="ammoBig"></div>
+      <div class="pill" id="boostTxt" hidden></div>
       <div class="bar boost"><i id="boostFill"></i></div>
       <div class="bar" id="hpBar"><i id="hpFill"></i></div>
     </div>
@@ -288,7 +305,7 @@ const I18N = {
     hardD: "Быстрая реакция, стреляют на упреждение, выбирают оружие под дистанцию.",
     insaneD: "Почти не промахиваются и охотятся за тобой. Удачи!",
     mixedD: "У каждого бота свой уровень — от новичка до терминатора.",
-    helpPc: "<b>WASD</b> — бег · <b>мышь</b> — прицел · <b>ЛКМ</b> — огонь · <b>ПКМ</b> — подобрать оружие · <b>R</b> — перезарядка · <b>Пробел</b> — 1↔2 · <b>1/2/3</b>, колесо — оружие · <b>G</b> — карта · <b>M</b> — масштаб · <b>4/5/6/7</b> — бинт/аптечка/энергетик/адреналин · <b>Esc</b> — пауза",
+    helpPc: "<b>WASD</b> — бег · <b>мышь</b> — прицел · <b>ЛКМ</b> — огонь · <b>ПКМ</b> — подобрать оружие · <b>R</b> — перезарядка · <b>Пробел</b> — 1↔2 · <b>1/2/3</b>, колесо — оружие · <b>G</b> — карта · <b>M</b> — масштаб · <b>B (Б)</b>/<b>5/6/7</b> — бинт/аптечка/энергетик/адреналин · <b>Z</b> — прицел · <b>Esc</b> — пауза",
     helpTouch: "<b>Левый стик</b> — бег · <b>правый стик</b> — прицел и огонь · кнопки справа — подобрать, перезарядка, смена оружия · снизу — лечение",
     best: "Лучший результат: #{p} место, {k} убийств", alive: "Живых: {n}", kills: "Убийств: {n}",
     zoneWait: "Зона сузится через {t}", zoneShrink: "Зона сужается!", zoneFinal: "Финальное кольцо",
@@ -297,12 +314,12 @@ const I18N = {
     win: "Победа!", winSub: "Ты последний выживший 🏆", lose: "Ты выбыл", loseBy: "Тебя победил {n}", loseZone: "Тебя накрыла зона",
     loseBoom: "Взрыв бочки", pick: "[ПКМ] Подобрать: {n}", pickT: "Взять: {n}", reload: "Перезарядка", swap: "Сменить", reloading: "Перезарядка…",
     you: "Ты", zone: "зона", boom: "взрыв",
-    fists: "Кулаки", glock: "Glock", fiveseven: "5.7", smg: "Пистолет-пулемёт", shotgun: "Дробовик", spas: "SPAS-12", m4: "M4", ak: "АК-47", sniper: "Снайперка",
+    fists: "Кулаки", glock: "Glock", fiveseven: "5.7", smg: "MP5", shotgun: "Дробовик", spas: "SPAS-12", m4: "M4", ak: "АК-47", sniper: "Снайперка",
     a9: "9 мм", a57: "5.7 мм", a556: "5.56 мм", a762: "7.62 мм", a12: "Дробь 12к",
     bandage: "Бинт", medkit: "Аптечка", soda: "Энергетик", pills: "Адреналин",
-    bandageD: "+15% здоровья", medkitD: "до 100%", sodaD: "+25% со временем", pillsD: "+100% со временем и скорость",
+    bandageD: "+15% здоровья", medkitD: "до 100%", sodaD: "+25% со временем", pillsD: "полная шкала буста: лечит со временем и ускоряет бег",
     vest: "Бронежилет {n} ур.", helmet: "Каска {n} ур.", pack: "Рюкзак {n} ур.",
-    vestS: "Броня", helmetS: "Каска", packS: "Рюкзак", lvl: "ур. {n}", none: "нет",
+    vestS: "Броня", helmetS: "Каска", packS: "Рюкзак", scope: "Прицел {n}x", scopeS: "Прицел", speedUp: "⚡ +{n}% к скорости", lvl: "ур. {n}", none: "нет",
     empty: "пусто", zoom: "Масштаб: {n}%", map: "Карта",
     test: "🧪 Тестовый режим", testHud: "Тестовый режим · T — панель", testTitle: "Тестовый полигон",
     tGod: "Бессмертие", tAmmo: "Бесконечные патроны", tZone: "Зона двигается", tPassive: "Боты не стреляют", tDebug: "Мысли ботов",
@@ -318,7 +335,7 @@ const I18N = {
     hardD: "Hızlı tepki, önden nişan alır, mesafeye göre silah seçer.",
     insaneD: "Neredeyse hiç ıskalamaz ve seni avlar. Bol şans!",
     mixedD: "Her botun kendi seviyesi var — acemiden terminatöre.",
-    helpPc: "<b>WASD</b> — koş · <b>fare</b> — nişan · <b>sol tık</b> — ateş · <b>sağ tık</b> — silahı al · <b>R</b> — şarjör · <b>Boşluk</b> — 1↔2 · <b>1/2/3</b>, tekerlek — silah · <b>G</b> — harita · <b>M</b> — yakınlaştırma · <b>4/5/6/7</b> — bandaj/ilk yardım/enerji/adrenalin · <b>Esc</b> — duraklat",
+    helpPc: "<b>WASD</b> — koş · <b>fare</b> — nişan · <b>sol tık</b> — ateş · <b>sağ tık</b> — silahı al · <b>R</b> — şarjör · <b>Boşluk</b> — 1↔2 · <b>1/2/3</b>, tekerlek — silah · <b>G</b> — harita · <b>M</b> — yakınlaştırma · <b>B</b>/<b>5/6/7</b> — bandaj/ilk yardım/enerji/adrenalin · <b>Z</b> — dürbün · <b>Esc</b> — duraklat",
     helpTouch: "<b>Sol çubuk</b> — koş · <b>sağ çubuk</b> — nişan ve ateş · sağdaki düğmeler — al, şarjör, silah değiştir · altta — iyileşme",
     best: "En iyi sonuç: #{p}. sıra, {k} leş", alive: "Hayatta: {n}", kills: "Leş: {n}",
     zoneWait: "Bölge {t} sonra daralacak", zoneShrink: "Bölge daralıyor!", zoneFinal: "Son halka",
@@ -327,12 +344,12 @@ const I18N = {
     win: "Zafer!", winSub: "Hayatta kalan son kişi sensin 🏆", lose: "Elendin", loseBy: "Seni {n} yendi", loseZone: "Bölge seni yakaladı",
     loseBoom: "Varil patlaması", pick: "[Sağ tık] Al: {n}", pickT: "Al: {n}", reload: "Şarjör", swap: "Değiştir", reloading: "Şarjör değişiyor…",
     you: "Sen", zone: "bölge", boom: "patlama",
-    fists: "Yumruk", glock: "Glock", fiveseven: "5.7", smg: "Hafif makineli", shotgun: "Pompalı", spas: "SPAS-12", m4: "M4", ak: "AK-47", sniper: "Keskin nişancı",
+    fists: "Yumruk", glock: "Glock", fiveseven: "5.7", smg: "MP5", shotgun: "Pompalı", spas: "SPAS-12", m4: "M4", ak: "AK-47", sniper: "Keskin nişancı",
     a9: "9 mm", a57: "5.7 mm", a556: "5.56 mm", a762: "7.62 mm", a12: "12 kalibre",
     bandage: "Bandaj", medkit: "İlk yardım", soda: "Enerji içeceği", pills: "Adrenalin",
-    bandageD: "+%15 can", medkitD: "%100'e kadar", sodaD: "zamanla +%25", pillsD: "zamanla +%100 ve hız",
+    bandageD: "+%15 can", medkitD: "%100'e kadar", sodaD: "zamanla +%25", pillsD: "tam takviye: zamanla iyileştirir ve hızlandırır",
     vest: "Yelek sv. {n}", helmet: "Kask sv. {n}", pack: "Sırt çantası sv. {n}",
-    vestS: "Yelek", helmetS: "Kask", packS: "Çanta", lvl: "sv. {n}", none: "yok",
+    vestS: "Yelek", helmetS: "Kask", packS: "Çanta", scope: "Dürbün {n}x", scopeS: "Dürbün", speedUp: "⚡ +%{n} hız", lvl: "sv. {n}", none: "yok",
     empty: "boş", zoom: "Yakınlaştırma: %{n}", map: "Harita",
     test: "🧪 Test modu", testHud: "Test modu · T — panel", testTitle: "Test alanı",
     tGod: "Ölümsüzlük", tAmmo: "Sonsuz mermi", tZone: "Bölge hareket eder", tPassive: "Botlar ateş etmez", tDebug: "Bot düşünceleri",
@@ -348,7 +365,7 @@ const I18N = {
     hardD: "Quick reactions, lead their shots, pick the right gun for the range.",
     insaneD: "Barely ever miss and will hunt you down. Good luck!",
     mixedD: "Every bot has its own level — from rookie to terminator.",
-    helpPc: "<b>WASD</b> — move · <b>mouse</b> — aim · <b>LMB</b> — shoot · <b>RMB</b> — pick up gun · <b>R</b> — reload · <b>Space</b> — 1↔2 · <b>1/2/3</b>, wheel — weapons · <b>G</b> — map · <b>M</b> — zoom · <b>4/5/6/7</b> — bandage/medkit/soda/pills · <b>Esc</b> — pause",
+    helpPc: "<b>WASD</b> — move · <b>mouse</b> — aim · <b>LMB</b> — shoot · <b>RMB</b> — pick up gun · <b>R</b> — reload · <b>Space</b> — 1↔2 · <b>1/2/3</b>, wheel — weapons · <b>G</b> — map · <b>M</b> — zoom · <b>B</b>/<b>5/6/7</b> — bandage/medkit/soda/pills · <b>Z</b> — scope · <b>Esc</b> — pause",
     helpTouch: "<b>Left stick</b> — move · <b>right stick</b> — aim and shoot · right buttons — pick up, reload, swap · bottom — healing",
     best: "Best result: #{p} place, {k} kills", alive: "Alive: {n}", kills: "Kills: {n}",
     zoneWait: "Zone shrinks in {t}", zoneShrink: "Zone is shrinking!", zoneFinal: "Final ring",
@@ -357,12 +374,12 @@ const I18N = {
     win: "Victory!", winSub: "You are the last survivor 🏆", lose: "You're out", loseBy: "Taken down by {n}", loseZone: "The zone got you",
     loseBoom: "Barrel explosion", pick: "[RMB] Pick up: {n}", pickT: "Take: {n}", reload: "Reload", swap: "Swap", reloading: "Reloading…",
     you: "You", zone: "zone", boom: "explosion",
-    fists: "Fists", glock: "Glock", fiveseven: "5.7", smg: "SMG", shotgun: "Shotgun", spas: "SPAS-12", m4: "M4", ak: "AK-47", sniper: "Sniper",
+    fists: "Fists", glock: "Glock", fiveseven: "5.7", smg: "MP5", shotgun: "Shotgun", spas: "SPAS-12", m4: "M4", ak: "AK-47", sniper: "Sniper",
     a9: "9mm", a57: "5.7mm", a556: "5.56mm", a762: "7.62mm", a12: "12 gauge",
     bandage: "Bandage", medkit: "Medkit", soda: "Soda", pills: "Pills",
-    bandageD: "+15% health", medkitD: "up to 100%", sodaD: "+25% over time", pillsD: "+100% over time and speed",
+    bandageD: "+15% health", medkitD: "up to 100%", sodaD: "+25% over time", pillsD: "full boost bar: heals over time and makes you run faster",
     vest: "Vest lvl {n}", helmet: "Helmet lvl {n}", pack: "Backpack lvl {n}",
-    vestS: "Vest", helmetS: "Helmet", packS: "Backpack", lvl: "lvl {n}", none: "none",
+    vestS: "Vest", helmetS: "Helmet", packS: "Backpack", scope: "Scope {n}x", scopeS: "Scope", speedUp: "⚡ +{n}% speed", lvl: "lvl {n}", none: "none",
     empty: "empty", zoom: "Zoom: {n}%", map: "Map",
     test: "🧪 Test mode", testHud: "Test mode · T — panel", testTitle: "Test range",
     tGod: "God mode", tAmmo: "Infinite ammo", tZone: "Zone moves", tPassive: "Bots hold fire", tDebug: "Bot thoughts",
@@ -401,19 +418,19 @@ const fmtTime = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) 
 /* ---------- game data ---------- */
 const MAP = 5000;
 const WEAPONS = {
-  fists:     { melee: true, dmg: 24, rate: .42, reach: 30 },
+  fists:     { move: 1, melee: true, dmg: 24, rate: .42, reach: 30 },
   // Glock: common, fast but weak and loose. 5.7: rare, harder hitting, more accurate, longer range.
-  glock:     { dmg: 13, pellets: 1, rate: .13,  mag: 17, reload: 1.4,  spread: .075, speed: 1400, range: 620,  ammo: "a9",   tier: 1, len: 22, col: "#3a3d48", sfx: "shot" },
-  fiveseven: { dmg: 20, pellets: 1, rate: .15,  mag: 20, reload: 1.35, spread: .04,  speed: 1750, range: 820,  ammo: "a57",  tier: 2, len: 26, col: "#b9a27a", sfx: "shot" },
-  smg:       { dmg: 12, pellets: 1, rate: .075, mag: 30, reload: 1.7,  spread: .12,  speed: 1500, range: 650,  ammo: "a9",   tier: 2, len: 34, col: "#4a4e5a", sfx: "shot" },
+  glock:     { move: .98, dmg: 13, pellets: 1, rate: .13,  mag: 17, reload: 1.4,  spread: .075, speed: 1400, range: 620,  ammo: "a9",   tier: 1, len: 22, col: "#3a3d48", sfx: "shot" },
+  fiveseven: { move: .98, dmg: 20, pellets: 1, rate: .15,  mag: 20, reload: 1.35, spread: .04,  speed: 1750, range: 820,  ammo: "a57",  tier: 2, len: 26, col: "#b9a27a", sfx: "shot" },
+  smg:       { move: .95, dmg: 12, pellets: 1, rate: .075, mag: 30, reload: 1.7,  spread: .12,  speed: 1500, range: 650,  ammo: "a9",   tier: 2, len: 34, col: "#4a4e5a", sfx: "shot" },
   // shotgun loads one shell at a time and can fire mid-reload
-  shotgun:   { dmg: 11, pellets: 10, rate: .9,   mag: 5,  shell: .45,   spread: .22,  speed: 1300, range: 420,  ammo: "a12",  tier: 2, len: 42, col: "#7a4a26", sfx: "shotgun" },
+  shotgun:   { move: .93, dmg: 11, pellets: 10, rate: .9,   mag: 5,  shell: .45,   spread: .22,  speed: 1300, range: 420,  ammo: "a12",  tier: 2, len: 42, col: "#7a4a26", sfx: "shotgun" },
   // SPAS-12: rarer pump shotgun with a tighter choke — fewer pellets, but they stay grouped further out
-  spas:      { dmg: 13, pellets: 7, rate: 1.0,  mag: 6,  shell: .5,    spread: .1,   speed: 1650, range: 600,  ammo: "a12",  tier: 3, len: 46, col: "#2b2e38", sfx: "shotgun" },
+  spas:      { move: .91, dmg: 13, pellets: 7, rate: 1.0,  mag: 6,  shell: .5,    spread: .1,   speed: 1650, range: 600,  ammo: "a12",  tier: 3, len: 46, col: "#2b2e38", sfx: "shotgun" },
   // M4: high fire rate, best up close and mid range. AK: heavier rounds, tighter spread, long range.
-  m4:        { dmg: 16, pellets: 1, rate: .08,  mag: 30, reload: 1.9,  spread: .075, speed: 1650, range: 720,  ammo: "a556", tier: 3, len: 44, col: "#24262e", sfx: "shot" },
-  ak:        { dmg: 23, pellets: 1, rate: .13,  mag: 30, reload: 2.3,  spread: .035, speed: 2000, range: 1000, ammo: "a762", tier: 3, len: 46, col: "#8a5a2e", sfx: "ak" },
-  sniper:    { dmg: 90, pellets: 1, rate: 1.3,  mag: 5,  reload: 2.6,  spread: .008, speed: 2800, range: 1500, ammo: "a762", tier: 3, len: 56, col: "#5d6b3a", sfx: "sniper", zoom: 1.3 }
+  m4:        { move: .91, dmg: 16, pellets: 1, rate: .08,  mag: 30, reload: 1.9,  spread: .075, speed: 1650, range: 720,  ammo: "a556", tier: 3, len: 44, col: "#24262e", sfx: "shot" },
+  ak:        { move: .9, dmg: 23, pellets: 1, rate: .13,  mag: 30, reload: 2.3,  spread: .035, speed: 2000, range: 1000, ammo: "a762", tier: 3, len: 46, col: "#8a5a2e", sfx: "ak" },
+  sniper:    { move: .84, dmg: 90, pellets: 1, rate: 1.3,  mag: 5,  reload: 2.6,  spread: .008, speed: 2800, range: 1500, ammo: "a762", tier: 3, len: 56, col: "#5d6b3a", sfx: "sniper" }
 };
 const PREF_DIST = { fists: 0, glock: 240, fiveseven: 300, smg: 220, shotgun: 130, spas: 230, m4: 280, ak: 460, sniper: 620 };
 const AMMO_TYPES = ["a9", "a57", "a556", "a762", "a12"];
@@ -585,27 +602,31 @@ function makeRuin(cx, cy) {
     addWall(cx, cy - s * .6, s * .5, th);
   }
   // loot inside ruins
-  spawnLootAt(cx + rand(-20, 20), cy + rand(-20, 20), true);
-  if (Math.random() < .6) addCrate(cx + rand(-30, 30), cy + rand(-30, 30) + 50, Math.random() < .35);
+  if (Math.random() < .6) spawnLootAt(cx + rand(-20, 20), cy + rand(-20, 20), true);
+  if (Math.random() < .5) addCrate(cx + rand(-30, 30), cy + rand(-30, 30) + 50, Math.random() < .35);
 }
 function addCrate(x, y, mil) {
   // regular wooden crate, or a rarer, sturdier military crate with better loot
-  return addObs({ kind: "crate", shape: "r", x, y, hw: mil ? 34 : 30, hh: mil ? 30 : 30, hp: mil ? 120 : 80, mil, rot: randi(0, 1) });
+  return addObs({ kind: "crate", shape: "r", x, y, hw: mil ? 34 : 30, hh: mil ? 30 : 30, hp: mil ? 75 : 50, mil, rot: randi(0, 1) });
 }
 function genWorld() {
   grid = Array.from({ length: GW * GW }, () => []);
   for (let i = 0; i < 17; i++) { const s = freeSpot(170); if (s) makeRuin(s.x, s.y); }
   for (let i = 0; i < 195; i++) { const s = freeSpot(30); if (s) { const tr = addObs({ kind: "tree", shape: "c", x: s.x, y: s.y, r: 26, hp: Infinity, canopy: rand(85, 110), hue: rand(-12, 12) }); G.trees.push(tr); } }
-  for (let i = 0; i < 90; i++) { const s = freeSpot(55); if (s) addObs({ kind: "rock", shape: "c", x: s.x, y: s.y, r: rand(38, 55), hp: 170 }); }
-  for (let i = 0; i < 122; i++) { const s = freeSpot(36); if (s) addCrate(s.x, s.y, Math.random() < .14); }
+  for (let i = 0; i < 90; i++) { const s = freeSpot(55); if (s) addObs({ kind: "rock", shape: "c", x: s.x, y: s.y, r: rand(38, 55), hp: 130 }); }
+  for (let i = 0; i < 100; i++) { const s = freeSpot(36); if (s) addCrate(s.x, s.y, Math.random() < .14); }
   for (let i = 0; i < 36; i++) { const s = freeSpot(28); if (s) addObs({ kind: "barrel", shape: "c", x: s.x, y: s.y, r: 26, hp: 40 }); }
   for (let i = 0; i < 125; i++) { const s = freeSpot(20); if (s) G.bushes.push({ x: s.x, y: s.y, r: rand(50, 68), seed: Math.random() * 10 }); }
-  for (let i = 0; i < 220; i++) { const s = freeSpot(22); if (s) spawnLootAt(s.x, s.y, false); }
+  for (let i = 0; i < 130; i++) { const s = freeSpot(22); if (s) spawnLootAt(s.x, s.y, false); }
   buildMinimapBase();
 }
 
 /* ---------- loot ---------- */
 const GEAR = ["helmet", "vest", "pack"];
+// scopes widen how much of the map you can see
+const SCOPES = [1, 2, 4, 8];
+const SCOPE_VIEW = { 1: 1, 2: 1.2, 4: 1.45, 8: 1.75 };
+const SCOPE_COLOR = { 2: LEVEL_COLOR[1], 4: LEVEL_COLOR[2], 8: LEVEL_COLOR[3] };
 function addLoot(x, y, kind, type, amount, extra) {
   const l = { id: nextId++, x: clamp(x, 30, MAP - 30), y: clamp(y, 30, MAP - 30), kind, type, amount, r: kind === "gun" ? 26 : 19, bob: Math.random() * 6 };
   if (extra) Object.assign(l, extra);
@@ -622,12 +643,14 @@ function spawnLootAt(x, y, rich) {
     addLoot(x, y, "gun", type, 1, { mag: WEAPONS[type].mag });
     const a = WEAPONS[type].ammo;
     addLoot(...sc(), "ammo", a, AMMO_PACK[a]);
-    if (rich || type === "fiveseven") addLoot(...sc(), "ammo", a, AMMO_PACK[a]);
+    if (type === "fiveseven") addLoot(...sc(), "ammo", a, AMMO_PACK[a]);
   } else if (k === "ammo") {
     const a = weighted({ a9: 5, a57: 1.5, a556: 3, a762: 3, a12: 3 });
     addLoot(x, y, "ammo", a, AMMO_PACK[a]);
   } else if (k === "heal") {
     addLoot(x, y, "heal", weighted({ bandage: 25, medkit: 5, soda: 10, pills: 3 }), 1);
+  } else if (Math.random() < (rich ? .3 : .22)) {
+    addLoot(x, y, "scope", weighted(rich ? { 2: 4, 4: 3, 8: 1.2 } : { 2: 6, 4: 2.5, 8: .6 }), 1);
   } else {
     const kind = pick(GEAR);
     addLoot(x, y, kind, weighted(rich ? { 1: 4, 2: 4, 3: 1.5 } : { 1: 8, 2: 3.5, 3: .8 }), 1);
@@ -639,6 +662,8 @@ function lootName(l) {
   if (l.kind === "heal") return t(l.type);
   return t(l.kind, { n: l.type });
 }
+function scopeName(n) { return t("scope", { n });
+}
 function lootValue(p, l) {
   if (l.kind === "gun") {
     if (p.slots.some(g => g && g.type === l.type)) return 0;
@@ -649,7 +674,8 @@ function lootValue(p, l) {
     return WEAPONS[l.type].tier > worst ? 4 : 0;
   }
   if (l.kind === "ammo") return p.slots.some(g => g && WEAPONS[g.type].ammo === l.type) && p.ammo[l.type] < ammoCap(p, l.type) * .8 ? 3 : 0;
-  if (l.kind === "heal") return p.items[l.type] < itemCap(p, l.type) ? (l.type === "medkit" || l.type === "pills" ? 3 : 2) : 0;
+  if (l.kind === "scope") return 0;
+  if (l.kind === "heal") return p.items[l.type] < itemCap(p, l.type) ? (l.type === "medkit" || l.type === "pills" ? 3 : 2) * (p.hp < 60 ? 2 : 1) : 0;
   return +l.type > p[l.kind] ? (l.kind === "pack" ? 4 : 5) : 0;
 }
 function removeLoot(l) { const i = G.loot.indexOf(l); if (i >= 0) G.loot.splice(i, 1); }
@@ -670,6 +696,13 @@ function pickupLoot(p, l) {
     if (take <= 0) return false;
     p.ammo[l.type] += take; l.amount -= take;
     if (l.amount <= 0) removeLoot(l);
+  } else if (l.kind === "scope") {
+    const lv = +l.type;
+    if (p.scopes.includes(lv)) return false;
+    p.scopes.push(lv); p.scopes.sort((a, b) => a - b);
+    if (lv > p.scope) p.scope = lv;
+    removeLoot(l);
+    if (p === G.me) toast(scopeName(lv));
   } else if (l.kind === "heal") {
     if (p.items[l.type] >= itemCap(p, l.type)) return false;
     p.items[l.type]++; removeLoot(l);
@@ -687,6 +720,7 @@ function dropAll(p) {
   for (const a in p.ammo) if (p.ammo[a] > 0) spill("ammo", a, p.ammo[a]);
   for (const it in p.items) for (let i = 0; i < p.items[it]; i++) spill("heal", it, 1);
   for (const g of GEAR) if (p[g]) spill(g, String(p[g]), 1);
+  for (const sc of p.scopes) if (sc > 1) spill("scope", String(sc), 1);
 }
 
 /* ---------- players ---------- */
@@ -694,7 +728,7 @@ function makePlayer(name, isBot, x, y, skill) {
   return {
     pl: true, id: nextId++, name, isBot, x, y, vx: 0, vy: 0, r: 24, hp: 100, boost: 0, angle: rand(0, 6.28),
     slots: [null, null], cur: 2, prevCur: 2, ammo: { a9: 0, a57: 0, a556: 0, a762: 0, a12: 0 }, items: { bandage: 0, medkit: 0, soda: 0, pills: 0 },
-    vest: 0, helmet: 0, pack: 0,
+    vest: 0, helmet: 0, pack: 0, scopes: [1], scope: 1,
     alive: true, kills: 0, dmgDealt: 0, reloadT: 0, fireT: 0, heal: null, color: pick(SHIRTS), mx: 0, my: 0,
     firing: false, lastShotT: -9, inBush: false, hitT: -9, meleeAnim: 0, punchSide: 0, skill, killer: null,
     ai: isBot ? newAI() : null
@@ -797,7 +831,7 @@ function damageObs(o, amt, src) {
     if (o.kind === "crate") {
       spawnLootAt(o.x, o.y, true);
       if (o.mil) { spawnLootAt(o.x + rand(-30, 30), o.y + rand(-30, 30), true); addLoot(o.x + rand(-30, 30), o.y + rand(-30, 30), pick(GEAR), String(randi(2, 3)), 1); }
-      else if (Math.random() < .5) spawnLootAt(o.x + rand(-25, 25), o.y + rand(-25, 25), false);
+      else if (Math.random() < .25) spawnLootAt(o.x + rand(-25, 25), o.y + rand(-25, 25), false);
       sfx("crate", o.x, o.y);
     }
     else if (o.kind === "barrel") explode(o.x, o.y, src);
@@ -902,6 +936,7 @@ function newAI() {
     chkX: 0, chkY: 0, chkT: 0, detourT: 0, detourA: 0, pauseT: 0, wanderT: 0, lastAttacker: null, hitT: -99,
     losOK: false, zoneUrgent: false, zoneGoal: null, switchT: 0 };
 }
+function hasHeals(b) { return b.items.bandage + b.items.medkit + b.items.pills + b.items.soda > 0; }
 function hasUsableGun(b) { return b.slots.some(g => g && (g.mag > 0 || b.ammo[WEAPONS[g.type].ammo] > 0)); }
 function weaponSuit(type, d) {
   switch (type) {
@@ -973,12 +1008,13 @@ function botThink(b) {
       botPickWeapon(b, bestD);
     } else if (bestD < 170 || (sk.aggro > .8 && bestD < 380)) { ai.mode = "melee"; switchWeapon(b, 2); }
     else ai.mode = "flee";
-    if (b.heal && sk.smart && bestD < 450) b.heal = null;
+    // a hurt smart bot that is losing the trade backs off to break line of sight and heal
+    if (sk.smart && hasHeals(b) && (b.hp < 30 || (b.hp < sk.heal && b.hp < best.hp - 15)) && bestD > 140) ai.mode = "flee";
+    if (b.heal && ai.mode !== "flee" && bestD < 450) b.heal = null;
     return;
   }
-  // --- calm: reload, heal, move ---
+  // --- calm: heal first, then reload, then move ---
   const g = curGun(b);
-  if (g && g.mag < WEAPONS[g.type].mag * .6) startReload(b);
   if (g && g.mag <= 0 && b.ammo[WEAPONS[g.type].ammo] <= 0) botPickWeapon(b, 300);
   if (!b.heal) {
     if (b.hp < sk.heal) {
@@ -988,14 +1024,17 @@ function botThink(b) {
       else if (b.items.medkit) startHeal(b, "medkit");
       else if (b.items.pills) startHeal(b, "pills");
       else if (b.items.soda) startHeal(b, "soda");
-    } else if (sk.smart && b.boost < 20 && b.hp < 90) {
+    } else if (sk.smart && b.hp < 85 && b.items.bandage > 1) startHeal(b, "bandage");
+    else if (sk.smart && b.boost < 20 && b.hp < 90) {
       if (b.items.soda) startHeal(b, "soda"); else if (b.hp < 70 && b.items.pills) startHeal(b, "pills");
     }
   }
+  // reloading would cancel healing, so only top up the magazine when not healing
+  if (!b.heal && g && g.mag < WEAPONS[g.type].mag * .6) startReload(b);
   if (b.heal && !ai.zoneUrgent) { ai.mode = "heal"; return; }
   if (ai.zoneUrgent) { ai.mode = "move"; ai.goal = ai.zoneGoal; ai.lootT = null; return; }
   // hunt last known enemy position
-  if (G.time - ai.memT < sk.memory && hasUsableGun(b) && sk.aggro >= .45) {
+  if (G.time - ai.memT < sk.memory && hasUsableGun(b) && sk.aggro >= .45 && b.hp > 50) {
     ai.mode = "move"; ai.goal = { x: ai.memX, y: ai.memY }; ai.lootT = null; return;
   }
   // loot
@@ -1070,7 +1109,11 @@ function botUpdate(b, dt) {
     if (d > b.r + 52) { mx = dx / d; my = dy / d; }
     aim = c; wantFire = d < b.r + 62;
   } else if (ai.mode === "heal") {
-    // stay still while healing
+    // smart bots keep backing away from where they last saw an enemy while they heal
+    if (sk.smart && G.time - ai.memT < 5) {
+      const dx = b.x - ai.memX, dy = b.y - ai.memY, d = Math.hypot(dx, dy) || 1;
+      if (d < 700) { mx = dx / d; my = dy / d; }
+    }
   } else if (ai.goal) {
     const dx = ai.goal.x - b.x, dy = ai.goal.y - b.y, d = Math.hypot(dx, dy);
     if (ai.lootT && !G.loot.includes(ai.lootT)) { ai.goal = null; ai.lootT = null; ai.thinkT = 0; }
@@ -1119,6 +1162,7 @@ function botUpdate(b, dt) {
 }
 
 /* ---------- per-player update (shared by human and bots) ---------- */
+const boostSpeed = p => p.boost >= 87 ? 1.12 : p.boost >= 50 ? 1.07 : 1;
 function updatePlayer(p, dt) {
   p.fireT -= dt; p.meleeAnim = Math.max(0, p.meleeAnim - dt);
   if (p.reloadT > 0) {
@@ -1146,12 +1190,17 @@ function updatePlayer(p, dt) {
     }
   }
   // boost turns into health 1:1 over time (soda +25, pills up to a full bar)
-  if (p.boost > 0) { const k = Math.min(p.boost, dt * 2.5); p.boost -= k; p.hp = Math.min(100, p.hp + k); }
+  // boost drains slowly; the fuller the bar, the faster it heals (and the faster you run)
+  if (p.boost > 0) {
+    p.boost = Math.max(0, p.boost - dt);
+    const rate = p.boost >= 87 ? 2.5 : p.boost >= 50 ? 2 : p.boost >= 25 ? 1.5 : 1;
+    p.hp = Math.min(100, p.hp + rate * dt);
+  }
   const g = curGun(p);
-  if (g && g.mag <= 0 && p.reloadT <= 0 && p.fireT <= 0 && p.ammo[WEAPONS[g.type].ammo] > 0) startReload(p);
+  if (g && g.mag <= 0 && !p.heal && p.reloadT <= 0 && p.fireT <= 0 && p.ammo[WEAPONS[g.type].ammo] > 0) startReload(p);
   // movement
   let mx = p.mx, my = p.my; const ml = Math.hypot(mx, my); if (ml > 1) { mx /= ml; my /= ml; }
-  const spd = 265 * (p.heal ? .5 : 1) * (p.boost > 50 ? 1.1 : 1) * (curWeapon(p) === "sniper" ? .92 : 1);
+  const spd = 270 * (p.heal ? .5 : 1) * boostSpeed(p) * WEAPONS[curWeapon(p)].move;
   const k = Math.min(1, dt * 14);
   p.vx += (mx * spd - p.vx) * k; p.vy += (my * spd - p.vy) * k;
   p.x += p.vx * dt; p.y += p.vy * dt;
@@ -1310,6 +1359,7 @@ function layoutArsenal() {
   row(AMMO_TYPES.flatMap(a => [["ammo", a, AMMO_PACK[a] * 3], ["ammo", a, AMMO_PACK[a] * 3]]), -185, 54);
   row(GEAR.flatMap(g => [1, 2, 3].map(l => [g, String(l), 1])), 185, 58);
   row(ITEM_KEYS.flatMap(it => [["heal", it, 1], ["heal", it, 1], ["heal", it, 1]]), 265, 46);
+  row([2, 4, 8].map(n => ["scope", String(n), 1]), 340, 70);
 }
 function testSpawn(kind) {
   const me = G.me;
@@ -1440,7 +1490,7 @@ const INK = "#23264a";
 function viewScale() {
   let s = Math.sqrt(VW * VH) / 1310 * ZOOMS[zoomIdx];
   const f = G.me && G.me.alive ? G.me : null;
-  if (f && curWeapon(f) === "sniper") s /= WEAPONS.sniper.zoom;
+  if (f) s /= SCOPE_VIEW[f.scope];
   return s;
 }
 function render() {
@@ -1669,16 +1719,33 @@ function drawGearIcon(c, kind, lvl, x, y, size) {
   }
   c.restore();
 }
+function drawScopeIcon(c, n, x, y, size) {
+  const k = size / 24;
+  c.save(); c.translate(x, y); c.scale(k, k);
+  c.lineWidth = 1.6; c.strokeStyle = INK;
+  c.beginPath(); c.arc(0, 0, 10, 0, Math.PI * 2); c.fillStyle = n > 1 ? SCOPE_COLOR[n] : "#c9ccd3"; c.fill(); c.stroke();
+  c.beginPath(); c.arc(0, 0, 6.5, 0, Math.PI * 2); c.fillStyle = "#cfefff"; c.fill(); c.stroke();
+  c.beginPath(); c.moveTo(-6.5, 0); c.lineTo(6.5, 0); c.moveTo(0, -6.5); c.lineTo(0, 6.5); c.lineWidth = 1; c.stroke();
+  c.fillStyle = INK; c.font = "900 8px Rubik, sans-serif"; c.textAlign = "center"; c.textBaseline = "middle";
+  c.fillText(n + "x", 7, 9);
+  c.restore();
+}
+function cycleScope(p) {
+  const i = p.scopes.indexOf(p.scope);
+  p.scope = p.scopes[(i + 1) % p.scopes.length];
+  toast(scopeName(p.scope));
+}
 function drawLoot(l) {
   const y = l.y + Math.sin(G.time * 3 + l.bob) * 2;
   // ring color tells the ammo type / gear level at a glance
-  const ring = l.kind === "gun" ? AMMO_COLOR[WEAPONS[l.type].ammo] : l.kind === "ammo" ? AMMO_COLOR[l.type] : l.kind === "heal" ? "#7dff8a" : LEVEL_COLOR[l.type];
+  const ring = l.kind === "gun" ? AMMO_COLOR[WEAPONS[l.type].ammo] : l.kind === "ammo" ? AMMO_COLOR[l.type] : l.kind === "heal" ? "#7dff8a" : l.kind === "scope" ? SCOPE_COLOR[l.type] : LEVEL_COLOR[l.type];
   ctx.fillStyle = "rgba(255,255,255,.92)"; ctx.strokeStyle = INK; ctx.lineWidth = 3;
   circle(l.x, y, l.r); ctx.fill(); ctx.stroke();
   ctx.strokeStyle = ring; ctx.lineWidth = 3; circle(l.x, y, l.r - 3); ctx.stroke();
   if (l.kind === "gun") drawGunIcon(ctx, l.type, l.x - 1, y + 1, 42);
   else if (l.kind === "ammo") drawAmmoIcon(ctx, l.type, l.x, y, 24);
   else if (l.kind === "heal") drawHealIcon(ctx, l.type, l.x, y, 26);
+  else if (l.kind === "scope") drawScopeIcon(ctx, +l.type, l.x, y, 26);
   else drawGearIcon(ctx, l.kind, +l.type, l.x, y, 26);
 }
 function drawObs(o) {
@@ -1855,7 +1922,7 @@ function buildHudButtons() {
   }
   const items = $("items"); items.innerHTML = "";
   ITEM_KEYS.forEach((it, i) => {
-    const b = document.createElement("button"); b.className = "item"; b.id = "item-" + it; b.title = t(it) + " — " + t(it + "D") + (isTouch ? "" : " [" + (i + 4) + "]");
+    const b = document.createElement("button"); b.className = "item"; b.id = "item-" + it; b.title = t(it) + " — " + t(it + "D") + (isTouch ? "" : " [" + (i ? i + 4 : "B") + "]");
     const cv = iconCanvas(22, 22); paintIcon(cv, 22, 22, c => drawHealIcon(c, it, 11, 11, 20));
     const sp = document.createElement("span"); sp.id = "itemTxt-" + it;
     b.append(cv, sp);
@@ -1869,6 +1936,11 @@ function buildHudButtons() {
     const sp = document.createElement("span"); sp.id = "eqTxt-" + g;
     d.append(cv, sp); equip.appendChild(d);
   }
+  const sb = document.createElement("button"); sb.className = "eq"; sb.id = "eq-scope"; sb.style.pointerEvents = "auto"; sb.style.cursor = "pointer";
+  const scv = iconCanvas(30, 30); scv.id = "eqIcon-scope";
+  const ssp = document.createElement("span"); ssp.id = "eqTxt-scope";
+  sb.append(scv, ssp); equip.appendChild(sb);
+  sb.addEventListener("pointerdown", e => { e.stopPropagation(); if (G.me && G.me.alive) cycleScope(G.me); });
   const am = $("ammoList"); am.innerHTML = "";
   for (const a of AMMO_TYPES) {
     const d = document.createElement("div"); d.className = "am"; d.id = "am-" + a; d.title = t(a);
@@ -1908,7 +1980,7 @@ function updateHUD() {
     el.classList.toggle("empty", i < 2 && !sg);
   }
   ITEM_KEYS.forEach((it, i) => {
-    setHTML("itemTxt-" + it, " " + me.items[it] + "/" + itemCap(me, it) + "<small>" + (i + 4) + " · " + t(it) + "</small>");
+    setHTML("itemTxt-" + it, " " + me.items[it] + "/" + itemCap(me, it) + "<small>" + (i ? i + 4 : "B") + " · " + t(it) + "</small>");
     $("item-" + it).classList.toggle("zero", !me.items[it]);
     $("item-" + it).classList.toggle("using", !!(me.heal && me.heal.type === it));
   });
@@ -1918,6 +1990,12 @@ function updateHUD() {
     setHTML("eqTxt-" + gk, t(gk + "S") + "<small>" + (lv ? t("lvl", { n: lv }) : t("none")) + "</small>");
     $("eq-" + gk).className = "eq " + (lv ? "l" + lv : "none");
   }
+  if (hudCache.scopeIcon !== me.scope) { hudCache.scopeIcon = me.scope; paintIcon($("eqIcon-scope"), 30, 30, c => drawScopeIcon(c, me.scope, 15, 15, 26)); }
+  setHTML("eqTxt-scope", t("scopeS") + " " + me.scope + "x<small>" + me.scopes.map(n => n === me.scope ? "[" + n + "x]" : n + "x").join(" ") + " · Z</small>");
+  $("eq-scope").className = "eq " + (me.scope === 8 ? "l3" : me.scope === 4 ? "l2" : me.scope === 2 ? "l1" : "none");
+  const bs = boostSpeed(me);
+  $("boostTxt").hidden = bs <= 1;
+  if (bs > 1) setText("boostTxt", t("speedUp", { n: Math.round((bs - 1) * 100) }));
   const curAmmo = g ? WEAPONS[g.type].ammo : null;
   for (const a of AMMO_TYPES) {
     setHTML("amTxt-" + a, me.ammo[a] + "<small>" + t(a) + "</small>");
@@ -2006,7 +2084,8 @@ addEventListener("keydown", e => {
   else if (e.code === "Digit2") switchWeapon(me, 1);
   else if (e.code === "Digit3") switchWeapon(me, 2);
   else if (e.code === "KeyQ") switchWeapon(me, me.prevCur);
-  else if (e.code === "Digit4") startHeal(me, "bandage");
+  else if (e.code === "KeyB" || e.code === "Comma" || e.code === "Digit4") startHeal(me, "bandage");
+  else if (e.code === "KeyZ" && !e.repeat) cycleScope(me);
   else if (e.code === "Digit5") startHeal(me, "medkit");
   else if (e.code === "Digit6") startHeal(me, "soda");
   else if (e.code === "Digit7") startHeal(me, "pills");
