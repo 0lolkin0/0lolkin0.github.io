@@ -27,6 +27,7 @@
   color-scheme: light;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { min-height: 100%; }
 body {
   margin: 0;
@@ -120,6 +121,8 @@ h1 {
 .n1 { color: #2f6bff; } .n2 { color: #1f9d3a; } .n3 { color: #ff3b47; } .n4 { color: #7a3cff; }
 .n5 { color: #c2185b; } .n6 { color: #00a3a3; } .n7 { color: var(--ink); } .n8 { color: #6b6f8f; }
 
+.langs { display: flex; gap: 6px; align-self: flex-end; }
+.langs .btn { font-size: .85rem; padding: 4px 10px; border-radius: 10px; }
 .controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; align-items: center; }
 .mode { display: flex; align-items: center; gap: 8px; }
 .mode svg { width: 20px; height: 20px; }
@@ -159,22 +162,27 @@ h1 {
 </div>
 
 <main>
-  <h1>Сапёр!</h1>
-  <p class="tagline">Найди все бомбочки и не взорвись</p>
+  <div class="langs" role="group" aria-label="Язык" data-i18n-aria="language">
+    <button class="btn" id="lang-ru" data-lang="ru" aria-pressed="true">RU</button>
+    <button class="btn" id="lang-tr" data-lang="tr" aria-pressed="false">TR</button>
+    <button class="btn" id="lang-en" data-lang="en" aria-pressed="false">EN</button>
+  </div>
+  <h1 data-i18n="heading">Сапёр!</h1>
+  <p class="tagline" data-i18n="tagline">Найди все бомбочки и не взорвись</p>
 
-  <div class="levels" role="group" aria-label="Сложность">
-    <button class="btn" id="lvl-easy" data-level="easy" aria-pressed="true">Лёгкий</button>
-    <button class="btn" id="lvl-mid" data-level="mid" aria-pressed="false">Средний</button>
-    <button class="btn" id="lvl-hard" data-level="hard" aria-pressed="false">Сложный</button>
+  <div class="levels" role="group" aria-label="Сложность" data-i18n-aria="difficulty">
+    <button class="btn" id="lvl-easy" data-level="easy" aria-pressed="true" data-i18n="easy">Лёгкий</button>
+    <button class="btn" id="lvl-mid" data-level="mid" aria-pressed="false" data-i18n="mid">Средний</button>
+    <button class="btn" id="lvl-hard" data-level="hard" aria-pressed="false" data-i18n="hard">Сложный</button>
   </div>
 
   <div class="board-wrap" id="boardWrap">
     <div class="hud">
-      <div class="counter" title="Осталось бомб"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="14" r="8" fill="currentColor"/><path d="M15 7 L18 4" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><circle cx="19.5" cy="3" r="2" fill="#ff8a3d"/></svg><span id="minesLeft">10</span></div>
-      <button class="face" id="face" aria-label="Новая игра"></button>
-      <div class="counter" title="Время"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8.5" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M12 8.5V13l3 2" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="M9.5 2.5h5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg><span id="time">0</span></div>
+      <div class="counter" title="Осталось бомб" data-i18n-title="minesLeft"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="14" r="8" fill="currentColor"/><path d="M15 7 L18 4" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><circle cx="19.5" cy="3" r="2" fill="#ff8a3d"/></svg><span id="minesLeft">10</span></div>
+      <button class="face" id="face" aria-label="Новая игра" data-i18n-aria="newGame"></button>
+      <div class="counter" title="Время" data-i18n-title="time"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8.5" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M12 8.5V13l3 2" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="M9.5 2.5h5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg><span id="time">0</span></div>
     </div>
-    <div class="grid" id="grid" role="grid" aria-label="Игровое поле"></div>
+    <div class="grid" id="grid" role="grid" aria-label="Игровое поле" data-i18n-aria="board"></div>
   </div>
 
   <div class="controls">
@@ -184,14 +192,14 @@ h1 {
     </button>
   </div>
 
-  <p class="help"><b>Клик</b> открывает клетку. Цифра показывает, сколько бомб рядом. <b>Правый клик</b> или <b>долгое нажатие</b> ставит флажок. Клик по цифре, вокруг которой уже стоят все флажки, открывает соседей.</p>
+  <p class="help" data-i18n-html="help"><b>Клик</b> открывает клетку. Цифра показывает, сколько бомб рядом. <b>Правый клик</b> или <b>долгое нажатие</b> ставит флажок. Клик по цифре, вокруг которой уже стоят все флажки, открывает соседей.</p>
 </main>
 
 <div class="overlay" id="overlay" hidden>
   <div class="card">
     <h2 id="resultTitle">Победа!</h2>
     <p id="resultText"></p>
-    <button class="btn" id="again">Играть ещё</button>
+    <button class="btn" id="again" data-i18n="again">Играть ещё</button>
   </div>
 </div>
 
@@ -202,6 +210,42 @@ h1 {
     mid:  { rows: 12, cols: 12, mines: 24 },
     hard: { rows: 16, cols: 16, mines: 40 }
   };
+  const I18N = {
+    ru: {
+      docTitle: "Мультяшный сапёр", heading: "Сапёр!", tagline: "Найди все бомбочки и не взорвись",
+      language: "Язык", difficulty: "Сложность", easy: "Лёгкий", mid: "Средний", hard: "Сложный",
+      minesLeft: "Осталось бомб", time: "Время", newGame: "Новая игра", board: "Игровое поле",
+      flagMode: "Режим флажков", on: "вкл", off: "выкл",
+      help: "<b>Клик</b> открывает клетку. Цифра показывает, сколько бомб рядом. <b>Правый клик</b> или <b>долгое нажатие</b> ставит флажок. Клик по цифре, вокруг которой уже стоят все флажки, открывает соседей.",
+      loseTitle: "Бабах!", loseText: "Ты наступил на бомбочку. Попробуешь ещё раз?",
+      winTitle: "Победа!", winText: s => `Все бомбочки найдены за ${s} сек.`, best: b => ` Твой рекорд: ${b} сек.`,
+      again: "Играть ещё", closed: "Закрытая клетка", bomb: "Бомба", near: n => n + " рядом", empty: "Пусто", flag: "Флажок"
+    },
+    tr: {
+      docTitle: "Çizgi Film Mayın Tarlası", heading: "Mayın Tarlası!", tagline: "Tüm bombaları bul ve patlama!",
+      language: "Dil", difficulty: "Zorluk", easy: "Kolay", mid: "Orta", hard: "Zor",
+      minesLeft: "Kalan bomba", time: "Süre", newGame: "Yeni oyun", board: "Oyun alanı",
+      flagMode: "Bayrak modu", on: "açık", off: "kapalı",
+      help: "<b>Tıkla</b> ve kareyi aç. Sayı, yanında kaç bomba olduğunu gösterir. <b>Sağ tık</b> ya da <b>uzun basma</b> bayrak koyar. Etrafındaki tüm bayrakları koyduğun bir sayıya tıklarsan komşu kareler açılır.",
+      loseTitle: "Bum!", loseText: "Bir bombaya bastın. Tekrar dener misin?",
+      winTitle: "Kazandın!", winText: s => `Tüm bombaları ${s} saniyede buldun.`, best: b => ` Rekorun: ${b} sn.`,
+      again: "Tekrar oyna", closed: "Kapalı kare", bomb: "Bomba", near: n => "Yanında " + n, empty: "Boş", flag: "Bayrak"
+    },
+    en: {
+      docTitle: "Cartoon Minesweeper", heading: "Minesweeper!", tagline: "Find all the bombs and don't go boom",
+      language: "Language", difficulty: "Difficulty", easy: "Easy", mid: "Medium", hard: "Hard",
+      minesLeft: "Bombs left", time: "Time", newGame: "New game", board: "Game board",
+      flagMode: "Flag mode", on: "on", off: "off",
+      help: "<b>Click</b> to open a square. A number shows how many bombs are next to it. <b>Right-click</b> or <b>long-press</b> to place a flag. Click a number that already has all its flags around it to open its neighbors.",
+      loseTitle: "Kaboom!", loseText: "You stepped on a bomb. Try again?",
+      winTitle: "You win!", winText: s => `You found all the bombs in ${s} sec.`, best: b => ` Your best: ${b} sec.`,
+      again: "Play again", closed: "Hidden square", bomb: "Bomb", near: n => n + " nearby", empty: "Empty", flag: "Flag"
+    }
+  };
+  let lang = "ru";
+  try { const saved = localStorage.getItem("saper-lang"); if (I18N[saved]) lang = saved; } catch (e) {}
+  const t = key => I18N[lang][key];
+
   const INK = "#23264a";
   const SVG = {
     bomb: `<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="14" cy="18" r="10" fill="${INK}"/><circle cx="10.5" cy="14.5" r="3" fill="#fff" opacity=".55"/><rect x="18" y="6" width="6" height="5" rx="1.5" transform="rotate(40 21 8.5)" fill="#8a8fb8" stroke="${INK}" stroke-width="1.5"/><path d="M23 6 q2-4 5-3" fill="none" stroke="${INK}" stroke-width="2" stroke-linecap="round"/><path d="M28 1.5l1 2.3 2.3.7-2.3.8-1 2.2-.8-2.2-2.3-.8 2.3-.7z" fill="#ff9f1c"/></svg>`,
@@ -261,7 +305,7 @@ h1 {
       b.className = "cell";
       b.id = "cell-" + i;
       b.dataset.i = i;
-      b.setAttribute("aria-label", "Закрытая клетка");
+      b.setAttribute("aria-label", t("closed"));
       frag.appendChild(b);
       els.push(b);
     }
@@ -291,11 +335,11 @@ h1 {
     el.classList.toggle("flag", c.flag && !c.open);
     el.className = el.className.replace(/\bn\d\b/g, "").trim();
     if (c.open) {
-      if (c.mine) { el.innerHTML = SVG.bomb; el.setAttribute("aria-label", "Бомба"); }
-      else if (c.n) { el.textContent = c.n; el.classList.add("n" + c.n); el.setAttribute("aria-label", c.n + " рядом"); }
-      else { el.textContent = ""; el.setAttribute("aria-label", "Пусто"); }
-    } else if (c.flag) { el.innerHTML = SVG.flag; el.setAttribute("aria-label", "Флажок"); }
-    else { el.textContent = ""; el.setAttribute("aria-label", "Закрытая клетка"); }
+      if (c.mine) { el.innerHTML = SVG.bomb; el.setAttribute("aria-label", t("bomb")); }
+      else if (c.n) { el.textContent = c.n; el.classList.add("n" + c.n); el.setAttribute("aria-label", t("near")(c.n)); }
+      else { el.textContent = ""; el.setAttribute("aria-label", t("empty")); }
+    } else if (c.flag) { el.innerHTML = SVG.flag; el.setAttribute("aria-label", t("flag")); }
+    else { el.textContent = ""; el.setAttribute("aria-label", t("closed")); }
   }
 
   function open(i) {
@@ -345,7 +389,7 @@ h1 {
     });
     faceEl.innerHTML = face("dead");
     wrap.classList.remove("shake"); void wrap.offsetWidth; wrap.classList.add("shake");
-    setTimeout(() => showResult("Бабах!", "Ты наступил на бомбочку. Попробуешь ещё раз?"), 700);
+    setTimeout(() => showResult({ kind: "lose" }), 700);
   }
 
   function win() {
@@ -353,8 +397,7 @@ h1 {
     cells.forEach((c, i) => { if (c.mine && !c.flag) { c.flag = true; render(i); } });
     minesLeftEl.textContent = 0;
     faceEl.innerHTML = face("cool");
-    const best = saveBest();
-    showResult("Победа!", `Все бомбочки найдены за ${seconds} сек.` + (best ? ` Твой рекорд: ${best} сек.` : ""));
+    showResult({ kind: "win", seconds, best: saveBest() });
   }
 
   function saveBest() {
@@ -367,11 +410,36 @@ h1 {
     } catch (e) { return null; }
   }
 
-  function showResult(title, text) {
-    document.getElementById("resultTitle").textContent = title;
-    document.getElementById("resultText").textContent = text;
+  let lastResult = null;
+  function fillResult() {
+    const res = lastResult; if (!res) return;
+    const win = res.kind === "win";
+    document.getElementById("resultTitle").textContent = t(win ? "winTitle" : "loseTitle");
+    document.getElementById("resultText").textContent = win
+      ? t("winText")(res.seconds) + (res.best ? t("best")(res.best) : "")
+      : t("loseText");
+  }
+  function showResult(res) {
+    lastResult = res;
+    fillResult();
     overlay.hidden = false;
     document.getElementById("again").focus();
+  }
+
+  function applyLang() {
+    document.documentElement.lang = lang;
+    document.title = t("docTitle");
+    document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = t(el.dataset.i18n); });
+    document.querySelectorAll("[data-i18n-html]").forEach(el => { el.innerHTML = t(el.dataset.i18nHtml); });
+    document.querySelectorAll("[data-i18n-aria]").forEach(el => { el.setAttribute("aria-label", t(el.dataset.i18nAria)); });
+    document.querySelectorAll("[data-i18n-title]").forEach(el => { el.title = t(el.dataset.i18nTitle); });
+    document.querySelectorAll("[data-lang]").forEach(b => b.setAttribute("aria-pressed", b.dataset.lang === lang));
+    updateFlagModeText();
+    if (cells) cells.forEach((_, i) => render(i));
+    fillResult();
+  }
+  function updateFlagModeText() {
+    document.getElementById("flagModeText").textContent = t("flagMode") + ": " + t(flagMode ? "on" : "off");
   }
 
   // Мышь: левый клик открывает, правый ставит флажок. Палец: долгое нажатие ставит флажок.
@@ -408,7 +476,7 @@ h1 {
   flagModeBtn.addEventListener("click", () => {
     flagMode = !flagMode;
     flagModeBtn.setAttribute("aria-pressed", flagMode);
-    document.getElementById("flagModeText").textContent = "Режим флажков: " + (flagMode ? "вкл" : "выкл");
+    updateFlagModeText();
   });
   document.querySelectorAll("[data-level]").forEach(b => b.addEventListener("click", () => {
     level = b.dataset.level;
@@ -416,7 +484,14 @@ h1 {
     newGame();
   }));
 
+  document.querySelectorAll("[data-lang]").forEach(b => b.addEventListener("click", () => {
+    lang = b.dataset.lang;
+    try { localStorage.setItem("saper-lang", lang); } catch (e) {}
+    applyLang();
+  }));
+
   newGame();
+  applyLang();
 })();
 </script>
 </body>
