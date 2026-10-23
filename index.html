@@ -403,7 +403,8 @@ h1 {
   function saveBest() {
     try {
       const key = "saper-best-" + level;
-      const prev = Number(localStorage.getItem(key)) || Infinity;
+      const saved = localStorage.getItem(key);
+      const prev = saved === null ? Infinity : Number(saved);
       const best = Math.min(prev, seconds);
       localStorage.setItem(key, best);
       return best;
@@ -416,7 +417,7 @@ h1 {
     const win = res.kind === "win";
     document.getElementById("resultTitle").textContent = t(win ? "winTitle" : "loseTitle");
     document.getElementById("resultText").textContent = win
-      ? t("winText")(res.seconds) + (res.best ? t("best")(res.best) : "")
+      ? t("winText")(res.seconds) + (res.best != null ? t("best")(res.best) : "")
       : t("loseText");
   }
   function showResult(res) {
