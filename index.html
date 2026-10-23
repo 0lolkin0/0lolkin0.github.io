@@ -100,7 +100,7 @@ h1 {
   --cols: 9;
   --cell: min(38px, calc((100vw - 32px - 30px - (var(--cols) - 1) * 3px) / var(--cols)));
   display: grid; grid-template-columns: repeat(var(--cols), var(--cell)); gap: 3px;
-  justify-content: center; touch-action: manipulation; user-select: none; -webkit-user-select: none;
+  justify-content: center; touch-action: none; user-select: none; -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
 .cell {
@@ -109,7 +109,9 @@ h1 {
   background: var(--tile); box-shadow: inset 0 -4px 0 rgba(35, 38, 74, .25), inset 0 3px 0 var(--tile-hi);
   font-family: var(--display); font-weight: 900; font-size: calc(var(--cell) * .58); line-height: 1;
   display: grid; place-items: center; cursor: pointer; color: var(--ink);
+  transition: transform .35s ease-out;
 }
+.cell.pressing { transform: scale(.8); background: var(--board); }
 .cell:hover:not(.open) { background: var(--tile-hi); }
 .cell.open { background: var(--tile-open); box-shadow: none; cursor: default; animation: pop .18s ease-out; }
 .cell.boom { background: var(--boom); }
@@ -192,7 +194,7 @@ h1 {
     </button>
   </div>
 
-  <p class="help" data-i18n-html="help"><b>Клик</b> открывает клетку. Цифра показывает, сколько бомб рядом. <b>Правый клик</b> или <b>долгое нажатие</b> ставит флажок. Клик по цифре, вокруг которой уже стоят все флажки, открывает соседей.</p>
+  <p class="help" data-i18n-html="help"><b>Нажми</b> на клетку, чтобы открыть её. Цифра показывает, сколько бомб рядом. <b>Правый клик</b> или <b>долгое нажатие</b> ставит флажок, а нажатие на флажок убирает его. Нажми на цифру, вокруг которой уже стоят все флажки, чтобы открыть соседей.</p>
 </main>
 
 <div class="overlay" id="overlay" hidden>
@@ -216,7 +218,7 @@ h1 {
       language: "Язык", difficulty: "Сложность", easy: "Лёгкий", mid: "Средний", hard: "Сложный",
       minesLeft: "Осталось бомб", time: "Время", newGame: "Новая игра", board: "Игровое поле",
       flagMode: "Режим флажков", on: "вкл", off: "выкл",
-      help: "<b>Клик</b> открывает клетку. Цифра показывает, сколько бомб рядом. <b>Правый клик</b> или <b>долгое нажатие</b> ставит флажок. Клик по цифре, вокруг которой уже стоят все флажки, открывает соседей.",
+      help: "<b>Нажми</b> на клетку, чтобы открыть её. Цифра показывает, сколько бомб рядом. <b>Правый клик</b> или <b>долгое нажатие</b> ставит флажок, а нажатие на флажок убирает его. Нажми на цифру, вокруг которой уже стоят все флажки, чтобы открыть соседей.",
       loseTitle: "Бабах!", loseText: "Ты наступил на бомбочку. Попробуешь ещё раз?",
       winTitle: "Победа!", winText: s => `Все бомбочки найдены за ${s} сек.`, best: b => ` Твой рекорд: ${b} сек.`,
       again: "Играть ещё", closed: "Закрытая клетка", bomb: "Бомба", near: n => n + " рядом", empty: "Пусто", flag: "Флажок"
@@ -226,7 +228,7 @@ h1 {
       language: "Dil", difficulty: "Zorluk", easy: "Kolay", mid: "Orta", hard: "Zor",
       minesLeft: "Kalan bomba", time: "Süre", newGame: "Yeni oyun", board: "Oyun alanı",
       flagMode: "Bayrak modu", on: "açık", off: "kapalı",
-      help: "<b>Tıkla</b> ve kareyi aç. Sayı, yanında kaç bomba olduğunu gösterir. <b>Sağ tık</b> ya da <b>uzun basma</b> bayrak koyar. Etrafındaki tüm bayrakları koyduğun bir sayıya tıklarsan komşu kareler açılır.",
+      help: "Kareyi açmak için <b>dokun</b>. Sayı, yanında kaç bomba olduğunu gösterir. <b>Sağ tık</b> ya da <b>uzun basma</b> bayrak koyar, bayrağa dokunmak onu kaldırır. Etrafındaki tüm bayrakları koyduğun bir sayıya dokunursan komşu kareler açılır.",
       loseTitle: "Bum!", loseText: "Bir bombaya bastın. Tekrar dener misin?",
       winTitle: "Kazandın!", winText: s => `Tüm bombaları ${s} saniyede buldun.`, best: b => ` Rekorun: ${b} sn.`,
       again: "Tekrar oyna", closed: "Kapalı kare", bomb: "Bomba", near: n => "Yanında " + n, empty: "Boş", flag: "Bayrak"
@@ -236,7 +238,7 @@ h1 {
       language: "Language", difficulty: "Difficulty", easy: "Easy", mid: "Medium", hard: "Hard",
       minesLeft: "Bombs left", time: "Time", newGame: "New game", board: "Game board",
       flagMode: "Flag mode", on: "on", off: "off",
-      help: "<b>Click</b> to open a square. A number shows how many bombs are next to it. <b>Right-click</b> or <b>long-press</b> to place a flag. Click a number that already has all its flags around it to open its neighbors.",
+      help: "<b>Tap</b> a square to open it. A number shows how many bombs are next to it. <b>Right-click</b> or <b>long-press</b> to place a flag, and tap a flag to remove it. Tap a number that already has all its flags around it to open its neighbors.",
       loseTitle: "Kaboom!", loseText: "You stepped on a bomb. Try again?",
       winTitle: "You win!", winText: s => `You found all the bombs in ${s} sec.`, best: b => ` Your best: ${b} sec.`,
       again: "Play again", closed: "Hidden square", bomb: "Bomb", near: n => n + " nearby", empty: "Empty", flag: "Flag"
@@ -374,7 +376,7 @@ h1 {
     if (over) return;
     const c = cells[i];
     if (flagMode && !c.open) return toggleFlag(i);
-    if (c.flag) return;
+    if (c.flag) return toggleFlag(i);
     if (!started) { placeMines(i); startTimer(); }
     if (c.open) { if (c.n) chord(i); return; }
     open(i);
@@ -443,33 +445,59 @@ h1 {
     document.getElementById("flagModeText").textContent = t("flagMode") + ": " + t(flagMode ? "on" : "off");
   }
 
-  // Мышь: левый клик открывает, правый ставит флажок. Палец: долгое нажатие ставит флажок.
-  let pressTimer = null, longPressed = false;
+  // Мышь: левый клик открывает, правый ставит флажок.
+  // Палец: касание обрабатываем сами — короткое нажатие открывает, долгое ставит или убирает флажок.
+  // Браузерные жесты на поле отключены, чтобы телефон не отменял долгое нажатие и не показывал меню.
+  const LONG_PRESS = 350, MOVE_LIMIT = 15;
+  let press = null, lastTouch = 0;
+  const resetFace = () => { if (!over) faceEl.innerHTML = face("happy"); };
+  function cancelPress() {
+    if (!press) return;
+    clearTimeout(press.timer);
+    press.el.classList.remove("pressing");
+    press = null;
+    resetFace();
+  }
+  gridEl.addEventListener("touchstart", e => { if (e.target.closest(".cell")) e.preventDefault(); }, { passive: false });
   gridEl.addEventListener("pointerdown", e => {
     const b = e.target.closest(".cell"); if (!b || over) return;
-    if (e.button === 0) faceEl.innerHTML = face("wow");
-    longPressed = false;
-    if (e.pointerType !== "mouse") {
-      pressTimer = setTimeout(() => {
-        longPressed = true;
-        toggleFlag(+b.dataset.i);
-        if (navigator.vibrate) try { navigator.vibrate(30); } catch (_) {}
-      }, 380);
-    }
+    if (e.pointerType === "mouse") { if (e.button === 0) faceEl.innerHTML = face("wow"); return; }
+    lastTouch = Date.now();
+    cancelPress();
+    const i = +b.dataset.i;
+    const p = { id: e.pointerId, i, el: b, x: e.clientX, y: e.clientY, long: false };
+    if (!cells[i].open) b.classList.add("pressing");
+    faceEl.innerHTML = face("wow");
+    p.timer = setTimeout(() => {
+      p.long = true;
+      b.classList.remove("pressing");
+      toggleFlag(i);
+      if (navigator.vibrate) try { navigator.vibrate(30); } catch (_) {}
+    }, LONG_PRESS);
+    press = p;
   });
-  const cancelPress = () => { clearTimeout(pressTimer); if (!over) faceEl.innerHTML = face("happy"); };
-  gridEl.addEventListener("pointerup", cancelPress);
-  gridEl.addEventListener("pointerleave", cancelPress);
+  gridEl.addEventListener("pointermove", e => {
+    if (press && e.pointerId === press.id && Math.hypot(e.clientX - press.x, e.clientY - press.y) > MOVE_LIMIT) cancelPress();
+  });
+  gridEl.addEventListener("pointerup", e => {
+    if (e.pointerType === "mouse") return resetFace();
+    lastTouch = Date.now();
+    if (!press || e.pointerId !== press.id) return;
+    const p = press;
+    cancelPress();
+    if (!p.long) act(p.i);
+  });
   gridEl.addEventListener("pointercancel", cancelPress);
+  gridEl.addEventListener("pointerleave", e => { if (e.pointerType === "mouse") resetFace(); });
+  const fromTouch = () => Date.now() - lastTouch < 800;
   gridEl.addEventListener("click", e => {
-    const b = e.target.closest(".cell"); if (!b) return;
-    if (longPressed) { longPressed = false; return; }
+    const b = e.target.closest(".cell"); if (!b || fromTouch()) return;
     act(+b.dataset.i);
   });
   gridEl.addEventListener("contextmenu", e => {
     const b = e.target.closest(".cell"); if (!b) return;
     e.preventDefault();
-    if (!longPressed) toggleFlag(+b.dataset.i);
+    if (!fromTouch()) toggleFlag(+b.dataset.i);
   });
 
   faceEl.addEventListener("click", newGame);
