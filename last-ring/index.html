@@ -680,12 +680,8 @@ function makeBuilding(cx, cy) {
   wood(cx + 60, cy + 20, cx + 170, cy + 20); wood(cx + 260, cy + 20, R - 13, cy + 20);
   addCrate(L + 70, T + 70, true); addCrate(R - 70, T + 70, true); addCrate(R - 80, B - 80, true); addCrate(L + 80, B - 80, false);
   const spot = () => { for (let i = 0; i < 60; i++) { const x = rand(L + 50, R - 50), y = rand(T + 50, B - 50); if (!blocked(x, y, 24)) return [x, y]; } return [cx, cy]; };
-  for (let i = 0; i < LOOT.vaultM249; i++) {
-    const [x, y] = spot();
-    addLoot(x, y, "gun", "m249", 1, { mag: WEAPONS.m249.mag });
-    addLoot(x + rand(-30, 30), y + rand(-30, 30), "ammo", "a556", 60);
-    addLoot(x + rand(-30, 30), y + rand(-30, 30), "ammo", "a556", 60);
-  }
+  // the M249 never lies in the open — it sits in its own reinforced case
+  for (let i = 0; i < LOOT.vaultM249; i++) { const [x, y] = spot(); addVaultCase(x, y); }
   for (let i = 0; i < LOOT.vaultGuns; i++) {
     const type = weighted(GUN_WEIGHTS.vault), a = WEAPONS[type].ammo, [x, y] = spot();
     addLoot(x, y, "gun", type, 1, { mag: WEAPONS[type].mag });
@@ -729,6 +725,9 @@ function makeRuin(cx, cy) {
   // loot inside ruins
   if (Math.random() < .6) spawnLootAt(cx + rand(-20, 20), cy + rand(-20, 20), true);
   if (Math.random() < .5) addCrate(cx + rand(-30, 30), cy + rand(-30, 30) + 50, Math.random() < .35);
+}
+function addVaultCase(x, y) {
+  return addObs({ kind: "crate", shape: "r", x, y, hw: 40, hh: 26, hp: 160, vault: true });
 }
 function addCrate(x, y, mil) {
   // regular wooden crate, or a rarer, sturdier military crate with better loot
@@ -1008,7 +1007,12 @@ function damageObs(o, amt, src) {
   if (o.hp <= 0) {
     o.dead = true;
     for (let i = 0; i < 12; i++) particle(o.x, o.y, rand(-220, 220), rand(-220, 220), rand(.3, .8), col, rand(4, 9), "dot");
-    if (o.kind === "crate") {
+    if (o.kind === "crate" && o.vault) {
+      addLoot(o.x, o.y, "gun", "m249", 1, { mag: WEAPONS.m249.mag });
+      addLoot(o.x + rand(-35, 35), o.y + rand(-35, 35), "ammo", "a556", 60);
+      addLoot(o.x + rand(-35, 35), o.y + rand(-35, 35), "ammo", "a556", 60);
+      sfx("crate", o.x, o.y);
+    } else if (o.kind === "crate") {
       spawnLootAt(o.x, o.y, true);
       if (o.mil) { spawnLootAt(o.x + rand(-30, 30), o.y + rand(-30, 30), true); addLoot(o.x + rand(-30, 30), o.y + rand(-30, 30), pick(GEAR), String(randi(2, 3)), 1); }
       else if (Math.random() < LOOT.crateExtra) spawnLootAt(o.x + rand(-25, 25), o.y + rand(-25, 25), false);
@@ -1533,7 +1537,7 @@ function setupTestRange() {
   G.cam.x = cx; G.cam.y = cy;
   // a few cover pieces to test shooting around obstacles
   addWall(cx - 330, cy, 22, 160); addWall(cx + 330, cy, 22, 160);
-  addCrate(cx - 420, cy - 60, false); addCrate(cx + 420, cy + 60, true);
+  addCrate(cx - 420, cy - 60, false); addCrate(cx + 420, cy + 60, true); addVaultCase(cx, cy - 420);
   addObs({ kind: "barrel", shape: "c", x: cx, y: cy + 420, r: 26, hp: 40 });
 }
 function layoutArsenal() {
@@ -1763,7 +1767,7 @@ function renderAdmin() {
     field(f, "Доля военных ящиков", LOOT, "milCrate", "0.01");
     field(f, "Шанс 2-го предмета из ящика", LOOT, "crateExtra", "0.05");
     field(f, "Стволов в каждом здании", LOOT, "vaultGuns", "1");
-    field(f, "M249 в каждом здании", LOOT, "vaultM249", "1");
+    field(f, "Ящиков с M249 в каждом здании", LOOT, "vaultM249", "1");
     field(f, "Доля прицелов в снаряжении (земля)", LOOT, "scopeShare", "0.01");
     field(f, "Доля прицелов (ящики)", LOOT, "scopeShareRich", "0.01");
     const sec2 = section("Шансы выпадения", "Это веса: чем больше число, тем чаще выпадает. Справа — итоговый шанс внутри группы. 0 = не выпадает совсем.");
@@ -2259,6 +2263,20 @@ function drawObs(o) {
 }
 function drawCrate(o, hpK) {
   const w = o.hw * hpK, h = o.hh * hpK, x = o.x - w, y = o.y - h;
+  if (o.vault) {
+    // reinforced black-and-gold case with a machine-gun emblem
+    ctx.lineWidth = 3; ctx.strokeStyle = INK;
+    roundRect(ctx, x, y, w * 2, h * 2, 6); ctx.fillStyle = "#2b2e38"; ctx.fill();
+    roundRect(ctx, x + 6, y + 6, w * 2 - 12, h * 2 - 12, 4); ctx.fillStyle = "#ffd45c"; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = "#ffd45c"; ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
+    for (const sx of [-1, 1]) { ctx.fillRect(o.x + sx * w * .6 - 4, y + h * 2 - 4, 8, 7); ctx.strokeRect(o.x + sx * w * .6 - 4, y + h * 2 - 4, 8, 7); }
+    ctx.save(); ctx.globalAlpha = .9;
+    drawGunIcon(ctx, "m249", o.x, o.y + 1, w * 1.45);
+    ctx.restore();
+    if (hpK < .88) { ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(o.x - w * .6, o.y - h * .5); ctx.lineTo(o.x - w * .2, o.y - h * .1); ctx.lineTo(o.x - w * .35, o.y + h * .4); ctx.stroke(); }
+    ctx.strokeStyle = INK; ctx.lineWidth = 3; roundRect(ctx, x, y, w * 2, h * 2, 6); ctx.stroke();
+    return;
+  }
   const base = o.mil ? "#6f8240" : "#d9a066", frame = o.mil ? "#4c5a2a" : "#a8672f", plank = o.mil ? "#5d6e34" : "#c48a52";
   ctx.lineWidth = 3; ctx.strokeStyle = INK;
   roundRect(ctx, x, y, w * 2, h * 2, 5); ctx.fillStyle = base; ctx.fill();
