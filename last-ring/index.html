@@ -78,7 +78,6 @@ h1 {
 .stat { background: #f4f1e6; border: 2px solid var(--ink); border-radius: 14px; padding: 8px 4px; }
 .stat b { display: block; font-family: var(--display); font-size: 1.5rem; }
 .stat span { font-size: .78rem; font-weight: 800; }
-.back { font-size: .85rem; font-weight: 800; color: var(--ink); }
 
 /* ---------- HUD ---------- */
 #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; font-family: var(--display); }
@@ -112,7 +111,26 @@ h1 {
 .bar i { display: block; height: 100%; width: 100%; background: #fff; transition: width .15s; }
 .bar.boost i { background: #ffb33d; }
 .bar.low i { background: var(--red); }
-.slots, .items { display: flex; gap: 6px; }
+.slots, .items, .equip, .ammo { display: flex; gap: 6px; }
+.side { display: flex; flex-direction: column; gap: 6px; }
+.side.left { align-items: flex-start; }
+.side.right { align-items: flex-end; }
+.eq {
+  display: flex; align-items: center; gap: 4px; background: rgba(35, 38, 74, .72); color: var(--white);
+  border: 2px solid var(--ink); border-radius: 12px; padding: 2px 8px 2px 3px; font-weight: 700; font-size: .78rem; line-height: 1.1;
+}
+.eq canvas { width: 30px; height: 30px; }
+.eq small { display: block; font-size: .66rem; opacity: .75; font-weight: 500; }
+.eq.none { opacity: .45; }
+.eq.l1 { border-color: #d9dde3; } .eq.l2 { border-color: #5fb8f0; } .eq.l3 { border-color: #ffd45c; box-shadow: 0 0 0 2px var(--ink); }
+.ammo { background: rgba(35, 38, 74, .72); border: 2px solid var(--ink); border-radius: 12px; padding: 3px 6px; gap: 8px; }
+.am { display: flex; align-items: center; gap: 4px; color: var(--white); font-weight: 700; font-size: .78rem; font-variant-numeric: tabular-nums; line-height: 1; }
+.am i { display: inline-block; width: 7px; height: 16px; border-radius: 4px 4px 1px 1px; border: 1.5px solid var(--ink); }
+.am small { font-size: .62rem; opacity: .7; font-weight: 500; display: block; }
+.am.zero { opacity: .35; }
+.am.cur { outline: 2px solid var(--sun); outline-offset: 2px; border-radius: 6px; }
+.slot { display: flex; align-items: center; gap: 6px; }
+.slot canvas { width: 54px; height: 24px; flex: none; }
 .slot, .item {
   background: rgba(35, 38, 74, .72); color: var(--white); border: 2px solid var(--ink); border-radius: 12px;
   padding: 4px 8px; font-family: var(--display); font-weight: 700; font-size: .8rem; text-align: left;
@@ -121,9 +139,31 @@ h1 {
 .slot small, .item small { display: block; font-size: .7rem; opacity: .75; font-weight: 500; }
 .slot.on { background: var(--sun); color: var(--ink); }
 .slot.empty { opacity: .45; }
-.item { min-width: 54px; text-align: center; }
+.item { min-width: 50px; display: flex; align-items: center; gap: 3px; }
+.item canvas { width: 22px; height: 22px; flex: none; }
 .item.zero { opacity: .4; }
 .item.using { background: #ffb33d; color: var(--ink); }
+#mini { pointer-events: auto; cursor: pointer; }
+#bigmap {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(86vh, 92vw); height: min(86vh, 92vw); border: 4px solid var(--ink); border-radius: 18px;
+  box-shadow: var(--shadow); background: #4f8f45; pointer-events: auto; cursor: pointer; z-index: 3;
+}
+#toast { position: absolute; left: 50%; top: 42%; transform: translateX(-50%); font-size: 1.1rem; }
+#testPanel {
+  position: absolute; left: max(10px, env(safe-area-inset-left, 0px)); top: 96px; width: 230px; max-height: calc(100vh - 230px); overflow-y: auto;
+  pointer-events: auto; background: rgba(255, 255, 255, .95); border: var(--outline); border-radius: 16px; box-shadow: var(--shadow);
+  padding: 10px; display: flex; flex-direction: column; gap: 6px; font-family: var(--body); font-weight: 800; font-size: .82rem;
+}
+#testPanel h3 { margin: 0; font-family: var(--display); font-size: 1rem; }
+#testPanel label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+#testPanel .btn { font-size: .78rem; padding: 4px 8px; border-radius: 10px; box-shadow: 2px 2px 0 var(--ink); }
+#testPanel .grid2 { display: flex; flex-wrap: wrap; gap: 5px; }
+#testPanel select { font: inherit; border: 2px solid var(--ink); border-radius: 8px; padding: 2px 4px; }
+#testPanel p { margin: 0; font-weight: 600; font-size: .74rem; color: #4a4e75; }
+#testBtn { position: absolute; top: calc(max(10px, env(safe-area-inset-top, 0px)) + 160px); right: calc(max(10px, env(safe-area-inset-right, 0px)) + 56px); padding: 4px 10px; font-size: .9rem; }
+body.touch #testBtn { top: calc(max(10px, env(safe-area-inset-top, 0px)) + 120px); }
+.btn.alt { font-size: .95rem; padding: 6px 16px; }
 #prompt { position: absolute; left: 50%; bottom: 140px; transform: translateX(-50%); font-weight: 700; }
 #vignette { position: absolute; inset: 0; box-shadow: inset 0 0 120px 30px rgba(255, 30, 40, .55); opacity: 0; transition: opacity .25s; }
 .touchbtns { position: absolute; right: max(12px, env(safe-area-inset-right, 0px)); bottom: 190px; display: none; flex-direction: column; gap: 10px; }
@@ -133,6 +173,10 @@ body.touch #prompt { bottom: auto; top: 46%; }
 body.touch .bottom { justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 8px; }
 body.touch .slots, body.touch .items { gap: 4px; }
 body.touch .slot, body.touch .item { min-width: 0; padding: 3px 7px; font-size: .72rem; }
+body.touch .slot canvas { width: 36px; height: 16px; }
+body.touch .eq canvas { width: 22px; height: 22px; }
+body.touch .eq small, body.touch .am small { display: none; }
+body.touch .side.left, body.touch .side.right { gap: 4px; }
 body.touch .item small { display: none; }
 body.touch #ammoBig { font-size: 1.2rem; }
 body.touch .vitals { order: -1; width: 100%; }
@@ -158,19 +202,29 @@ body.touch #pauseBtn { top: calc(max(10px, env(safe-area-inset-top, 0px)) + 120p
   <canvas id="mini" width="150" height="150"></canvas>
   <button class="btn" id="pauseBtn" aria-label="Пауза" data-i18n-aria="pause">II</button>
   <div class="pill" id="prompt" hidden></div>
+  <div class="pill" id="toast" hidden></div>
+  <canvas id="bigmap" hidden></canvas>
+  <button class="btn" id="testBtn" hidden>🧪</button>
+  <div id="testPanel" hidden></div>
   <div class="touchbtns">
     <button class="btn" id="tPick" hidden></button>
     <button class="btn" id="tReload" data-i18n="reload">Перезарядка</button>
     <button class="btn" id="tSwap" data-i18n="swap">Сменить</button>
   </div>
   <div class="bottom">
-    <div class="items" id="items"></div>
+    <div class="side left">
+      <div class="equip" id="equip"></div>
+      <div class="items" id="items"></div>
+    </div>
     <div class="vitals">
       <div id="ammoBig"></div>
       <div class="bar boost"><i id="boostFill"></i></div>
       <div class="bar" id="hpBar"><i id="hpFill"></i></div>
     </div>
-    <div class="slots" id="slots"></div>
+    <div class="side right">
+      <div class="ammo" id="ammoList"></div>
+      <div class="slots" id="slots"></div>
+    </div>
   </div>
 </div>
 
@@ -188,9 +242,9 @@ body.touch #pauseBtn { top: calc(max(10px, env(safe-area-inset-top, 0px)) + 120p
     <p class="desc" id="diffDesc"></p>
     <label class="slider"><span data-i18n="bots">Ботов</span><input type="range" id="botCount" min="3" max="40" step="1" value="20"><output id="botOut">20</output></label>
     <button class="btn big" id="playBtn" data-i18n="play">Играть!</button>
+    <button class="btn alt" id="testModeBtn" data-i18n="test">🧪 Тестовый режим</button>
     <p class="best" id="bestTxt"></p>
     <p class="help" id="helpTxt"></p>
-    <a class="back" href="../" data-i18n="back">← К сапёру</a>
   </div>
 </div>
 
@@ -227,74 +281,98 @@ body.touch #pauseBtn { top: calc(max(10px, env(safe-area-inset-top, 0px)) + 120p
 const I18N = {
   ru: {
     title: "Последнее кольцо", tagline: "Собирай лут, прячься в кустах и останься последним в сужающемся кольце",
-    difficulty: "Сложность ботов", bots: "Ботов", play: "Играть!", language: "Язык", back: "← К сапёру",
+    difficulty: "Сложность ботов", bots: "Ботов", play: "Играть!", language: "Язык",
     easy: "Новичок", normal: "Боец", hard: "Ветеран", insane: "Терминатор", mixed: "Вперемешку",
     easyD: "Медленно реагируют, мажут, плохо следят за зоной.",
     normalD: "Уворачиваются, перезаряжаются в укрытии, лечатся.",
     hardD: "Быстрая реакция, стреляют на упреждение, выбирают оружие под дистанцию.",
     insaneD: "Почти не промахиваются и охотятся за тобой. Удачи!",
     mixedD: "У каждого бота свой уровень — от новичка до терминатора.",
-    helpPc: "<b>WASD</b> — бег · <b>мышь</b> — прицел · <b>ЛКМ</b> — огонь · <b>R</b> — перезарядка · <b>E</b> — подобрать · <b>1/2/3</b>, колесо — оружие · <b>4/5/6</b> — бинт/аптечка/энергетик · <b>Esc</b> — пауза",
+    helpPc: "<b>WASD</b> — бег · <b>мышь</b> — прицел · <b>ЛКМ</b> — огонь · <b>ПКМ</b> — подобрать оружие · <b>R</b> — перезарядка · <b>Пробел</b> — 1↔2 · <b>1/2/3</b>, колесо — оружие · <b>G</b> — карта · <b>M</b> — масштаб · <b>4/5/6/7</b> — бинт/аптечка/энергетик/адреналин · <b>Esc</b> — пауза",
     helpTouch: "<b>Левый стик</b> — бег · <b>правый стик</b> — прицел и огонь · кнопки справа — подобрать, перезарядка, смена оружия · снизу — лечение",
     best: "Лучший результат: #{p} место, {k} убийств", alive: "Живых: {n}", kills: "Убийств: {n}",
     zoneWait: "Зона сузится через {t}", zoneShrink: "Зона сужается!", zoneFinal: "Финальное кольцо",
     outside: "Ты вне зоны! Беги к кругу", pause: "Пауза", paused: "Пауза", resume: "Продолжить", toMenu: "В меню",
     place: "Место", killsW: "Убийства", timeW: "Время", again: "Ещё раз",
     win: "Победа!", winSub: "Ты последний выживший 🏆", lose: "Ты выбыл", loseBy: "Тебя победил {n}", loseZone: "Тебя накрыла зона",
-    loseBoom: "Взрыв бочки", pick: "[E] Подобрать: {n}", pickT: "Взять: {n}", reload: "Перезарядка", swap: "Сменить", reloading: "Перезарядка…",
+    loseBoom: "Взрыв бочки", pick: "[ПКМ] Подобрать: {n}", pickT: "Взять: {n}", reload: "Перезарядка", swap: "Сменить", reloading: "Перезарядка…",
     you: "Ты", zone: "зона", boom: "взрыв",
-    fists: "Кулаки", pistol: "Пистолет", smg: "Пистолет-пулемёт", shotgun: "Дробовик", rifle: "Автомат", sniper: "Снайперка",
-    a9: "Патроны 9 мм", a12: "Дробь", a762: "Патроны 7.62", bandage: "Бинт", medkit: "Аптечка", soda: "Энергетик", vest: "Бронежилет {n} ур.",
-    empty: "пусто"
+    fists: "Кулаки", glock: "Glock", fiveseven: "5.7", smg: "Пистолет-пулемёт", shotgun: "Дробовик", spas: "SPAS-12", m4: "M4", ak: "АК-47", sniper: "Снайперка",
+    a9: "9 мм", a57: "5.7 мм", a556: "5.56 мм", a762: "7.62 мм", a12: "Дробь 12к",
+    bandage: "Бинт", medkit: "Аптечка", soda: "Энергетик", pills: "Адреналин",
+    bandageD: "+15% здоровья", medkitD: "до 100%", sodaD: "+25% со временем", pillsD: "+100% со временем и скорость",
+    vest: "Бронежилет {n} ур.", helmet: "Каска {n} ур.", pack: "Рюкзак {n} ур.",
+    vestS: "Броня", helmetS: "Каска", packS: "Рюкзак", lvl: "ур. {n}", none: "нет",
+    empty: "пусто", zoom: "Масштаб: {n}%", map: "Карта",
+    test: "🧪 Тестовый режим", testHud: "Тестовый режим · T — панель", testTitle: "Тестовый полигон",
+    tGod: "Бессмертие", tAmmo: "Бесконечные патроны", tZone: "Зона двигается", tPassive: "Боты не стреляют", tDebug: "Мысли ботов",
+    tSpawn: "+ Бот", tDummy: "+ Мишень", tRunner: "+ Бегущая мишень", tClear: "Убрать ботов", tArsenal: "Арсенал заново",
+    tGear: "Всё снаряжение 3 ур.", tSpeed: "Скорость", tLevel: "Уровень бота", tHint: "Цифры над целью — урон. Смерть = возрождение.", tClose: "Закрыть (T)"
   },
   tr: {
     title: "Son Halka", tagline: "Ganimet topla, çalılarda saklan ve daralan halkada hayatta kalan son kişi ol",
-    difficulty: "Bot zorluğu", bots: "Bot", play: "Oyna!", language: "Dil", back: "← Mayın tarlasına",
+    difficulty: "Bot zorluğu", bots: "Bot", play: "Oyna!", language: "Dil",
     easy: "Acemi", normal: "Asker", hard: "Usta", insane: "Terminatör", mixed: "Karışık",
     easyD: "Yavaş tepki verir, ıskalar, bölgeyi pek takip etmez.",
     normalD: "Kaçar, siperde şarjör değiştirir, iyileşir.",
     hardD: "Hızlı tepki, önden nişan alır, mesafeye göre silah seçer.",
     insaneD: "Neredeyse hiç ıskalamaz ve seni avlar. Bol şans!",
     mixedD: "Her botun kendi seviyesi var — acemiden terminatöre.",
-    helpPc: "<b>WASD</b> — koş · <b>fare</b> — nişan · <b>sol tık</b> — ateş · <b>R</b> — şarjör · <b>E</b> — al · <b>1/2/3</b>, tekerlek — silah · <b>4/5/6</b> — bandaj/ilk yardım/enerji · <b>Esc</b> — duraklat",
+    helpPc: "<b>WASD</b> — koş · <b>fare</b> — nişan · <b>sol tık</b> — ateş · <b>sağ tık</b> — silahı al · <b>R</b> — şarjör · <b>Boşluk</b> — 1↔2 · <b>1/2/3</b>, tekerlek — silah · <b>G</b> — harita · <b>M</b> — yakınlaştırma · <b>4/5/6/7</b> — bandaj/ilk yardım/enerji/adrenalin · <b>Esc</b> — duraklat",
     helpTouch: "<b>Sol çubuk</b> — koş · <b>sağ çubuk</b> — nişan ve ateş · sağdaki düğmeler — al, şarjör, silah değiştir · altta — iyileşme",
     best: "En iyi sonuç: #{p}. sıra, {k} leş", alive: "Hayatta: {n}", kills: "Leş: {n}",
     zoneWait: "Bölge {t} sonra daralacak", zoneShrink: "Bölge daralıyor!", zoneFinal: "Son halka",
     outside: "Bölgenin dışındasın! Halkaya koş", pause: "Duraklat", paused: "Duraklatıldı", resume: "Devam", toMenu: "Menü",
     place: "Sıra", killsW: "Leş", timeW: "Süre", again: "Tekrar",
     win: "Zafer!", winSub: "Hayatta kalan son kişi sensin 🏆", lose: "Elendin", loseBy: "Seni {n} yendi", loseZone: "Bölge seni yakaladı",
-    loseBoom: "Varil patlaması", pick: "[E] Al: {n}", pickT: "Al: {n}", reload: "Şarjör", swap: "Değiştir", reloading: "Şarjör değişiyor…",
+    loseBoom: "Varil patlaması", pick: "[Sağ tık] Al: {n}", pickT: "Al: {n}", reload: "Şarjör", swap: "Değiştir", reloading: "Şarjör değişiyor…",
     you: "Sen", zone: "bölge", boom: "patlama",
-    fists: "Yumruk", pistol: "Tabanca", smg: "Hafif makineli", shotgun: "Pompalı", rifle: "Tüfek", sniper: "Keskin nişancı",
-    a9: "9 mm mermi", a12: "Saçma", a762: "7.62 mermi", bandage: "Bandaj", medkit: "İlk yardım", soda: "Enerji içeceği", vest: "Yelek sv. {n}",
-    empty: "boş"
+    fists: "Yumruk", glock: "Glock", fiveseven: "5.7", smg: "Hafif makineli", shotgun: "Pompalı", spas: "SPAS-12", m4: "M4", ak: "AK-47", sniper: "Keskin nişancı",
+    a9: "9 mm", a57: "5.7 mm", a556: "5.56 mm", a762: "7.62 mm", a12: "12 kalibre",
+    bandage: "Bandaj", medkit: "İlk yardım", soda: "Enerji içeceği", pills: "Adrenalin",
+    bandageD: "+%15 can", medkitD: "%100'e kadar", sodaD: "zamanla +%25", pillsD: "zamanla +%100 ve hız",
+    vest: "Yelek sv. {n}", helmet: "Kask sv. {n}", pack: "Sırt çantası sv. {n}",
+    vestS: "Yelek", helmetS: "Kask", packS: "Çanta", lvl: "sv. {n}", none: "yok",
+    empty: "boş", zoom: "Yakınlaştırma: %{n}", map: "Harita",
+    test: "🧪 Test modu", testHud: "Test modu · T — panel", testTitle: "Test alanı",
+    tGod: "Ölümsüzlük", tAmmo: "Sonsuz mermi", tZone: "Bölge hareket eder", tPassive: "Botlar ateş etmez", tDebug: "Bot düşünceleri",
+    tSpawn: "+ Bot", tDummy: "+ Hedef", tRunner: "+ Koşan hedef", tClear: "Botları kaldır", tArsenal: "Cephaneliği yenile",
+    tGear: "Tüm ekipman sv. 3", tSpeed: "Hız", tLevel: "Bot seviyesi", tHint: "Hedefin üstündeki sayılar — hasar. Ölünce yeniden doğarsın.", tClose: "Kapat (T)"
   },
   en: {
     title: "Last Ring", tagline: "Grab loot, hide in bushes and be the last one standing inside the shrinking ring",
-    difficulty: "Bot difficulty", bots: "Bots", play: "Play!", language: "Language", back: "← To Minesweeper",
+    difficulty: "Bot difficulty", bots: "Bots", play: "Play!", language: "Language",
     easy: "Rookie", normal: "Soldier", hard: "Veteran", insane: "Terminator", mixed: "Mixed",
     easyD: "Slow to react, miss a lot, barely watch the zone.",
     normalD: "Strafe, reload behind cover, heal up.",
     hardD: "Quick reactions, lead their shots, pick the right gun for the range.",
     insaneD: "Barely ever miss and will hunt you down. Good luck!",
     mixedD: "Every bot has its own level — from rookie to terminator.",
-    helpPc: "<b>WASD</b> — move · <b>mouse</b> — aim · <b>LMB</b> — shoot · <b>R</b> — reload · <b>E</b> — pick up · <b>1/2/3</b>, wheel — weapons · <b>4/5/6</b> — bandage/medkit/soda · <b>Esc</b> — pause",
+    helpPc: "<b>WASD</b> — move · <b>mouse</b> — aim · <b>LMB</b> — shoot · <b>RMB</b> — pick up gun · <b>R</b> — reload · <b>Space</b> — 1↔2 · <b>1/2/3</b>, wheel — weapons · <b>G</b> — map · <b>M</b> — zoom · <b>4/5/6/7</b> — bandage/medkit/soda/pills · <b>Esc</b> — pause",
     helpTouch: "<b>Left stick</b> — move · <b>right stick</b> — aim and shoot · right buttons — pick up, reload, swap · bottom — healing",
     best: "Best result: #{p} place, {k} kills", alive: "Alive: {n}", kills: "Kills: {n}",
     zoneWait: "Zone shrinks in {t}", zoneShrink: "Zone is shrinking!", zoneFinal: "Final ring",
     outside: "You're outside the zone! Run to the ring", pause: "Pause", paused: "Paused", resume: "Resume", toMenu: "Menu",
     place: "Place", killsW: "Kills", timeW: "Time", again: "Play again",
     win: "Victory!", winSub: "You are the last survivor 🏆", lose: "You're out", loseBy: "Taken down by {n}", loseZone: "The zone got you",
-    loseBoom: "Barrel explosion", pick: "[E] Pick up: {n}", pickT: "Take: {n}", reload: "Reload", swap: "Swap", reloading: "Reloading…",
+    loseBoom: "Barrel explosion", pick: "[RMB] Pick up: {n}", pickT: "Take: {n}", reload: "Reload", swap: "Swap", reloading: "Reloading…",
     you: "You", zone: "zone", boom: "explosion",
-    fists: "Fists", pistol: "Pistol", smg: "SMG", shotgun: "Shotgun", rifle: "Rifle", sniper: "Sniper",
-    a9: "9mm ammo", a12: "Shells", a762: "7.62 ammo", bandage: "Bandage", medkit: "Medkit", soda: "Soda", vest: "Vest lvl {n}",
-    empty: "empty"
+    fists: "Fists", glock: "Glock", fiveseven: "5.7", smg: "SMG", shotgun: "Shotgun", spas: "SPAS-12", m4: "M4", ak: "AK-47", sniper: "Sniper",
+    a9: "9mm", a57: "5.7mm", a556: "5.56mm", a762: "7.62mm", a12: "12 gauge",
+    bandage: "Bandage", medkit: "Medkit", soda: "Soda", pills: "Pills",
+    bandageD: "+15% health", medkitD: "up to 100%", sodaD: "+25% over time", pillsD: "+100% over time and speed",
+    vest: "Vest lvl {n}", helmet: "Helmet lvl {n}", pack: "Backpack lvl {n}",
+    vestS: "Vest", helmetS: "Helmet", packS: "Backpack", lvl: "lvl {n}", none: "none",
+    empty: "empty", zoom: "Zoom: {n}%", map: "Map",
+    test: "🧪 Test mode", testHud: "Test mode · T — panel", testTitle: "Test range",
+    tGod: "God mode", tAmmo: "Infinite ammo", tZone: "Zone moves", tPassive: "Bots hold fire", tDebug: "Bot thoughts",
+    tSpawn: "+ Bot", tDummy: "+ Dummy", tRunner: "+ Running dummy", tClear: "Remove bots", tArsenal: "Reset arsenal",
+    tGear: "All gear lvl 3", tSpeed: "Speed", tLevel: "Bot level", tHint: "Numbers over targets show damage. Dying respawns you.", tClose: "Close (T)"
   }
 };
 let lang = "ru";
 try {
-  const saved = localStorage.getItem("lastring-lang") || localStorage.getItem("saper-lang");
+  const saved = localStorage.getItem("lastring-lang");
   if (I18N[saved]) lang = saved;
 } catch (e) {}
 const t = (key, vars) => {
@@ -323,21 +401,39 @@ const fmtTime = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) 
 /* ---------- game data ---------- */
 const MAP = 5000;
 const WEAPONS = {
-  fists:   { melee: true, dmg: 20, rate: .42, reach: 30 },
-  pistol:  { dmg: 15, pellets: 1, rate: .2,   mag: 15, reload: 1.2, spread: .05,  speed: 1500, range: 750,  ammo: "a9",   tier: 1, len: 26, sfx: "shot" },
-  smg:     { dmg: 10, pellets: 1, rate: .075, mag: 30, reload: 1.7, spread: .12,  speed: 1500, range: 650,  ammo: "a9",   tier: 2, len: 34, sfx: "shot" },
-  shotgun: { dmg: 9,  pellets: 9, rate: .85,  mag: 5,  reload: 2.3, spread: .22,  speed: 1300, range: 420,  ammo: "a12",  tier: 2, len: 38, sfx: "shotgun" },
-  rifle:   { dmg: 15, pellets: 1, rate: .11,  mag: 30, reload: 2.0, spread: .05,  speed: 1800, range: 950,  ammo: "a762", tier: 3, len: 44, sfx: "shot" },
-  sniper:  { dmg: 75, pellets: 1, rate: 1.3,  mag: 5,  reload: 2.6, spread: .008, speed: 2800, range: 1500, ammo: "a762", tier: 3, len: 54, sfx: "sniper", zoom: 1.3 }
+  fists:     { melee: true, dmg: 24, rate: .42, reach: 30 },
+  // Glock: common, fast but weak and loose. 5.7: rare, harder hitting, more accurate, longer range.
+  glock:     { dmg: 13, pellets: 1, rate: .13,  mag: 17, reload: 1.4,  spread: .075, speed: 1400, range: 620,  ammo: "a9",   tier: 1, len: 22, col: "#3a3d48", sfx: "shot" },
+  fiveseven: { dmg: 20, pellets: 1, rate: .15,  mag: 20, reload: 1.35, spread: .04,  speed: 1750, range: 820,  ammo: "a57",  tier: 2, len: 26, col: "#b9a27a", sfx: "shot" },
+  smg:       { dmg: 12, pellets: 1, rate: .075, mag: 30, reload: 1.7,  spread: .12,  speed: 1500, range: 650,  ammo: "a9",   tier: 2, len: 34, col: "#4a4e5a", sfx: "shot" },
+  // shotgun loads one shell at a time and can fire mid-reload
+  shotgun:   { dmg: 11, pellets: 10, rate: .9,   mag: 5,  shell: .45,   spread: .22,  speed: 1300, range: 420,  ammo: "a12",  tier: 2, len: 42, col: "#7a4a26", sfx: "shotgun" },
+  // SPAS-12: rarer pump shotgun with a tighter choke — fewer pellets, but they stay grouped further out
+  spas:      { dmg: 13, pellets: 7, rate: 1.0,  mag: 6,  shell: .5,    spread: .1,   speed: 1650, range: 600,  ammo: "a12",  tier: 3, len: 46, col: "#2b2e38", sfx: "shotgun" },
+  // M4: high fire rate, best up close and mid range. AK: heavier rounds, tighter spread, long range.
+  m4:        { dmg: 16, pellets: 1, rate: .08,  mag: 30, reload: 1.9,  spread: .075, speed: 1650, range: 720,  ammo: "a556", tier: 3, len: 44, col: "#24262e", sfx: "shot" },
+  ak:        { dmg: 23, pellets: 1, rate: .13,  mag: 30, reload: 2.3,  spread: .035, speed: 2000, range: 1000, ammo: "a762", tier: 3, len: 46, col: "#8a5a2e", sfx: "ak" },
+  sniper:    { dmg: 90, pellets: 1, rate: 1.3,  mag: 5,  reload: 2.6,  spread: .008, speed: 2800, range: 1500, ammo: "a762", tier: 3, len: 56, col: "#5d6b3a", sfx: "sniper", zoom: 1.3 }
 };
-const PREF_DIST = { fists: 0, pistol: 280, smg: 220, shotgun: 130, rifle: 380, sniper: 620 };
-const AMMO_CAP = { a9: 150, a12: 45, a762: 150 };
-const AMMO_PACK = { a9: 30, a12: 10, a762: 30 };
-const AMMO_COLOR = { a9: "#ffcf3d", a12: "#ff5a5f", a762: "#4fbf6a" };
-const ITEMS = { bandage: { cap: 10, time: 2.4 }, medkit: { cap: 3, time: 5.5 }, soda: { cap: 4, time: 2.8 } };
-const ITEM_ICON = { bandage: "🩹", medkit: "🧰", soda: "🥤" };
-const VEST_RED = [0, .25, .38, .5];
-const VEST_COLOR = [null, "#8f9aa6", "#3f78c2", "#22274a"];
+const PREF_DIST = { fists: 0, glock: 240, fiveseven: 300, smg: 220, shotgun: 130, spas: 230, m4: 280, ak: 460, sniper: 620 };
+const AMMO_TYPES = ["a9", "a57", "a556", "a762", "a12"];
+const AMMO_PACK = { a9: 30, a57: 25, a556: 30, a762: 30, a12: 10 };
+const AMMO_COLOR = { a9: "#ffcf3d", a57: "#b57cff", a556: "#4fbf6a", a762: "#3f8fe0", a12: "#ff5a5f" };
+// capacities by backpack level 0..3
+const AMMO_CAPS = { a9: [90, 180, 240, 300], a57: [60, 120, 180, 240], a556: [90, 180, 240, 300], a762: [90, 180, 240, 300], a12: [15, 30, 45, 60] };
+const ITEMS = {
+  bandage: { caps: [5, 10, 15, 30], time: 2.4 },
+  medkit:  { caps: [1, 2, 3, 4],    time: 5.5 },
+  soda:    { caps: [2, 5, 10, 15],  time: 2.8 },
+  pills:   { caps: [1, 2, 3, 4],    time: 4 }
+};
+const ITEM_KEYS = ["bandage", "medkit", "soda", "pills"];
+const ITEM_ICON = { bandage: "🩹", medkit: "🧰", soda: "🥤", pills: "💊" };
+const ammoCap = (p, a) => AMMO_CAPS[a][p.pack];
+const itemCap = (p, it) => ITEMS[it].caps[p.pack];
+const VEST_RED = [0, .2, .3, .4];
+const HELMET_RED = [0, .1, .15, .2];
+const LEVEL_COLOR = [null, "#d9dde3", "#5fb8f0", "#ffd45c"];
 const SHIRTS = ["#ff8a3d", "#5fb8f0", "#b57cff", "#ff6fa8", "#3fd0b0", "#ffd45c", "#9ad84f", "#f2f2f2", "#ff5a5f", "#6f7bff"];
 const BOT_NAMES = ["Pixel", "Tofu", "Rocket", "Mango", "Biscuit", "Nugget", "Zigzag", "Kiwi", "Turbo", "Pickle", "Boba", "Waffle",
   "Comet", "Noodle", "Bolt", "Pebble", "Sprout", "Ninja", "Cactus", "Bagel", "Fuzzy", "Gizmo", "Mochi", "Rusty", "Taco",
@@ -490,49 +586,58 @@ function makeRuin(cx, cy) {
   }
   // loot inside ruins
   spawnLootAt(cx + rand(-20, 20), cy + rand(-20, 20), true);
-  if (Math.random() < .6) addObs({ kind: "crate", shape: "r", x: cx + rand(-30, 30), y: cy + rand(-30, 30) + 50, hw: 30, hh: 30, hp: 80 });
+  if (Math.random() < .6) addCrate(cx + rand(-30, 30), cy + rand(-30, 30) + 50, Math.random() < .35);
+}
+function addCrate(x, y, mil) {
+  // regular wooden crate, or a rarer, sturdier military crate with better loot
+  return addObs({ kind: "crate", shape: "r", x, y, hw: mil ? 34 : 30, hh: mil ? 30 : 30, hp: mil ? 120 : 80, mil, rot: randi(0, 1) });
 }
 function genWorld() {
   grid = Array.from({ length: GW * GW }, () => []);
-  for (let i = 0; i < 20; i++) { const s = freeSpot(170); if (s) makeRuin(s.x, s.y); }
-  for (let i = 0; i < 230; i++) { const s = freeSpot(30); if (s) { const tr = addObs({ kind: "tree", shape: "c", x: s.x, y: s.y, r: 26, hp: Infinity, canopy: rand(85, 110), hue: rand(-12, 12) }); G.trees.push(tr); } }
-  for (let i = 0; i < 105; i++) { const s = freeSpot(55); if (s) addObs({ kind: "rock", shape: "c", x: s.x, y: s.y, r: rand(38, 55), hp: 170 }); }
-  for (let i = 0; i < 145; i++) { const s = freeSpot(36); if (s) addObs({ kind: "crate", shape: "r", x: s.x, y: s.y, hw: 32, hh: 32, hp: 80 }); }
-  for (let i = 0; i < 42; i++) { const s = freeSpot(28); if (s) addObs({ kind: "barrel", shape: "c", x: s.x, y: s.y, r: 26, hp: 40 }); }
-  for (let i = 0; i < 145; i++) { const s = freeSpot(20); if (s) G.bushes.push({ x: s.x, y: s.y, r: rand(50, 68), seed: Math.random() * 10 }); }
-  for (let i = 0; i < 260; i++) { const s = freeSpot(22); if (s) spawnLootAt(s.x, s.y, false); }
+  for (let i = 0; i < 17; i++) { const s = freeSpot(170); if (s) makeRuin(s.x, s.y); }
+  for (let i = 0; i < 195; i++) { const s = freeSpot(30); if (s) { const tr = addObs({ kind: "tree", shape: "c", x: s.x, y: s.y, r: 26, hp: Infinity, canopy: rand(85, 110), hue: rand(-12, 12) }); G.trees.push(tr); } }
+  for (let i = 0; i < 90; i++) { const s = freeSpot(55); if (s) addObs({ kind: "rock", shape: "c", x: s.x, y: s.y, r: rand(38, 55), hp: 170 }); }
+  for (let i = 0; i < 122; i++) { const s = freeSpot(36); if (s) addCrate(s.x, s.y, Math.random() < .14); }
+  for (let i = 0; i < 36; i++) { const s = freeSpot(28); if (s) addObs({ kind: "barrel", shape: "c", x: s.x, y: s.y, r: 26, hp: 40 }); }
+  for (let i = 0; i < 125; i++) { const s = freeSpot(20); if (s) G.bushes.push({ x: s.x, y: s.y, r: rand(50, 68), seed: Math.random() * 10 }); }
+  for (let i = 0; i < 220; i++) { const s = freeSpot(22); if (s) spawnLootAt(s.x, s.y, false); }
   buildMinimapBase();
 }
 
 /* ---------- loot ---------- */
+const GEAR = ["helmet", "vest", "pack"];
 function addLoot(x, y, kind, type, amount, extra) {
-  const l = { id: nextId++, x: clamp(x, 30, MAP - 30), y: clamp(y, 30, MAP - 30), kind, type, amount, r: kind === "gun" ? 24 : 18, bob: Math.random() * 6 };
+  const l = { id: nextId++, x: clamp(x, 30, MAP - 30), y: clamp(y, 30, MAP - 30), kind, type, amount, r: kind === "gun" ? 26 : 19, bob: Math.random() * 6 };
   if (extra) Object.assign(l, extra);
   G.loot.push(l);
   return l;
 }
 function spawnLootAt(x, y, rich) {
-  const k = weighted(rich ? { gun: 5, ammo: 2, heal: 3, vest: 2 } : { gun: 3, ammo: 4, heal: 4, vest: 1.3 });
+  const k = weighted(rich ? { gun: 5, ammo: 2, heal: 3, gear: 3 } : { gun: 3, ammo: 4, heal: 4, gear: 2 });
   const sc = () => [x + rand(-30, 30), y + rand(-30, 30)];
   if (k === "gun") {
-    const type = weighted(rich ? { pistol: 6, smg: 12, shotgun: 10, rifle: 11, sniper: 5 } : { pistol: 20, smg: 14, shotgun: 12, rifle: 8, sniper: 3 });
+    const type = weighted(rich
+      ? { glock: 6, fiveseven: 4, smg: 11, shotgun: 9, spas: 5, m4: 8, ak: 6, sniper: 4 }
+      : { glock: 22, fiveseven: 4, smg: 14, shotgun: 11, spas: 2.5, m4: 6, ak: 4, sniper: 2 });
     addLoot(x, y, "gun", type, 1, { mag: WEAPONS[type].mag });
     const a = WEAPONS[type].ammo;
-    addLoot(...sc(), "ammo", a, AMMO_PACK[a] * (type === "shotgun" ? 1 : 1));
+    addLoot(...sc(), "ammo", a, AMMO_PACK[a]);
+    if (rich || type === "fiveseven") addLoot(...sc(), "ammo", a, AMMO_PACK[a]);
   } else if (k === "ammo") {
-    const a = weighted({ a9: 5, a12: 3, a762: 4 });
+    const a = weighted({ a9: 5, a57: 1.5, a556: 3, a762: 3, a12: 3 });
     addLoot(x, y, "ammo", a, AMMO_PACK[a]);
   } else if (k === "heal") {
-    addLoot(x, y, "heal", weighted({ bandage: 25, medkit: 6, soda: 10 }), 1);
+    addLoot(x, y, "heal", weighted({ bandage: 25, medkit: 5, soda: 10, pills: 3 }), 1);
   } else {
-    addLoot(x, y, "vest", weighted(rich ? { 1: 4, 2: 4, 3: 1.5 } : { 1: 8, 2: 4, 3: 1.2 }), 1);
+    const kind = pick(GEAR);
+    addLoot(x, y, kind, weighted(rich ? { 1: 4, 2: 4, 3: 1.5 } : { 1: 8, 2: 3.5, 3: .8 }), 1);
   }
 }
 function lootName(l) {
   if (l.kind === "gun") return t(l.type);
   if (l.kind === "ammo") return t(l.type) + " ×" + l.amount;
   if (l.kind === "heal") return t(l.type);
-  return t("vest", { n: l.type });
+  return t(l.kind, { n: l.type });
 }
 function lootValue(p, l) {
   if (l.kind === "gun") {
@@ -543,9 +648,9 @@ function lootValue(p, l) {
     const worst = Math.min(...guns.map(g => WEAPONS[g.type].tier));
     return WEAPONS[l.type].tier > worst ? 4 : 0;
   }
-  if (l.kind === "ammo") return p.slots.some(g => g && WEAPONS[g.type].ammo === l.type) && p.ammo[l.type] < AMMO_CAP[l.type] * .8 ? 3 : 0;
-  if (l.kind === "heal") return p.items[l.type] < ITEMS[l.type].cap ? (l.type === "medkit" ? 3 : 2) : 0;
-  return +l.type > p.vest ? 5 : 0;
+  if (l.kind === "ammo") return p.slots.some(g => g && WEAPONS[g.type].ammo === l.type) && p.ammo[l.type] < ammoCap(p, l.type) * .8 ? 3 : 0;
+  if (l.kind === "heal") return p.items[l.type] < itemCap(p, l.type) ? (l.type === "medkit" || l.type === "pills" ? 3 : 2) : 0;
+  return +l.type > p[l.kind] ? (l.kind === "pack" ? 4 : 5) : 0;
 }
 function removeLoot(l) { const i = G.loot.indexOf(l); if (i >= 0) G.loot.splice(i, 1); }
 function pickupLoot(p, l) {
@@ -561,17 +666,17 @@ function pickupLoot(p, l) {
     removeLoot(l);
     switchWeapon(p, slot, true);
   } else if (l.kind === "ammo") {
-    const take = Math.min(l.amount, AMMO_CAP[l.type] - p.ammo[l.type]);
+    const take = Math.min(l.amount, ammoCap(p, l.type) - p.ammo[l.type]);
     if (take <= 0) return false;
     p.ammo[l.type] += take; l.amount -= take;
     if (l.amount <= 0) removeLoot(l);
   } else if (l.kind === "heal") {
-    if (p.items[l.type] >= ITEMS[l.type].cap) return false;
+    if (p.items[l.type] >= itemCap(p, l.type)) return false;
     p.items[l.type]++; removeLoot(l);
   } else {
-    if (+l.type <= p.vest) return false;
-    if (p.vest) addLoot(p.x + rand(-20, 20), p.y + rand(-20, 20), "vest", String(p.vest), 1);
-    p.vest = +l.type; removeLoot(l);
+    if (+l.type <= p[l.kind]) return false;
+    if (p[l.kind]) addLoot(p.x + rand(-20, 20), p.y + rand(-20, 20), l.kind, String(p[l.kind]), 1);
+    p[l.kind] = +l.type; removeLoot(l);
   }
   if (p === G.me) sfx("pickup", p.x, p.y);
   return true;
@@ -581,14 +686,15 @@ function dropAll(p) {
   for (const g of p.slots) if (g) spill("gun", g.type, 1, { mag: g.mag });
   for (const a in p.ammo) if (p.ammo[a] > 0) spill("ammo", a, p.ammo[a]);
   for (const it in p.items) for (let i = 0; i < p.items[it]; i++) spill("heal", it, 1);
-  if (p.vest) spill("vest", String(p.vest), 1);
+  for (const g of GEAR) if (p[g]) spill(g, String(p[g]), 1);
 }
 
 /* ---------- players ---------- */
 function makePlayer(name, isBot, x, y, skill) {
   return {
     pl: true, id: nextId++, name, isBot, x, y, vx: 0, vy: 0, r: 24, hp: 100, boost: 0, angle: rand(0, 6.28),
-    slots: [null, null], cur: 2, prevCur: 2, ammo: { a9: 0, a12: 0, a762: 0 }, items: { bandage: 0, medkit: 0, soda: 0 }, vest: 0,
+    slots: [null, null], cur: 2, prevCur: 2, ammo: { a9: 0, a57: 0, a556: 0, a762: 0, a12: 0 }, items: { bandage: 0, medkit: 0, soda: 0, pills: 0 },
+    vest: 0, helmet: 0, pack: 0,
     alive: true, kills: 0, dmgDealt: 0, reloadT: 0, fireT: 0, heal: null, color: pick(SHIRTS), mx: 0, my: 0,
     firing: false, lastShotT: -9, inBush: false, hitT: -9, meleeAnim: 0, punchSide: 0, skill, killer: null,
     ai: isBot ? newAI() : null
@@ -607,13 +713,12 @@ function startReload(p) {
   const g = curGun(p); if (!g || p.reloadT > 0) return;
   const w = WEAPONS[g.type];
   if (g.mag >= w.mag || p.ammo[w.ammo] <= 0) return;
-  p.reloadT = w.reload; p.heal = null;
+  p.reloadT = w.shell || w.reload; p.heal = null;
 }
 function startHeal(p, type) {
   if (p.heal || p.items[type] <= 0) return false;
-  if (type === "bandage" && p.hp >= 75) return false;
-  if (type === "medkit" && p.hp >= 100) return false;
-  if (type === "soda" && p.boost >= 100) return false;
+  if ((type === "bandage" || type === "medkit") && p.hp >= 100) return false;
+  if ((type === "soda" || type === "pills") && p.boost >= 100) return false;
   p.heal = { type, t: ITEMS[type].time, total: ITEMS[type].time }; p.reloadT = 0;
   return true;
 }
@@ -623,9 +728,10 @@ function tryFire(p) {
   if (p.heal) p.heal = null;
   if (w.melee) { doMelee(p); p.fireT = w.rate; return; }
   const g = curGun(p);
-  if (p.reloadT > 0) return;
+  if (p.reloadT > 0) { if (w.shell && g.mag > 0) p.reloadT = 0; else return; }
   if (g.mag <= 0) { startReload(p); return; }
   g.mag--; p.fireT = w.rate; p.lastShotT = G.time;
+  if (G.test && G.test.ammo && p === G.me) p.ammo[w.ammo] = ammoCap(p, w.ammo);
   const moving = Math.hypot(p.vx, p.vy) > 60;
   for (let i = 0; i < w.pellets; i++) {
     const a = p.angle + gauss() * w.spread * (moving ? 1.35 : 1) * .6;
@@ -655,7 +761,11 @@ function doMelee(p) {
 }
 function damagePlayer(tg, amt, src, wk) {
   if (!tg.alive) return;
-  if (wk !== "zone") amt *= 1 - VEST_RED[tg.vest];
+  if (wk !== "zone") amt *= (1 - VEST_RED[tg.vest]) * (1 - HELMET_RED[tg.helmet]);
+  if (G.test) {
+    if (wk !== "zone") damageNumber(tg.x, tg.y, amt, tg === G.me ? "#ff5a5f" : "#ffffff");
+    if (tg === G.me && G.test.god) { tg.hitT = G.time; G.flash = .2; return; }
+  }
   tg.hp -= amt; tg.hitT = G.time;
   if (src && src !== tg) { src.dmgDealt += amt; if (tg.isBot) { tg.ai.lastAttacker = src; tg.ai.hitT = G.time; } }
   if (tg === G.me && wk !== "zone") G.flash = .35;
@@ -670,6 +780,7 @@ function killPlayer(p, src, wk) {
   dropAll(p);
   for (let i = 0; i < 14; i++) particle(p.x, p.y, rand(-180, 180), rand(-180, 180), rand(.3, .7), "#c8304a", rand(4, 8), "dot");
   if (G.attract) { if (alive <= 1) G.restartT = 3; return; }
+  if (G.test) { if (p === G.me) G.respawnT = 1.5; return; }
   if (p === G.me) endGame(false, wk);
   else if (alive === 1 && G.me.alive) { G.me.place = 1; endGame(true); }
 }
@@ -683,7 +794,12 @@ function damageObs(o, amt, src) {
   if (o.hp <= 0) {
     o.dead = true;
     for (let i = 0; i < 12; i++) particle(o.x, o.y, rand(-220, 220), rand(-220, 220), rand(.3, .8), col, rand(4, 9), "dot");
-    if (o.kind === "crate") { spawnLootAt(o.x, o.y, true); if (Math.random() < .5) spawnLootAt(o.x + rand(-25, 25), o.y + rand(-25, 25), false); sfx("crate", o.x, o.y); }
+    if (o.kind === "crate") {
+      spawnLootAt(o.x, o.y, true);
+      if (o.mil) { spawnLootAt(o.x + rand(-30, 30), o.y + rand(-30, 30), true); addLoot(o.x + rand(-30, 30), o.y + rand(-30, 30), pick(GEAR), String(randi(2, 3)), 1); }
+      else if (Math.random() < .5) spawnLootAt(o.x + rand(-25, 25), o.y + rand(-25, 25), false);
+      sfx("crate", o.x, o.y);
+    }
     else if (o.kind === "barrel") explode(o.x, o.y, src);
     else sfx("crate", o.x, o.y);
   }
@@ -754,6 +870,7 @@ function planZone(z) {
 }
 function updateZone(dt) {
   const z = G.zone;
+  if (G.test && !G.test.zone) return;
   z.t -= dt;
   const ph = PHASES[z.phase];
   if (z.stage === "done") z.dps += dt * 2; // the final ring keeps getting deadlier so a match always ends
@@ -790,7 +907,10 @@ function weaponSuit(type, d) {
   switch (type) {
     case "sniper": return d > 450 ? 5 : 1.2;
     case "shotgun": return d < 200 ? 5.5 : d < 300 ? 2 : .4;
-    case "rifle": return 4;
+    case "spas": return d < 320 ? 5.2 : d < 480 ? 3 : .8;
+    case "m4": return d < 420 ? 4.6 : 2.8;
+    case "ak": return d > 320 ? 4.8 : 3.2;
+    case "fiveseven": return 2.6;
     case "smg": return d < 350 ? 4.2 : 2;
     default: return 2;
   }
@@ -863,10 +983,14 @@ function botThink(b) {
   if (!b.heal) {
     if (b.hp < sk.heal) {
       if (b.hp < 45 && b.items.medkit) startHeal(b, "medkit");
-      else if (b.hp < 75 && b.items.bandage) startHeal(b, "bandage");
+      else if (b.hp < 45 && b.items.pills) startHeal(b, "pills");
+      else if (b.items.bandage) startHeal(b, "bandage");
       else if (b.items.medkit) startHeal(b, "medkit");
+      else if (b.items.pills) startHeal(b, "pills");
       else if (b.items.soda) startHeal(b, "soda");
-    } else if (sk.smart && b.items.soda && b.boost < 25 && b.hp < 90) startHeal(b, "soda");
+    } else if (sk.smart && b.boost < 20 && b.hp < 90) {
+      if (b.items.soda) startHeal(b, "soda"); else if (b.hp < 70 && b.items.pills) startHeal(b, "pills");
+    }
   }
   if (b.heal && !ai.zoneUrgent) { ai.mode = "heal"; return; }
   if (ai.zoneUrgent) { ai.mode = "move"; ai.goal = ai.zoneGoal; ai.lootT = null; return; }
@@ -917,6 +1041,11 @@ function steer(b, mx, my) {
 }
 function botUpdate(b, dt) {
   const ai = b.ai, sk = b.skill;
+  if (ai.dummy) {
+    b.mx = ai.dummy === "run" ? (Math.sin(G.time * 1.4 + b.id) > 0 ? 1 : -1) : 0; b.my = 0; b.firing = false;
+    if (G.me) b.angle = Math.atan2(G.me.y - b.y, G.me.x - b.x);
+    return;
+  }
   ai.thinkT -= dt; ai.reactT -= dt; ai.pauseT -= dt; ai.strafeT -= dt; ai.aimErrT -= dt; ai.detourT -= dt; ai.wanderT -= dt; ai.switchT -= dt;
   if (ai.thinkT <= 0) { ai.thinkT = sk.think * rand(.7, 1.3); botThink(b); }
   if (ai.strafeT <= 0) { ai.strafeDir *= -1; ai.strafeT = rand(.4, 1.4); }
@@ -976,6 +1105,7 @@ function botUpdate(b, dt) {
       if (Math.random() < (1 - sk.burst) * dt * 5) ai.pauseT = rand(.25, .7);
     }
   } else if (ml > .1) b.angle = turnToward(b.angle, Math.atan2(my, mx), 7 * dt);
+  if (G.test && G.test.passive) b.firing = false;
   // auto pickups
   for (let i = G.loot.length - 1; i >= 0; i--) {
     const l = G.loot[i];
@@ -995,21 +1125,28 @@ function updatePlayer(p, dt) {
     p.reloadT -= dt;
     if (p.reloadT <= 0) {
       const g = curGun(p);
-      if (g) { const w = WEAPONS[g.type], take = Math.min(w.mag - g.mag, p.ammo[w.ammo]); g.mag += take; p.ammo[w.ammo] -= take; }
       p.reloadT = 0;
+      if (g) {
+        const w = WEAPONS[g.type], take = Math.min(w.shell ? 1 : w.mag - g.mag, p.ammo[w.ammo]);
+        g.mag += take; p.ammo[w.ammo] -= take;
+        if (w.shell && take > 0 && g.mag < w.mag && p.ammo[w.ammo] > 0) p.reloadT = w.shell; // next shell
+        if (w.shell && take > 0 && p === G.me) sfx("shell", p.x, p.y);
+      }
     }
   }
   if (p.heal) {
     p.heal.t -= dt;
     if (p.heal.t <= 0) {
       const it = p.heal.type; p.items[it]--;
-      if (it === "bandage") p.hp = Math.max(p.hp, Math.min(75, p.hp + 15));
+      if (it === "bandage") p.hp = Math.min(100, p.hp + 15);
       else if (it === "medkit") p.hp = 100;
-      else p.boost = Math.min(100, p.boost + 40);
+      else if (it === "soda") p.boost = Math.min(100, p.boost + 25);
+      else p.boost = 100;
       p.heal = null;
     }
   }
-  if (p.boost > 0) { p.boost = Math.max(0, p.boost - dt * 2.2); p.hp = Math.min(100, p.hp + dt * 1.4); }
+  // boost turns into health 1:1 over time (soda +25, pills up to a full bar)
+  if (p.boost > 0) { const k = Math.min(p.boost, dt * 2.5); p.boost -= k; p.hp = Math.min(100, p.hp + k); }
   const g = curGun(p);
   if (g && g.mag <= 0 && p.reloadT <= 0 && p.fireT <= 0 && p.ammo[WEAPONS[g.type].ammo] > 0) startReload(p);
   // movement
@@ -1050,6 +1187,7 @@ function nearestGunLoot(p) {
   return best;
 }
 function humanInput(p, dt) {
+  if (G.over) { p.mx = p.my = 0; p.firing = false; return; }
   let mx = 0, my = 0;
   if (keys.has("KeyW") || keys.has("ArrowUp")) my -= 1;
   if (keys.has("KeyS") || keys.has("ArrowDown")) my += 1;
@@ -1077,11 +1215,12 @@ function humanInput(p, dt) {
 }
 
 /* ---------- game lifecycle ---------- */
-function newGame(attract) {
+function newGame(attract, test) {
   G = { players: [], bullets: [], loot: [], obs: [], trees: [], bushes: [], particles: [], feed: [],
-    time: 0, me: null, over: false, attract, flash: 0, cam: { x: MAP / 2, y: MAP / 2 }, restartT: 0, spectate: null };
+    time: 0, me: null, over: false, attract, flash: 0, cam: { x: MAP / 2, y: MAP / 2 }, restartT: 0, spectate: null, test: null, respawnT: 0 };
   genWorld();
   G.zone = initZone();
+  if (test) { setupTestRange(); return; }
   const n = attract ? 14 : settings.bots;
   const names = [...BOT_NAMES].sort(() => Math.random() - .5);
   const spots = [];
@@ -1101,9 +1240,11 @@ function newGame(attract) {
   if (attract) G.zone.t = 25;
   G.cam.x = (G.me || G.spectate).x; G.cam.y = (G.me || G.spectate).y;
 }
-function startMatch() {
+function startMatch(test) {
   initAudio();
-  newGame(false);
+  newGame(false, test === true);
+  $("testBtn").hidden = !G.test; $("testPanel").hidden = true; $("bigmap").hidden = true;
+  if (G.test) buildTestPanel();
   $("menu").hidden = true; $("end").hidden = true; $("pause").hidden = true;
   $("hud").hidden = false;
   paused = false;
@@ -1137,6 +1278,106 @@ function toMenu() {
   renderMenu();
 }
 
+/* =====================================================================
+   TEST MODE — a cleared range in the middle of the map with the whole
+   arsenal laid out, toggles for god mode / ammo / zone / bot behaviour,
+   bot & dummy spawning, damage numbers and bot "thoughts".
+   ===================================================================== */
+const TEST_R = 560;
+function setupTestRange() {
+  const cx = MAP / 2, cy = MAP / 2;
+  G.test = { god: true, ammo: true, zone: false, passive: false, debug: true, speed: 1, level: settings.diff === "mixed" ? "normal" : settings.diff, n: 0 };
+  for (const o of G.obs) if (Math.hypot(o.x - cx, o.y - cy) < TEST_R) o.dead = true;
+  G.trees = G.trees.filter(o => !o.dead);
+  G.bushes = G.bushes.filter(b => Math.hypot(b.x - cx, b.y - cy) > TEST_R);
+  G.loot = G.loot.filter(l => Math.hypot(l.x - cx, l.y - cy) > TEST_R);
+  buildMinimapBase();
+  layoutArsenal();
+  G.me = makePlayer(t("you"), false, cx, cy, null);
+  G.me.color = "#ffd45c";
+  G.players.push(G.me);
+  G.cam.x = cx; G.cam.y = cy;
+  // a few cover pieces to test shooting around obstacles
+  addWall(cx - 330, cy, 22, 160); addWall(cx + 330, cy, 22, 160);
+  addCrate(cx - 420, cy - 60, false); addCrate(cx + 420, cy + 60, true);
+  addObs({ kind: "barrel", shape: "c", x: cx, y: cy + 420, r: 26, hp: 40 });
+}
+function layoutArsenal() {
+  const cx = MAP / 2, cy = MAP / 2;
+  G.loot = G.loot.filter(l => Math.hypot(l.x - cx, l.y - cy) > TEST_R);
+  const row = (items, y, gap) => items.forEach((it, i) => addLoot(cx + (i - (items.length - 1) / 2) * gap, cy + y, ...it));
+  row(Object.keys(WEAPONS).filter(w => w !== "fists").map(w => ["gun", w, 1, { mag: WEAPONS[w].mag }]), -270, 74);
+  row(AMMO_TYPES.flatMap(a => [["ammo", a, AMMO_PACK[a] * 3], ["ammo", a, AMMO_PACK[a] * 3]]), -185, 54);
+  row(GEAR.flatMap(g => [1, 2, 3].map(l => [g, String(l), 1])), 185, 58);
+  row(ITEM_KEYS.flatMap(it => [["heal", it, 1], ["heal", it, 1], ["heal", it, 1]]), 265, 46);
+}
+function testSpawn(kind) {
+  const me = G.me;
+  for (let i = 0; i < 40; i++) {
+    const a = rand(0, Math.PI * 2), d = rand(380, 520), x = me.x + Math.cos(a) * d, y = me.y + Math.sin(a) * d;
+    if (blocked(x, y, 30)) continue;
+    G.test.n++;
+    const lvl = kind === "bot" ? G.test.level : "normal";
+    const b = makePlayer(kind === "bot" ? t(lvl) + " #" + G.test.n : "🎯 #" + G.test.n, true, x, y, makeSkill(lvl));
+    if (kind === "bot") {
+      const gun = pick(["m4", "ak", "shotgun", "spas", "smg", "fiveseven"]);
+      b.slots[0] = { type: gun, mag: WEAPONS[gun].mag }; b.ammo[WEAPONS[gun].ammo] = 90; b.cur = 0;
+      b.items.bandage = 3; b.items.medkit = 1;
+    } else b.ai.dummy = kind;
+    G.players.push(b);
+    return;
+  }
+}
+function respawnMe() {
+  const np = makePlayer(t("you"), false, MAP / 2, MAP / 2, null);
+  np.color = "#ffd45c";
+  G.players[G.players.indexOf(G.me)] = np;
+  G.me = np;
+}
+function damageNumber(x, y, amt, color) {
+  if (G.particles.length < 600) G.particles.push({ x: x + rand(-10, 10), y: y - 30, vx: rand(-20, 20), vy: -70, life: .9, max: .9, color, size: 18, type: "text", text: String(Math.round(amt)) });
+}
+function buildTestPanel() {
+  const P = $("testPanel"), T = G.test;
+  P.innerHTML = "";
+  const h = document.createElement("h3"); h.textContent = t("testTitle"); P.appendChild(h);
+  const check = (key, label) => {
+    const l = document.createElement("label"), c = document.createElement("input");
+    c.type = "checkbox"; c.checked = T[key];
+    c.addEventListener("change", () => { G.test[key] = c.checked; c.blur(); });
+    l.append(c, document.createTextNode(t(label))); P.appendChild(l);
+  };
+  check("god", "tGod"); check("ammo", "tAmmo"); check("zone", "tZone"); check("passive", "tPassive"); check("debug", "tDebug");
+  const lv = document.createElement("label"); lv.textContent = t("tLevel") + " ";
+  const sel = document.createElement("select");
+  for (const d of ["easy", "normal", "hard", "insane"]) { const o = document.createElement("option"); o.value = d; o.textContent = t(d); o.selected = T.level === d; sel.appendChild(o); }
+  sel.addEventListener("change", () => { G.test.level = sel.value; sel.blur(); });
+  lv.appendChild(sel); P.appendChild(lv);
+  const btns = (list) => {
+    const g = document.createElement("div"); g.className = "grid2";
+    for (const [label, fn] of list) {
+      const b = document.createElement("button"); b.className = "btn"; b.textContent = t(label);
+      b.addEventListener("click", () => { fn(); b.blur(); });
+      g.appendChild(b);
+    }
+    P.appendChild(g);
+  };
+  btns([["tSpawn", () => testSpawn("bot")], ["tDummy", () => testSpawn("stand")], ["tRunner", () => testSpawn("run")],
+    ["tClear", () => { G.players = G.players.filter(p => !p.isBot); }],
+    ["tArsenal", layoutArsenal],
+    ["tGear", () => { const me = G.me; for (const g of GEAR) me[g] = 3; for (const a of AMMO_TYPES) me.ammo[a] = ammoCap(me, a); for (const it of ITEM_KEYS) me.items[it] = itemCap(me, it); me.hp = 100; }]]);
+  const sp = document.createElement("label"); sp.textContent = t("tSpeed") + " ";
+  const ss = document.createElement("select");
+  for (const v of [.25, .5, 1, 2]) { const o = document.createElement("option"); o.value = v; o.textContent = v + "×"; o.selected = T.speed === v; ss.appendChild(o); }
+  ss.addEventListener("change", () => { G.test.speed = +ss.value; ss.blur(); });
+  sp.appendChild(ss); P.appendChild(sp);
+  const hint = document.createElement("p"); hint.textContent = t("tHint"); P.appendChild(hint);
+  btns([["tClose", () => { $("testPanel").hidden = true; }]]);
+}
+function toggleTestPanel() { if (G && G.test) { $("testPanel").hidden = !$("testPanel").hidden; } }
+$("testBtn").addEventListener("click", e => { toggleTestPanel(); e.currentTarget.blur(); });
+$("testModeBtn").addEventListener("click", () => startMatch(true));
+
 /* ---------- main update ---------- */
 let paused = false;
 function update(dt) {
@@ -1150,6 +1391,7 @@ function update(dt) {
   separatePlayers();
   updateBullets(dt);
   G.flash = Math.max(0, G.flash - dt);
+  if (G.test && !G.me.alive) { G.respawnT -= dt; if (G.respawnT <= 0) respawnMe(); }
   // camera
   let follow = G.me && G.me.alive ? G.me : G.spectate;
   if ((!follow || !follow.alive) && (G.attract || G.over)) {
@@ -1196,7 +1438,7 @@ function circle(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); }
 const INK = "#23264a";
 
 function viewScale() {
-  let s = Math.sqrt(VW * VH) / 1150;
+  let s = Math.sqrt(VW * VH) / 1310 * ZOOMS[zoomIdx];
   const f = G.me && G.me.alive ? G.me : null;
   if (f && curWeapon(f) === "sniper") s /= WEAPONS.sniper.zoom;
   return s;
@@ -1252,6 +1494,7 @@ function render() {
     if (!inView(q.x, q.y, q.size)) continue;
     const a = q.life / q.max;
     if (q.type === "ring") { ctx.globalAlpha = a; ctx.strokeStyle = q.color; ctx.lineWidth = 14 * a; circle(q.x, q.y, q.size * (1 - a * .7)); ctx.stroke(); ctx.fillStyle = "rgba(255,180,60," + (a * .35) + ")"; ctx.fill(); }
+    else if (q.type === "text") { ctx.globalAlpha = Math.min(1, a * 2); ctx.font = "900 20px Rubik, sans-serif"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = INK; ctx.strokeText(q.text, q.x, q.y); ctx.fillStyle = q.color; ctx.fillText(q.text, q.x, q.y); }
     else if (q.type === "flash") { ctx.globalAlpha = a / q.max * .06 + .4; ctx.fillStyle = q.color; circle(q.x, q.y, q.size); ctx.fill(); }
     else { ctx.globalAlpha = Math.min(1, a * 1.5); ctx.fillStyle = q.color; circle(q.x, q.y, q.size * (q.type === "spark" ? a : 1)); ctx.fill(); }
   }
@@ -1263,7 +1506,13 @@ function render() {
     if (!p.alive || p === G.me || !inView(p.x, p.y, 60)) continue;
     if (p.inBush && me && Math.hypot(me.x - p.x, me.y - p.y) > 150) continue;
     ctx.fillStyle = "rgba(35,38,74,.75)"; ctx.fillText(p.name, p.x, p.y - 36);
-    if (G.time - p.hitT < 3) {
+    if (G.test && G.test.debug && p.ai && !p.ai.dummy) {
+      const tg = p.ai.target && p.ai.target.alive ? " → " + p.ai.target.name : "";
+      ctx.font = "800 13px Nunito, sans-serif"; ctx.fillStyle = "#ffffff";
+      ctx.fillText(p.ai.mode + tg + (p.ai.zoneUrgent ? " · zone" : "") + " · " + t(curWeapon(p)), p.x, p.y - 54);
+      ctx.font = "800 15px Nunito, sans-serif";
+    }
+    if (G.time - p.hitT < 3 || G.test) {
       ctx.fillStyle = "rgba(35,38,74,.7)"; ctx.fillRect(p.x - 24, p.y + 32, 48, 6);
       ctx.fillStyle = p.hp < 30 ? "#ff5a5f" : "#ffffff"; ctx.fillRect(p.x - 24, p.y + 32, 48 * p.hp / 100, 6);
     }
@@ -1289,30 +1538,148 @@ function render() {
   }
   drawMinimap();
 }
+/* ---------- icons (shared by the map and the HUD; drawn in a 64×28 box, muzzle to the right) ---------- */
+const DARK = "#2b2e38", WOOD = "#9a6233";
+function poly(c, pts, fill) { c.beginPath(); c.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) c.lineTo(pts[i], pts[i + 1]); c.closePath(); c.fillStyle = fill; c.fill(); c.stroke(); }
+function box(c, x, y, w, h, fill) { c.fillStyle = fill; c.fillRect(x, y, w, h); c.strokeRect(x, y, w, h); }
+const GUN_SHAPES = {
+  glock(c) {
+    poly(c, [-12, -1, -4, -1, -2, 10, -10, 10], DARK);
+    box(c, -14, -8, 26, 7, "#3a3d48");
+    c.strokeRect(-5, -1, 6, 4);
+  },
+  fiveseven(c) {
+    poly(c, [-15, -1, -6, -1, -3, 11, -12, 11], DARK);
+    box(c, -17, -2, 30, 3, DARK);
+    box(c, -18, -9, 34, 7, "#c9b48a");
+    c.strokeRect(-6, 1, 6, 4);
+  },
+  smg(c) {
+    c.strokeStyle = DARK; c.lineWidth = 2.2; c.strokeRect(-27, -6, 12, 6); c.strokeStyle = INK; c.lineWidth = 1.4;
+    box(c, 16, -5, 9, 3, DARK);
+    box(c, 2, 2, 5, 12, DARK);
+    box(c, -9, 2, 5, 8, DARK);
+    box(c, -15, -7, 31, 9, "#5a5f6c");
+  },
+  shotgun(c) {
+    poly(c, [-31, -5, -14, -8, -14, 1, -31, 6], WOOD);
+    box(c, -6, -3, 30, 3, DARK);
+    box(c, -6, -7, 39, 4, DARK);
+    box(c, 6, -5, 13, 7, WOOD);
+    box(c, -15, -8, 11, 10, DARK);
+  },
+  spas(c) {
+    c.strokeStyle = DARK; c.lineWidth = 2.4; c.beginPath(); c.moveTo(-14, -4); c.lineTo(-30, -4); c.lineTo(-30, 4); c.lineTo(-14, 2); c.stroke(); c.strokeStyle = INK; c.lineWidth = 1.4;
+    box(c, -10, 1, 5, 9, DARK);
+    box(c, -6, -2, 32, 3, "#4a4e5a");
+    box(c, -6, -8, 40, 5, DARK);
+    for (let x = -2; x < 30; x += 6) { c.fillStyle = "#6b7080"; c.fillRect(x, -7, 3, 3); }
+    box(c, 4, -3, 14, 7, "#4a4e5a");
+    box(c, -15, -8, 11, 10, DARK);
+  },
+  m4(c) {
+    box(c, -29, -7, 15, 8, "#24262e");
+    box(c, -10, 1, 5, 9, "#24262e");
+    poly(c, [1, 1, 7, 1, 9, 13, 3, 13], "#24262e");
+    box(c, 12, -7, 15, 7, "#3a3d48");
+    box(c, 27, -5, 8, 3, "#24262e");
+    box(c, -14, -8, 26, 9, "#24262e");
+    box(c, -8, -11, 16, 3, "#3a3d48");
+  },
+  ak(c) {
+    poly(c, [-31, -3, -13, -7, -13, 0, -31, 5], WOOD);
+    box(c, -9, 0, 5, 8, DARK);
+    poly(c, [1, 0, 8, 0, 14, 12, 7, 15], "#3a3d48");
+    box(c, 13, -10, 14, 2, DARK);
+    box(c, 27, -6, 10, 2.5, DARK);
+    box(c, 13, -7, 13, 6, WOOD);
+    box(c, -13, -8, 27, 8, "#3a3d48");
+  },
+  sniper(c) {
+    poly(c, [-32, -5, -12, -7, -12, 1, -24, 2, -27, 6, -32, 6], "#6b7b44");
+    box(c, 8, -5, 26, 3, DARK);
+    box(c, -12, -7, 21, 7, "#6b7b44");
+    box(c, -7, -14, 19, 5, DARK);
+    c.fillStyle = "#7fd0ff"; c.fillRect(11, -13, 2, 3);
+    c.beginPath(); c.moveTo(26, -2); c.lineTo(30, 8); c.moveTo(26, -2); c.lineTo(22, 8); c.stroke();
+  }
+};
+function drawGunIcon(c, type, x, y, width) {
+  const k = width / 64;
+  c.save(); c.translate(x, y); c.scale(k, k);
+  c.lineWidth = 1.4; c.strokeStyle = INK; c.lineJoin = "round";
+  GUN_SHAPES[type](c);
+  c.restore();
+}
+function drawAmmoIcon(c, type, x, y, size) {
+  const k = size / 24;
+  c.save(); c.translate(x, y); c.scale(k, k);
+  c.lineWidth = 1.5; c.strokeStyle = INK;
+  if (type === "a12") {
+    for (const dx of [-5, 5]) { box(c, dx - 4, -8, 8, 12, AMMO_COLOR.a12); box(c, dx - 4, 4, 8, 5, "#e0b04a"); }
+  } else {
+    const len = type === "a762" ? 20 : type === "a556" ? 18 : 15;
+    for (const dx of [-6, 0, 6]) {
+      c.beginPath(); c.moveTo(dx - 2.5, len / 2); c.lineTo(dx - 2.5, -len / 2 + 4); c.quadraticCurveTo(dx, -len / 2 - 2, dx + 2.5, -len / 2 + 4); c.lineTo(dx + 2.5, len / 2); c.closePath();
+      c.fillStyle = AMMO_COLOR[type]; c.fill(); c.stroke();
+    }
+  }
+  c.restore();
+}
+function drawHealIcon(c, type, x, y, size) {
+  const k = size / 24;
+  c.save(); c.translate(x, y); c.scale(k, k);
+  c.lineWidth = 1.5; c.strokeStyle = INK;
+  if (type === "bandage") {
+    roundRect(c, -10, -6, 20, 12, 4); c.fillStyle = "#f1dcb8"; c.fill(); c.stroke();
+    c.fillStyle = "#ff5a5f"; c.fillRect(-1.5, -4, 3, 8); c.fillRect(-4, -1.5, 8, 3);
+  } else if (type === "medkit") {
+    roundRect(c, -11, -8, 22, 17, 3); c.fillStyle = "#ff5a5f"; c.fill(); c.stroke();
+    box(c, -4, -11, 8, 3, "#c8304a");
+    c.fillStyle = "#fff"; c.fillRect(-2.5, -5, 5, 11); c.fillRect(-5.5, -2, 11, 5);
+  } else if (type === "soda") {
+    roundRect(c, -6, -10, 12, 20, 3); c.fillStyle = "#3f78c2"; c.fill(); c.stroke();
+    c.fillStyle = "#ffd45c"; c.fillRect(-6, -2, 12, 5);
+  } else {
+    roundRect(c, -7, -6, 14, 16, 3); c.fillStyle = "#ff9a3d"; c.fill(); c.stroke();
+    box(c, -8, -11, 16, 5, "#ffffff");
+    c.fillStyle = "#fff"; c.fillRect(-4, 0, 8, 4);
+  }
+  c.restore();
+}
+function drawGearIcon(c, kind, lvl, x, y, size) {
+  const k = size / 24, fill = lvl ? LEVEL_COLOR[lvl] : "#8a8fa3";
+  c.save(); c.translate(x, y); c.scale(k, k);
+  c.lineWidth = 1.6; c.strokeStyle = INK; c.lineJoin = "round";
+  if (kind === "helmet") {
+    c.beginPath(); c.moveTo(-10, 4); c.lineTo(-10, 0); c.arc(0, 0, 10, Math.PI, 0); c.lineTo(10, 4); c.closePath(); c.fillStyle = fill; c.fill(); c.stroke();
+    box(c, -12, 3, 24, 4, fill);
+  } else if (kind === "vest") {
+    poly(c, [-5, -10, -2, -6, 2, -6, 5, -10, 10, -6, 10, 10, -10, 10, -10, -6], fill);
+    c.beginPath(); c.moveTo(0, -6); c.lineTo(0, 10); c.stroke();
+  } else {
+    roundRect(c, -9, -7, 18, 18, 5); c.fillStyle = fill; c.fill(); c.stroke();
+    roundRect(c, -9, -9, 18, 8, 4); c.fill(); c.stroke();
+    box(c, -5, 3, 10, 6, fill);
+    c.beginPath(); c.arc(0, -10, 4, Math.PI, 0); c.stroke();
+  }
+  if (lvl) {
+    c.fillStyle = INK; c.font = "900 10px Rubik, sans-serif"; c.textAlign = "center"; c.textBaseline = "middle";
+    c.fillText(lvl, 0, kind === "helmet" ? -1 : kind === "pack" ? 6 : 3);
+  }
+  c.restore();
+}
 function drawLoot(l) {
   const y = l.y + Math.sin(G.time * 3 + l.bob) * 2;
-  ctx.fillStyle = "rgba(255,255,255,.9)"; ctx.strokeStyle = INK; ctx.lineWidth = 3;
+  // ring color tells the ammo type / gear level at a glance
+  const ring = l.kind === "gun" ? AMMO_COLOR[WEAPONS[l.type].ammo] : l.kind === "ammo" ? AMMO_COLOR[l.type] : l.kind === "heal" ? "#7dff8a" : LEVEL_COLOR[l.type];
+  ctx.fillStyle = "rgba(255,255,255,.92)"; ctx.strokeStyle = INK; ctx.lineWidth = 3;
   circle(l.x, y, l.r); ctx.fill(); ctx.stroke();
-  ctx.save(); ctx.translate(l.x, y);
-  if (l.kind === "gun") {
-    const w = WEAPONS[l.type];
-    ctx.rotate(-.5); ctx.fillStyle = "#2d2f3a";
-    roundRect(ctx, -w.len * .32, -3.5, w.len * .64, 7, 2); ctx.fill();
-    ctx.fillRect(-w.len * .32, 0, 6, 9);
-    ctx.fillStyle = AMMO_COLOR[w.ammo]; ctx.fillRect(w.len * .32 - 4, -3.5, 4, 7);
-  } else if (l.kind === "ammo") {
-    ctx.fillStyle = AMMO_COLOR[l.type];
-    for (let i = -1; i <= 1; i++) { roundRect(ctx, i * 6 - 2.5, -7, 5, 14, 2.5); ctx.fill(); }
-  } else if (l.kind === "heal") {
-    if (l.type === "soda") { ctx.fillStyle = "#3f78c2"; roundRect(ctx, -6, -9, 12, 18, 3); ctx.fill(); ctx.fillStyle = "#ffd45c"; ctx.fillRect(-6, -2, 12, 4); }
-    else { const big = l.type === "medkit"; ctx.fillStyle = big ? "#ff5a5f" : "#e8c9a0"; const a = big ? 11 : 9, b = big ? 4 : 3; ctx.fillRect(-a, -b, a * 2, b * 2); ctx.fillRect(-b, -a, b * 2, a * 2); }
-  } else {
-    ctx.fillStyle = VEST_COLOR[l.type];
-    ctx.beginPath(); ctx.moveTo(0, -11); ctx.lineTo(10, -6); ctx.lineTo(8, 8); ctx.lineTo(0, 12); ctx.lineTo(-8, 8); ctx.lineTo(-10, -6); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = "#fff"; ctx.font = "900 11px Rubik, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(l.type, 0, 1);
-    ctx.textBaseline = "alphabetic";
-  }
-  ctx.restore();
+  ctx.strokeStyle = ring; ctx.lineWidth = 3; circle(l.x, y, l.r - 3); ctx.stroke();
+  if (l.kind === "gun") drawGunIcon(ctx, l.type, l.x - 1, y + 1, 42);
+  else if (l.kind === "ammo") drawAmmoIcon(ctx, l.type, l.x, y, 24);
+  else if (l.kind === "heal") drawHealIcon(ctx, l.type, l.x, y, 26);
+  else drawGearIcon(ctx, l.kind, +l.type, l.x, y, 26);
 }
 function drawObs(o) {
   ctx.lineWidth = 3; ctx.strokeStyle = INK;
@@ -1324,17 +1691,46 @@ function drawObs(o) {
     ctx.fillStyle = "#9aa0a8"; circle(o.x, o.y, r); ctx.fill(); ctx.stroke();
     ctx.fillStyle = "#b8bec6"; circle(o.x - r * .25, o.y - r * .25, r * .45); ctx.fill();
   } else if (o.kind === "crate") {
-    const h = o.hw * hpK;
-    ctx.fillStyle = "#c9925a"; roundRect(ctx, o.x - h, o.y - h, h * 2, h * 2, 6); ctx.fill(); ctx.stroke();
-    ctx.strokeStyle = "#8a5a2e"; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.moveTo(o.x - h + 6, o.y - h + 6); ctx.lineTo(o.x + h - 6, o.y + h - 6); ctx.moveTo(o.x + h - 6, o.y - h + 6); ctx.lineTo(o.x - h + 6, o.y + h - 6); ctx.stroke();
-  } else if (o.kind === "barrel") {
+    drawCrate(o, hpK);  } else if (o.kind === "barrel") {
     ctx.fillStyle = "#e0463f"; circle(o.x, o.y, o.r * hpK); ctx.fill(); ctx.stroke();
     ctx.strokeStyle = "#9c2a25"; ctx.lineWidth = 3; circle(o.x, o.y, o.r * hpK * .6); ctx.stroke();
     ctx.fillStyle = "#ffd45c"; circle(o.x, o.y, 5); ctx.fill();
   } else if (o.kind === "wall") {
     ctx.fillStyle = "#a89a8a"; ctx.fillRect(o.x - o.hw, o.y - o.hh, o.hw * 2, o.hh * 2); ctx.strokeRect(o.x - o.hw, o.y - o.hh, o.hw * 2, o.hh * 2);
   }
+}
+function drawCrate(o, hpK) {
+  const w = o.hw * hpK, h = o.hh * hpK, x = o.x - w, y = o.y - h;
+  const base = o.mil ? "#6f8240" : "#d9a066", frame = o.mil ? "#4c5a2a" : "#a8672f", plank = o.mil ? "#5d6e34" : "#c48a52";
+  ctx.lineWidth = 3; ctx.strokeStyle = INK;
+  roundRect(ctx, x, y, w * 2, h * 2, 5); ctx.fillStyle = base; ctx.fill();
+  // planks
+  ctx.strokeStyle = plank; ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i = 1; i < 4; i++) { const yy = y + h * 2 * i / 4; ctx.moveTo(x + 6, yy); ctx.lineTo(x + w * 2 - 6, yy); }
+  ctx.stroke();
+  // frame + brace
+  ctx.strokeStyle = frame; ctx.lineWidth = 6;
+  ctx.strokeRect(x + 4, y + 4, w * 2 - 8, h * 2 - 8);
+  if (!o.mil) { ctx.beginPath(); if (o.rot) { ctx.moveTo(x + 7, y + 7); ctx.lineTo(x + w * 2 - 7, y + h * 2 - 7); } else { ctx.moveTo(x + w * 2 - 7, y + 7); ctx.lineTo(x + 7, y + h * 2 - 7); } ctx.stroke(); }
+  else {
+    // stencil star + latches on military crates
+    ctx.fillStyle = "rgba(255,255,255,.85)"; ctx.beginPath();
+    for (let i = 0; i < 10; i++) { const r = i % 2 ? 4.5 : 11, a = -Math.PI / 2 + i * Math.PI / 5; ctx.lineTo(o.x + Math.cos(a) * r * hpK, o.y + Math.sin(a) * r * hpK); }
+    ctx.fill();
+    ctx.fillStyle = "#c9ccd3"; ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
+    for (const sx of [-1, 1]) { ctx.fillRect(o.x + sx * w * .55 - 4, y - 2, 8, 6); ctx.strokeRect(o.x + sx * w * .55 - 4, y - 2, 8, 6); }
+  }
+  // metal corners
+  ctx.fillStyle = "#8e96a3"; ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
+  for (const [cx, cy] of [[x, y], [x + w * 2 - 9, y], [x, y + h * 2 - 9], [x + w * 2 - 9, y + h * 2 - 9]]) { ctx.fillRect(cx, cy, 9, 9); ctx.strokeRect(cx, cy, 9, 9); }
+  // cracks when damaged
+  if (hpK < .88) {
+    ctx.strokeStyle = "rgba(35,38,74,.6)"; ctx.lineWidth = 2; ctx.beginPath();
+    ctx.moveTo(o.x - w * .5, o.y - h * .3); ctx.lineTo(o.x - w * .1, o.y); ctx.lineTo(o.x - w * .25, o.y + h * .3); ctx.lineTo(o.x + w * .2, o.y + h * .5);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = INK; ctx.lineWidth = 3; roundRect(ctx, x, y, w * 2, h * 2, 5); ctx.stroke();
 }
 function drawBush(b, inside) {
   ctx.globalAlpha = inside ? .45 : .95;
@@ -1361,56 +1757,124 @@ function drawPlayer(p) {
     const pa = p.meleeAnim > 0 ? Math.sin((1 - p.meleeAnim / .25) * Math.PI) * 18 : 0;
     h1x = 18 + (p.punchSide ? pa : 0); h1y = -17; h2x = 18 + (p.punchSide ? 0 : pa); h2y = 17;
   } else {
-    const w = WEAPONS[wk], recoil = p.fireT > w.rate - .06 ? -5 : 0;
-    ctx.fillStyle = "#2d2f3a"; roundRect(ctx, 10 + recoil, -4.5, w.len + 14, 9, 3); ctx.fill(); ctx.stroke();
+    const w = WEAPONS[wk], recoil = p.fireT > w.rate - .06 ? -5 : 0, thick = wk === "glock" || wk === "fiveseven" ? 8 : 10;
+    ctx.fillStyle = w.col; roundRect(ctx, 10 + recoil, -thick / 2, w.len + 14, thick, 3); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = DARK; ctx.fillRect(10 + recoil + w.len + 4, -2.5, 10, 5);
+    if (wk === "sniper") { ctx.fillStyle = DARK; roundRect(ctx, 20 + recoil, -7, 16, 14, 3); ctx.fill(); ctx.stroke(); }
     h1x = 16 + recoil; h1y = 6; h2x = 18 + w.len * .55 + recoil; h2y = -1;
   }
+  if (p.pack) {
+    ctx.fillStyle = "#8b6a45"; circle(-p.r * .62, 0, p.r * (.62 + p.pack * .08)); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = LEVEL_COLOR[p.pack]; ctx.lineWidth = 3; circle(-p.r * .62, 0, p.r * (.62 + p.pack * .08) - 4); ctx.stroke(); ctx.strokeStyle = INK; ctx.lineWidth = 3;
+  }
   ctx.fillStyle = p.color; circle(0, 0, p.r); ctx.fill(); ctx.stroke();
-  if (p.vest) { ctx.strokeStyle = VEST_COLOR[p.vest]; ctx.lineWidth = 5; circle(0, 0, p.r - 5); ctx.stroke(); ctx.strokeStyle = INK; ctx.lineWidth = 3; }
+  if (p.vest) { ctx.strokeStyle = LEVEL_COLOR[p.vest]; ctx.lineWidth = 6; circle(0, 0, p.r - 5); ctx.stroke(); ctx.strokeStyle = INK; ctx.lineWidth = 1.5; circle(0, 0, p.r - 8.5); ctx.stroke(); ctx.lineWidth = 3; }
+  if (p.helmet) { ctx.fillStyle = LEVEL_COLOR[p.helmet]; circle(-2, 0, p.r * .58); ctx.fill(); ctx.stroke(); ctx.fillStyle = "rgba(255,255,255,.45)"; circle(-5, -4, p.r * .2); ctx.fill(); }
   ctx.fillStyle = skin;
   circle(h1x, h1y, 8); ctx.fill(); ctx.stroke();
   circle(h2x, h2y, 8); ctx.fill(); ctx.stroke();
   ctx.restore();
   if (p.heal || p.reloadT > 0) {
-    const k = p.heal ? 1 - p.heal.t / p.heal.total : 1 - p.reloadT / WEAPONS[curWeapon(p)].reload;
+    const k = p.heal ? 1 - p.heal.t / p.heal.total : 1 - p.reloadT / (WEAPONS[curWeapon(p)].shell || WEAPONS[curWeapon(p)].reload);
     ctx.strokeStyle = p.heal ? "#7dff8a" : "#ffffff"; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 8, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2); ctx.stroke();
   }
 }
-function drawMinimap() {
-  if ($("hud").hidden || !miniBase) return;
-  const S = mini.width, k = S / MAP, z = G.zone;
-  mctx.setTransform(1, 0, 0, 1, 0, 0);
-  mctx.drawImage(miniBase, 0, 0, S, S);
-  mctx.fillStyle = "rgba(210,40,60,.35)";
-  mctx.beginPath(); mctx.rect(0, 0, S, S); mctx.arc(z.x * k, z.y * k, Math.max(.5, z.r * k), 0, Math.PI * 2, true); mctx.fill("evenodd");
-  mctx.strokeStyle = "#ff5a5f"; mctx.lineWidth = 1.5 * DPR; mctx.beginPath(); mctx.arc(z.x * k, z.y * k, Math.max(.5, z.r * k), 0, 7); mctx.stroke();
-  if (z.stage !== "done") { mctx.strokeStyle = "#fff"; mctx.setLineDash([4 * DPR, 3 * DPR]); mctx.beginPath(); mctx.arc(z.toX * k, z.toY * k, Math.max(.5, z.toR * k), 0, 7); mctx.stroke(); mctx.setLineDash([]); }
+function drawMap(cv, c, big) {
+  const S = cv.width, k = S / MAP, z = G.zone, px = DPR * (big ? 1.6 : 1);
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.drawImage(miniBase, 0, 0, S, S);
+  if (big) {
+    c.strokeStyle = "rgba(35,38,74,.18)"; c.lineWidth = 1; c.beginPath();
+    for (let i = 1; i < 10; i++) { c.moveTo(i * S / 10, 0); c.lineTo(i * S / 10, S); c.moveTo(0, i * S / 10); c.lineTo(S, i * S / 10); }
+    c.stroke();
+  }
+  c.fillStyle = "rgba(210,40,60,.35)";
+  c.beginPath(); c.rect(0, 0, S, S); c.arc(z.x * k, z.y * k, Math.max(.5, z.r * k), 0, Math.PI * 2, true); c.fill("evenodd");
+  c.strokeStyle = "#ff5a5f"; c.lineWidth = 1.5 * px; c.beginPath(); c.arc(z.x * k, z.y * k, Math.max(.5, z.r * k), 0, 7); c.stroke();
+  if (z.stage !== "done") { c.strokeStyle = "#fff"; c.setLineDash([4 * px, 3 * px]); c.beginPath(); c.arc(z.toX * k, z.toY * k, Math.max(.5, z.toR * k), 0, 7); c.stroke(); c.setLineDash([]); }
+  if (G.test) for (const p of G.players) if (p.alive && p.isBot) { c.fillStyle = "#ff5a5f"; c.beginPath(); c.arc(p.x * k, p.y * k, 3 * px, 0, 7); c.fill(); }
   const f = G.me && G.me.alive ? G.me : G.spectate;
   if (f) {
-    mctx.fillStyle = "#ffd45c"; mctx.strokeStyle = INK; mctx.lineWidth = 1.5 * DPR;
-    mctx.beginPath(); mctx.arc(f.x * k, f.y * k, 4 * DPR, 0, 7); mctx.fill(); mctx.stroke();
-    mctx.strokeStyle = "rgba(255,255,255,.6)"; mctx.lineWidth = DPR;
-    const vw = VW / scale * k, vh = VH / scale * k; mctx.strokeRect(f.x * k - vw / 2, f.y * k - vh / 2, vw, vh);
+    c.fillStyle = "#ffd45c"; c.strokeStyle = INK; c.lineWidth = 1.5 * px;
+    c.beginPath(); c.arc(f.x * k, f.y * k, 4 * px, 0, 7); c.fill(); c.stroke();
+    if (big) { c.beginPath(); c.moveTo(f.x * k + Math.cos(f.angle) * 6 * px, f.y * k + Math.sin(f.angle) * 6 * px); c.lineTo(f.x * k + Math.cos(f.angle) * 14 * px, f.y * k + Math.sin(f.angle) * 14 * px); c.stroke(); }
+    c.strokeStyle = "rgba(255,255,255,.6)"; c.lineWidth = DPR;
+    const vw = VW / scale * k, vh = VH / scale * k; c.strokeRect(f.x * k - vw / 2, f.y * k - vh / 2, vw, vh);
   }
+}
+const bigmap = $("bigmap"), bctx = bigmap.getContext("2d");
+function drawMinimap() {
+  if ($("hud").hidden || !miniBase) return;
+  drawMap(mini, mctx, false);
+  if (!bigmap.hidden) {
+    const w = Math.round(bigmap.getBoundingClientRect().width * DPR);
+    if (w > 0 && bigmap.width !== w) { bigmap.width = w; bigmap.height = w; }
+    drawMap(bigmap, bctx, true);
+  }
+}
+function toggleBigMap() { if (!$("hud").hidden) bigmap.hidden = !bigmap.hidden; }
+mini.addEventListener("pointerdown", e => { e.stopPropagation(); toggleBigMap(); });
+bigmap.addEventListener("pointerdown", e => { e.stopPropagation(); bigmap.hidden = true; });
+
+/* ---------- zoom (M) ---------- */
+const ZOOMS = [1, .85, .7];
+let zoomIdx = 0;
+try { zoomIdx = clamp(+localStorage.getItem("lastring-zoom") || 0, 0, ZOOMS.length - 1); } catch (e) {}
+let toastTimer = 0;
+function toast(text) {
+  const el = $("toast"); el.textContent = text; el.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 1200);
+}
+function cycleZoom() {
+  zoomIdx = (zoomIdx + 1) % ZOOMS.length;
+  try { localStorage.setItem("lastring-zoom", zoomIdx); } catch (e) {}
+  toast(t("zoom", { n: Math.round(ZOOMS[zoomIdx] * 100) }));
 }
 
 /* ---------- HUD ---------- */
 const hudCache = {};
 function setText(id, s) { if (hudCache[id] !== s) { hudCache[id] = s; $(id).textContent = s; } }
 function setHTML(id, s) { if (hudCache[id] !== s) { hudCache[id] = s; $(id).innerHTML = s; } }
+function iconCanvas(w, h) {
+  const c = document.createElement("canvas");
+  c.width = Math.round(w * 2); c.height = Math.round(h * 2);
+  c.getContext("2d").setTransform(2, 0, 0, 2, 0, 0);
+  return c;
+}
+function paintIcon(c, w, h, fn) { const x = c.getContext("2d"); x.clearRect(0, 0, w, h); fn(x); }
 function buildHudButtons() {
   const slots = $("slots"); slots.innerHTML = "";
   for (const i of [0, 1, 2]) {
     const b = document.createElement("button"); b.className = "slot"; b.id = "slot" + i;
+    const cv = iconCanvas(54, 24); cv.id = "slotIcon" + i;
+    const sp = document.createElement("span"); sp.id = "slotTxt" + i;
+    b.append(cv, sp);
     b.addEventListener("pointerdown", e => { e.stopPropagation(); if (G.me && G.me.alive) switchWeapon(G.me, i); });
     slots.appendChild(b);
   }
   const items = $("items"); items.innerHTML = "";
-  for (const it of ["bandage", "medkit", "soda"]) {
-    const b = document.createElement("button"); b.className = "item"; b.id = "item-" + it; b.title = t(it);
+  ITEM_KEYS.forEach((it, i) => {
+    const b = document.createElement("button"); b.className = "item"; b.id = "item-" + it; b.title = t(it) + " — " + t(it + "D") + (isTouch ? "" : " [" + (i + 4) + "]");
+    const cv = iconCanvas(22, 22); paintIcon(cv, 22, 22, c => drawHealIcon(c, it, 11, 11, 20));
+    const sp = document.createElement("span"); sp.id = "itemTxt-" + it;
+    b.append(cv, sp);
     b.addEventListener("pointerdown", e => { e.stopPropagation(); if (G.me && G.me.alive) startHeal(G.me, it); });
     items.appendChild(b);
+  });
+  const equip = $("equip"); equip.innerHTML = "";
+  for (const g of GEAR) {
+    const d = document.createElement("div"); d.className = "eq"; d.id = "eq-" + g;
+    const cv = iconCanvas(30, 30); cv.id = "eqIcon-" + g;
+    const sp = document.createElement("span"); sp.id = "eqTxt-" + g;
+    d.append(cv, sp); equip.appendChild(d);
+  }
+  const am = $("ammoList"); am.innerHTML = "";
+  for (const a of AMMO_TYPES) {
+    const d = document.createElement("div"); d.className = "am"; d.id = "am-" + a; d.title = t(a);
+    const i = document.createElement("i"); i.style.background = AMMO_COLOR[a];
+    const sp = document.createElement("span"); sp.id = "amTxt-" + a;
+    d.append(i, sp); am.appendChild(d);
   }
   for (const k in hudCache) delete hudCache[k];
 }
@@ -1421,28 +1885,44 @@ function updateHUD() {
   setText("aliveTxt", t("alive", { n: alive }));
   setText("killsTxt", t("kills", { n: me.kills }));
   const outside = me.alive && Math.hypot(me.x - z.x, me.y - z.y) > z.r;
-  setText("zoneMsg", outside ? t("outside") : z.stage === "wait" ? t("zoneWait", { t: fmtTime(z.t) }) : z.stage === "shrink" ? t("zoneShrink") : t("zoneFinal"));
+  setText("zoneMsg", G.test ? t("testHud") : outside ? t("outside") : z.stage === "wait" ? t("zoneWait", { t: fmtTime(z.t) }) : z.stage === "shrink" ? t("zoneShrink") : t("zoneFinal"));
   $("zoneMsg").classList.toggle("warn", outside || z.stage === "shrink");
   $("hpFill").style.width = Math.max(0, me.hp) + "%";
   $("hpBar").classList.toggle("low", me.hp < 30);
   $("boostFill").style.width = me.boost + "%";
   const g = curGun(me);
   if (me.reloadT > 0) setHTML("ammoBig", t("reloading"));
-  else if (g) setHTML("ammoBig", g.mag + " <small>/ " + me.ammo[WEAPONS[g.type].ammo] + "</small>");
+  else if (g) setHTML("ammoBig", g.mag + " <small>/ " + me.ammo[WEAPONS[g.type].ammo] + " · " + t(WEAPONS[g.type].ammo) + "</small>");
   else setHTML("ammoBig", "");
   for (const i of [0, 1, 2]) {
     const el = $("slot" + i), sg = i < 2 ? me.slots[i] : null;
+    const type = i === 2 ? "fists" : sg ? sg.type : "";
+    if (hudCache["icon" + i] !== type) {
+      hudCache["icon" + i] = type;
+      paintIcon($("slotIcon" + i), 54, 24, c => { if (type && type !== "fists") drawGunIcon(c, type, 27, 13, 50); else if (type === "fists") { c.fillStyle = "#f3c89a"; c.strokeStyle = INK; c.lineWidth = 1.5; for (const dx of [18, 34]) { c.beginPath(); c.arc(dx, 12, 7, 0, 7); c.fill(); c.stroke(); } } });
+    }
     const label = i === 2 ? t("fists") : sg ? t(sg.type) : t("empty");
     const sub = i === 2 ? "3" : sg ? (i + 1) + " · " + sg.mag + "/" + me.ammo[WEAPONS[sg.type].ammo] : String(i + 1);
-    setHTML("slot" + i, label + "<small>" + sub + "</small>");
+    setHTML("slotTxt" + i, label + "<small>" + sub + "</small>");
     el.classList.toggle("on", me.cur === i);
     el.classList.toggle("empty", i < 2 && !sg);
   }
-  ["bandage", "medkit", "soda"].forEach((it, i) => {
-    setHTML("item-" + it, ITEM_ICON[it] + " " + me.items[it] + "<small>" + (isTouch ? t(it) : (i + 4) + " · " + t(it)) + "</small>");
+  ITEM_KEYS.forEach((it, i) => {
+    setHTML("itemTxt-" + it, " " + me.items[it] + "/" + itemCap(me, it) + "<small>" + (i + 4) + " · " + t(it) + "</small>");
     $("item-" + it).classList.toggle("zero", !me.items[it]);
     $("item-" + it).classList.toggle("using", !!(me.heal && me.heal.type === it));
   });
+  for (const gk of GEAR) {
+    const lv = me[gk];
+    if (hudCache["eq" + gk] !== lv) { hudCache["eq" + gk] = lv; paintIcon($("eqIcon-" + gk), 30, 30, c => drawGearIcon(c, gk, lv, 15, 15, 26)); }
+    setHTML("eqTxt-" + gk, t(gk + "S") + "<small>" + (lv ? t("lvl", { n: lv }) : t("none")) + "</small>");
+    $("eq-" + gk).className = "eq " + (lv ? "l" + lv : "none");
+  }
+  const curAmmo = g ? WEAPONS[g.type].ammo : null;
+  for (const a of AMMO_TYPES) {
+    setHTML("amTxt-" + a, me.ammo[a] + "<small>" + t(a) + "</small>");
+    $("am-" + a).className = "am" + (me.ammo[a] ? "" : " zero") + (a === curAmmo ? " cur" : "");
+  }
   const gl = me.alive ? nearestGunLoot(me) : null;
   $("prompt").hidden = !gl || isTouch;
   if (gl && !isTouch) setText("prompt", t("pick", { n: lootName(gl) }));
@@ -1479,7 +1959,7 @@ function initAudio() {
   } catch (e) { AC = null; }
 }
 const SFX = {
-  shot: [1400, .1, .18, "bandpass"], shotgun: [700, .22, .3, "lowpass"], sniper: [500, .35, .4, "lowpass"],
+  shot: [1400, .1, .18, "bandpass"], ak: [900, .14, .24, "bandpass"], shell: [2200, .04, .1, "highpass"], shotgun: [700, .22, .3, "lowpass"], sniper: [500, .35, .4, "lowpass"],
   hit: [2600, .05, .12, "highpass"], punch: [380, .07, .18, "lowpass"], crate: [500, .18, .22, "lowpass"], boom: [140, .6, .7, "lowpass"]
 };
 function sfx(kind, x, y) {
@@ -1505,25 +1985,37 @@ function sfx(kind, x, y) {
 
 /* ---------- input wiring ---------- */
 addEventListener("keydown", e => {
+  if (e.code === "Space") { e.preventDefault(); if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); }
   if (e.code === "Escape" || e.code === "KeyP") { if (G && !G.attract && !G.over) togglePause(); return; }
   keys.add(e.code);
-  const me = G && G.me;
-  if (!me || !me.alive || paused) return;
+  if (!G || G.attract || paused) return;
+  if (e.code === "KeyG" && !e.repeat) { toggleBigMap(); return; }
+  if (e.code === "KeyM" && !e.repeat) { cycleZoom(); return; }
+  if (e.code === "KeyT" && !e.repeat) { toggleTestPanel(); return; }
+  const me = G.me;
+  if (!me || !me.alive || G.over) return;
+  if (e.code === "Space" && !e.repeat) {
+    // Space flips between the two gun slots (from fists it goes back to the last gun)
+    const target = me.cur === 0 ? 1 : me.cur === 1 ? 0 : (me.prevCur !== 2 && me.slots[me.prevCur] ? me.prevCur : 0);
+    if (me.slots[target]) switchWeapon(me, target);
+    else if (me.cur === 2 && me.slots[1 - target]) switchWeapon(me, 1 - target);
+    return;
+  }
   if (e.code === "KeyR") startReload(me);
-  else if (e.code === "KeyE" || e.code === "KeyF") { const l = nearestGunLoot(me); if (l) pickupLoot(me, l); }
   else if (e.code === "Digit1") switchWeapon(me, 0);
   else if (e.code === "Digit2") switchWeapon(me, 1);
   else if (e.code === "Digit3") switchWeapon(me, 2);
   else if (e.code === "KeyQ") switchWeapon(me, me.prevCur);
-  else if (e.code === "Digit4" || e.code === "Digit7") startHeal(me, "bandage");
-  else if (e.code === "Digit5" || e.code === "Digit8") startHeal(me, "medkit");
-  else if (e.code === "Digit6" || e.code === "Digit9") startHeal(me, "soda");
+  else if (e.code === "Digit4") startHeal(me, "bandage");
+  else if (e.code === "Digit5") startHeal(me, "medkit");
+  else if (e.code === "Digit6") startHeal(me, "soda");
+  else if (e.code === "Digit7") startHeal(me, "pills");
 });
 addEventListener("keyup", e => keys.delete(e.code));
 addEventListener("blur", () => { keys.clear(); mouse.down = false; if (G && !G.attract && !G.over && !paused) togglePause(); });
 document.addEventListener("visibilitychange", () => { if (document.hidden && G && !G.attract && !G.over && !paused) togglePause(); });
 addEventListener("wheel", e => {
-  const me = G && G.me; if (!me || !me.alive || paused) return;
+  const me = G && G.me; if (!me || !me.alive || paused || G.over) return;
   const order = [0, 1, 2].filter(i => i === 2 || me.slots[i]);
   const idx = order.indexOf(me.cur);
   switchWeapon(me, order[(idx + (e.deltaY > 0 ? 1 : -1) + order.length) % order.length]);
@@ -1538,6 +2030,11 @@ canvas.addEventListener("pointerdown", e => {
   } else {
     mouse.x = e.clientX; mouse.y = e.clientY;
     if (e.button === 0) mouse.down = true;
+    else if (e.button === 2) {
+      // right click picks up the gun you are standing on
+      const me = G && G.me;
+      if (me && me.alive && !G.over && !paused) { const l = nearestGunLoot(me); if (l) pickupLoot(me, l); }
+    }
   }
   initAudio();
 });
@@ -1611,7 +2108,10 @@ let last = performance.now();
 function frame(now) {
   const dt = Math.min(.05, (now - last) / 1000); last = now;
   sfxCount = 0;
-  if (G && !paused) update(dt);
+  if (G && !paused) {
+    let rem = dt * (G.test ? G.test.speed : 1);
+    while (rem > 1e-4) { const d = Math.min(rem, .05); update(d); rem -= d; }
+  }
   if (G) { render(); updateHUD(); }
   requestAnimationFrame(frame);
 }
