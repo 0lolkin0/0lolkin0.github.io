@@ -379,9 +379,9 @@ const I18N = {
     vestS: "Броня", helmetS: "Каска", packS: "Рюкзак", scope: "Прицел {n}x", scopeIndoor: "🏠 в здании только 1x", scopeS: "Прицел", speedUp: "⚡ +{n}% к скорости", lvl: "ур. {n}", none: "нет",
     wBtn: "📋 Оружие", wTitle: "Характеристики оружия", close: "Закрыть",
     wName: "Оружие", wAmmo: "Патроны", wDmg: "Урон", wRate: "Выстр./с", wDps: "Урон/с", wMag: "Магазин", wReload: "Перезарядка",
-    wSpread: "Разброс", wHit: "Кучность (300)", wRange: "Дальность", wSpeed: "Скорость пули", wAP: "Пробитие брони", wMove: "Скорость бега", wRarity: "Редкость",
+    wSpread: "Разброс", wHit: "Кучность (300)", wRange: "Дальность", wSpeed: "Скорость пули", wAP: "Пробитие брони", wMove: "Скорость бега", wFireMove: "Бег при стрельбе", wRarity: "Редкость",
     perShell: "{n} с / патрон", rVault: "только в зданиях", melee: "ближний бой", rCommon: "частое", rNormal: "обычное", rRare: "редкое", rVeryRare: "очень редкое",
-    wNote: "Урон — без брони, у дробовиков «урон × дробин». Урон/с — урон за секунду непрерывной стрельбы. Разброс — угол в градусах (в движении в 1.35 раза больше). Кучность — доля пуль (дробин), попадающих стоя в неподвижного противника на дистанции 300. Пробитие брони — какую часть защиты каски и бронежилета игнорирует пуля. Скорость бега — с этим оружием в руках, 100% — с кулаками.",
+    wNote: "Урон — без брони, у дробовиков «урон × дробин». Урон/с — урон за секунду непрерывной стрельбы. Разброс — угол в градусах (в движении в 1.35 раза больше). Кучность — доля пуль (дробин), попадающих стоя в неподвижного противника на дистанции 300. Пробитие брони — какую часть защиты каски и бронежилета игнорирует пуля. Скорость бега — с этим оружием в руках, 100% — с кулаками. Бег при стрельбе — скорость в момент стрельбы (держится 0.3 с после каждого выстрела).",
     empty: "пусто", zoom: "Масштаб: {n}%", map: "Карта",
     test: "🧪 Тестовый режим", testHud: "Тестовый режим · T — панель", testTitle: "Тестовый полигон",
     tGod: "Бессмертие", tAmmo: "Бесконечные патроны", tZone: "Зона двигается", tPassive: "Боты не стреляют", tDebug: "Мысли ботов",
@@ -414,9 +414,9 @@ const I18N = {
     vestS: "Yelek", helmetS: "Kask", packS: "Çanta", scope: "Dürbün {n}x", scopeIndoor: "🏠 binada sadece 1x", scopeS: "Dürbün", speedUp: "⚡ +%{n} hız", lvl: "sv. {n}", none: "yok",
     wBtn: "📋 Silahlar", wTitle: "Silah özellikleri", close: "Kapat",
     wName: "Silah", wAmmo: "Mermi", wDmg: "Hasar", wRate: "Atış/sn", wDps: "Hasar/sn", wMag: "Şarjör", wReload: "Şarjör değişimi",
-    wSpread: "Saçılma", wHit: "İsabet (300)", wRange: "Menzil", wSpeed: "Mermi hızı", wAP: "Zırh delme", wMove: "Koşu hızı", wRarity: "Nadirlik",
+    wSpread: "Saçılma", wHit: "İsabet (300)", wRange: "Menzil", wSpeed: "Mermi hızı", wAP: "Zırh delme", wMove: "Koşu hızı", wFireMove: "Ateş ederken koşu", wRarity: "Nadirlik",
     perShell: "{n} sn / mermi", rVault: "sadece binalarda", melee: "yakın dövüş", rCommon: "yaygın", rNormal: "normal", rRare: "nadir", rVeryRare: "çok nadir",
-    wNote: "Hasar zırhsızdır, pompalılarda «hasar × saçma». Hasar/sn — sürekli ateşte saniyedeki hasar. Saçılma — derece cinsinden açı (hareket ederken 1,35 kat fazla). İsabet — 300 mesafede duran hedefe, dururken ateş edildiğinde isabet eden mermi oranı. Zırh delme — kask ve yeleğin korumasının ne kadarını yok sayar. Koşu hızı — bu silah eldeyken, %100 — yumrukla.",
+    wNote: "Hasar zırhsızdır, pompalılarda «hasar × saçma». Hasar/sn — sürekli ateşte saniyedeki hasar. Saçılma — derece cinsinden açı (hareket ederken 1,35 kat fazla). İsabet — 300 mesafede duran hedefe, dururken ateş edildiğinde isabet eden mermi oranı. Zırh delme — kask ve yeleğin korumasının ne kadarını yok sayar. Koşu hızı — bu silah eldeyken, %100 — yumrukla. Ateş ederken koşu — her atıştan sonra 0,3 sn boyunca hız.",
     empty: "boş", zoom: "Yakınlaştırma: %{n}", map: "Harita",
     test: "🧪 Test modu", testHud: "Test modu · T — panel", testTitle: "Test alanı",
     tGod: "Ölümsüzlük", tAmmo: "Sonsuz mermi", tZone: "Bölge hareket eder", tPassive: "Botlar ateş etmez", tDebug: "Bot düşünceleri",
@@ -449,9 +449,9 @@ const I18N = {
     vestS: "Vest", helmetS: "Helmet", packS: "Backpack", scope: "Scope {n}x", scopeIndoor: "🏠 indoors 1x only", scopeS: "Scope", speedUp: "⚡ +{n}% speed", lvl: "lvl {n}", none: "none",
     wBtn: "📋 Weapons", wTitle: "Weapon stats", close: "Close",
     wName: "Weapon", wAmmo: "Ammo", wDmg: "Damage", wRate: "Shots/s", wDps: "DPS", wMag: "Magazine", wReload: "Reload",
-    wSpread: "Spread", wHit: "Grouping (300)", wRange: "Range", wSpeed: "Bullet speed", wAP: "Armor pierce", wMove: "Run speed", wRarity: "Rarity",
+    wSpread: "Spread", wHit: "Grouping (300)", wRange: "Range", wSpeed: "Bullet speed", wAP: "Armor pierce", wMove: "Run speed", wFireMove: "Run while firing", wRarity: "Rarity",
     perShell: "{n} s / shell", rVault: "buildings only", melee: "melee", rCommon: "common", rNormal: "normal", rRare: "rare", rVeryRare: "very rare",
-    wNote: "Damage is without armor; shotguns show “damage × pellets”. DPS is damage per second of continuous fire. Spread is the angle in degrees (1.35× more while moving). Grouping is the share of bullets (pellets) that hit a standing enemy at range 300 when you shoot standing still. Armor pierce is how much of helmet and vest protection the round ignores. Run speed is with that weapon in hand, 100% = fists.",
+    wNote: "Damage is without armor; shotguns show “damage × pellets”. DPS is damage per second of continuous fire. Spread is the angle in degrees (1.35× more while moving). Grouping is the share of bullets (pellets) that hit a standing enemy at range 300 when you shoot standing still. Armor pierce is how much of helmet and vest protection the round ignores. Run speed is with that weapon in hand, 100% = fists. Run while firing is your speed for 0.3 s after each shot.",
     empty: "empty", zoom: "Zoom: {n}%", map: "Map",
     test: "🧪 Test mode", testHud: "Test mode · T — panel", testTitle: "Test range",
     tGod: "God mode", tAmmo: "Infinite ammo", tZone: "Zone moves", tPassive: "Bots hold fire", tDebug: "Bot thoughts",
@@ -492,21 +492,21 @@ const MAP = 5750;
 const WEAPONS = {
   fists:     { move: 1, melee: true, dmg: 24, rate: .42, reach: 30 },
   // Glock: common, fast but weak and loose. 5.7: rare, harder hitting, more accurate, longer range.
-  glock:     { move: .98, dmg: 13, pellets: 1, rate: .13,  mag: 17, reload: 1.4,  spread: .075, speed: 1400, range: 620,  ammo: "a9",   tier: 1, len: 22, col: "#3a3d48", sfx: "shot" },
-  fiveseven: { move: .98, dmg: 20, pellets: 1, rate: .15,  mag: 20, reload: 1.35, spread: .04,  speed: 1750, range: 820,  ammo: "a57",  tier: 2, len: 26, col: "#b9a27a", sfx: "shot" },
-  smg:       { move: .95, dmg: 12, pellets: 1, rate: .075, mag: 30, reload: 1.7,  spread: .12,  speed: 1500, range: 650,  ammo: "a9",   tier: 2, len: 34, col: "#4a4e5a", sfx: "shot" },
+  glock:     { move: .98, fireMove: .9, dmg: 13, pellets: 1, rate: .13,  mag: 17, reload: 1.4,  spread: .075, speed: 1400, range: 620,  ammo: "a9",   tier: 1, len: 22, col: "#3a3d48", sfx: "shot" },
+  fiveseven: { move: .98, fireMove: .9, dmg: 20, pellets: 1, rate: .15,  mag: 20, reload: 1.35, spread: .04,  speed: 1750, range: 820,  ammo: "a57",  tier: 2, len: 26, col: "#b9a27a", sfx: "shot" },
+  smg:       { move: .95, fireMove: .85, dmg: 12, pellets: 1, rate: .075, mag: 30, reload: 1.7,  spread: .12,  speed: 1500, range: 650,  ammo: "a9",   tier: 2, len: 34, col: "#4a4e5a", sfx: "shot" },
   // shotgun loads one shell at a time and can fire mid-reload
-  shotgun:   { move: .93, dmg: 11, pellets: 10, rate: .9,   mag: 5,  shell: .45,   spread: .19,  speed: 1400, range: 540,  ammo: "a12",  tier: 2, len: 42, col: "#7a4a26", sfx: "shotgun" },
+  shotgun:   { move: .93, fireMove: .75, dmg: 11, pellets: 10, rate: .9,   mag: 5,  shell: .45,   spread: .19,  speed: 1400, range: 540,  ammo: "a12",  tier: 2, len: 42, col: "#7a4a26", sfx: "shotgun" },
   // SPAS-12: rarer pump shotgun with a tighter choke — fewer pellets, but they stay grouped further out
-  spas:      { move: .91, dmg: 13, pellets: 7, rate: 1.0,  mag: 6,  shell: .5,    spread: .09,  speed: 1700, range: 660,  ammo: "a12",  tier: 3, len: 46, col: "#2b2e38", sfx: "shotgun" },
+  spas:      { move: .91, fireMove: .72, dmg: 13, pellets: 7, rate: 1.0,  mag: 6,  shell: .5,    spread: .09,  speed: 1700, range: 660,  ammo: "a12",  tier: 3, len: 46, col: "#2b2e38", sfx: "shotgun" },
   // P90: 5.7, huge fire rate and a 50-round magazine, so-so accuracy, rounds pierce armor (ap = share of armor ignored)
-  p90:       { move: .95, dmg: 10, pellets: 1, rate: .055, mag: 50, reload: 2.5,  spread: .11,  speed: 1600, range: 640,  ammo: "a57",  tier: 3, len: 34, col: "#3b4034", sfx: "shot" },
+  p90:       { move: .95, fireMove: .85, dmg: 10, pellets: 1, rate: .055, mag: 50, reload: 2.5,  spread: .11,  speed: 1600, range: 640,  ammo: "a57",  tier: 3, len: 34, col: "#3b4034", sfx: "shot" },
   // M249: building-only light machine gun — 100-round belt and huge DPS, paid for with a long reload and slow running
-  m249:      { move: .82, dmg: 17, pellets: 1, rate: .07,  mag: 100, reload: 5.2, spread: .06,  speed: 1800, range: 900,  ammo: "a556", tier: 4, len: 52, col: "#3d4a3a", sfx: "ak" },
+  m249:      { move: .82, fireMove: .6, dmg: 17, pellets: 1, rate: .07,  mag: 100, reload: 5.2, spread: .06,  speed: 1800, range: 900,  ammo: "a556", tier: 4, len: 52, col: "#3d4a3a", sfx: "ak" },
   // M4: high fire rate, best up close and mid range. AK: heavier rounds, tighter spread, long range.
-  m4:        { move: .91, dmg: 16, pellets: 1, rate: .08,  mag: 30, reload: 1.9,  spread: .075, speed: 1650, range: 720,  ammo: "a556", tier: 3, len: 44, col: "#24262e", sfx: "shot" },
-  ak:        { move: .9, dmg: 23, pellets: 1, rate: .13,  mag: 30, reload: 2.3,  spread: .035, speed: 2000, range: 1000, ammo: "a762", tier: 3, len: 46, col: "#8a5a2e", sfx: "ak" },
-  sniper:    { move: .84, dmg: 90, pellets: 1, rate: 1.3,  mag: 5,  reload: 2.6,  spread: .008, speed: 2800, range: 1500, ammo: "a762", tier: 3, len: 56, col: "#5d6b3a", sfx: "sniper" }
+  m4:        { move: .91, fireMove: .8, dmg: 16, pellets: 1, rate: .08,  mag: 30, reload: 1.9,  spread: .075, speed: 1650, range: 720,  ammo: "a556", tier: 3, len: 44, col: "#24262e", sfx: "shot" },
+  ak:        { move: .9, fireMove: .78, dmg: 23, pellets: 1, rate: .13,  mag: 30, reload: 2.3,  spread: .035, speed: 2000, range: 1000, ammo: "a762", tier: 3, len: 46, col: "#8a5a2e", sfx: "ak" },
+  sniper:    { move: .84, fireMove: .65, dmg: 90, pellets: 1, rate: 1.3,  mag: 5,  reload: 2.6,  spread: .008, speed: 2800, range: 1500, ammo: "a762", tier: 3, len: 56, col: "#5d6b3a", sfx: "sniper" }
 };
 const PREF_DIST = { m249: 400, p90: 240, fists: 0, glock: 240, fiveseven: 300, smg: 220, shotgun: 130, spas: 230, m4: 280, ak: 460, sniper: 620 };
 const AMMO_TYPES = ["a9", "a57", "a556", "a762", "a12"];
@@ -680,12 +680,8 @@ function makeBuilding(cx, cy) {
   wood(cx + 60, cy + 20, cx + 170, cy + 20); wood(cx + 260, cy + 20, R - 13, cy + 20);
   addCrate(L + 70, T + 70, true); addCrate(R - 70, T + 70, true); addCrate(R - 80, B - 80, true); addCrate(L + 80, B - 80, false);
   const spot = () => { for (let i = 0; i < 60; i++) { const x = rand(L + 50, R - 50), y = rand(T + 50, B - 50); if (!blocked(x, y, 24)) return [x, y]; } return [cx, cy]; };
-  for (let i = 0; i < LOOT.vaultM249; i++) {
-    const [x, y] = spot();
-    addLoot(x, y, "gun", "m249", 1, { mag: WEAPONS.m249.mag });
-    addLoot(x + rand(-30, 30), y + rand(-30, 30), "ammo", "a556", 60);
-    addLoot(x + rand(-30, 30), y + rand(-30, 30), "ammo", "a556", 60);
-  }
+  // the M249 never lies in the open — it sits in its own reinforced case
+  for (let i = 0; i < LOOT.vaultM249; i++) { const [x, y] = spot(); addVaultCase(x, y); }
   for (let i = 0; i < LOOT.vaultGuns; i++) {
     const type = weighted(GUN_WEIGHTS.vault), a = WEAPONS[type].ammo, [x, y] = spot();
     addLoot(x, y, "gun", type, 1, { mag: WEAPONS[type].mag });
@@ -729,6 +725,9 @@ function makeRuin(cx, cy) {
   // loot inside ruins
   if (Math.random() < .6) spawnLootAt(cx + rand(-20, 20), cy + rand(-20, 20), true);
   if (Math.random() < .5) addCrate(cx + rand(-30, 30), cy + rand(-30, 30) + 50, Math.random() < .35);
+}
+function addVaultCase(x, y) {
+  return addObs({ kind: "crate", shape: "r", x, y, hw: 40, hh: 26, hp: 160, vault: true });
 }
 function addCrate(x, y, mil) {
   // regular wooden crate, or a rarer, sturdier military crate with better loot
@@ -780,7 +779,7 @@ const TUNE = {
 
 /* ---------- admin overrides: stored only in this browser ---------- */
 const ADMIN_KEY = "lastring-admin";
-const WEAPON_FIELDS = ["dmg", "pellets", "rate", "spread", "range", "speed", "mag", "reload", "shell", "move"];
+const WEAPON_FIELDS = ["dmg", "pellets", "rate", "spread", "range", "speed", "mag", "reload", "shell", "move", "fireMove"];
 function adminSnapshot() {
   const weapons = {};
   for (const w in WEAPONS) { weapons[w] = {}; for (const f of WEAPON_FIELDS) if (typeof WEAPONS[w][f] === "number") weapons[w][f] = WEAPONS[w][f]; }
@@ -940,6 +939,7 @@ function tryFire(p) {
   if (p.reloadT > 0) { if (w.shell && g.mag > 0) p.reloadT = 0; else return; }
   if (g.mag <= 0) { startReload(p); return; }
   g.mag--; p.fireT = w.rate; p.lastShotT = G.time;
+  p.shootSlowT = .3; // shooting slows you down for a moment
   if (G.test && G.test.ammo && p === G.me) p.ammo[w.ammo] = ammoCap(p, w.ammo);
   const moving = Math.hypot(p.vx, p.vy) > 60;
   for (let i = 0; i < w.pellets; i++) {
@@ -970,6 +970,7 @@ function doMelee(p) {
 }
 function damagePlayer(tg, amt, src, wk) {
   if (!tg.alive) return;
+  if (tg === G.me && cheat("god")) { if (wk !== "zone") tg.hitT = G.time; return; }
   if (wk !== "zone") {
     const ap = WEAPONS[wk] && WEAPONS[wk].ammo ? AMMO_AP[WEAPONS[wk].ammo] : 0;
     amt *= (1 - VEST_RED[tg.vest] * (1 - ap)) * (1 - HELMET_RED[tg.helmet] * (1 - ap));
@@ -1006,7 +1007,12 @@ function damageObs(o, amt, src) {
   if (o.hp <= 0) {
     o.dead = true;
     for (let i = 0; i < 12; i++) particle(o.x, o.y, rand(-220, 220), rand(-220, 220), rand(.3, .8), col, rand(4, 9), "dot");
-    if (o.kind === "crate") {
+    if (o.kind === "crate" && o.vault) {
+      addLoot(o.x, o.y, "gun", "m249", 1, { mag: WEAPONS.m249.mag });
+      addLoot(o.x + rand(-35, 35), o.y + rand(-35, 35), "ammo", "a556", 60);
+      addLoot(o.x + rand(-35, 35), o.y + rand(-35, 35), "ammo", "a556", 60);
+      sfx("crate", o.x, o.y);
+    } else if (o.kind === "crate") {
       spawnLootAt(o.x, o.y, true);
       if (o.mil) { spawnLootAt(o.x + rand(-30, 30), o.y + rand(-30, 30), true); addLoot(o.x + rand(-30, 30), o.y + rand(-30, 30), pick(GEAR), String(randi(2, 3)), 1); }
       else if (Math.random() < LOOT.crateExtra) spawnLootAt(o.x + rand(-25, 25), o.y + rand(-25, 25), false);
@@ -1381,7 +1387,9 @@ function updatePlayer(p, dt) {
   if (g && g.mag <= 0 && !p.heal && p.reloadT <= 0 && p.fireT <= 0 && p.ammo[WEAPONS[g.type].ammo] > 0) startReload(p);
   // movement
   let mx = p.mx, my = p.my; const ml = Math.hypot(mx, my); if (ml > 1) { mx /= ml; my /= ml; }
-  const spd = TUNE.runSpeed * (p.heal ? .5 : 1) * boostSpeed(p) * WEAPONS[curWeapon(p)].move;
+  if (p.shootSlowT > 0) p.shootSlowT -= dt;
+  const shooting = p.shootSlowT > 0 && WEAPONS[curWeapon(p)].fireMove ? WEAPONS[curWeapon(p)].fireMove : 1;
+  const spd = TUNE.runSpeed * (p.heal ? .5 : 1) * boostSpeed(p) * WEAPONS[curWeapon(p)].move * shooting;
   const k = Math.min(1, dt * 14);
   p.vx += (mx * spd - p.vx) * k; p.vy += (my * spd - p.vy) * k;
   p.x += p.vx * dt; p.y += p.vy * dt;
@@ -1529,7 +1537,7 @@ function setupTestRange() {
   G.cam.x = cx; G.cam.y = cy;
   // a few cover pieces to test shooting around obstacles
   addWall(cx - 330, cy, 22, 160); addWall(cx + 330, cy, 22, 160);
-  addCrate(cx - 420, cy - 60, false); addCrate(cx + 420, cy + 60, true);
+  addCrate(cx - 420, cy - 60, false); addCrate(cx + 420, cy + 60, true); addVaultCase(cx, cy - 420);
   addObs({ kind: "barrel", shape: "c", x: cx, y: cy + 420, r: 26, hp: 40 });
 }
 function layoutArsenal() {
@@ -1626,7 +1634,7 @@ function rarityOf(type) {
   return share > .18 ? t("rCommon") : share > .09 ? t("rNormal") : share > .04 ? t("rRare") : t("rVeryRare");
 }
 function renderWeaponTable() {
-  const cols = ["wName", "wAmmo", "wDmg", "wRate", "wDps", "wMag", "wReload", "wSpread", "wHit", "wRange", "wSpeed", "wAP", "wMove", "wRarity"];
+  const cols = ["wName", "wAmmo", "wDmg", "wRate", "wDps", "wMag", "wReload", "wSpread", "wHit", "wRange", "wSpeed", "wAP", "wMove", "wFireMove", "wRarity"];
   const tb = $("wtable"); tb.innerHTML = "";
   const head = document.createElement("tr");
   for (const c of cols) { const th = document.createElement("th"); th.textContent = t(c); head.appendChild(th); }
@@ -1656,6 +1664,7 @@ function renderWeaponTable() {
       cell(AMMO_AP[w.ammo] ? Math.round(AMMO_AP[w.ammo] * 100) + "%" : "—");
     }
     cell(Math.round(w.move * 100) + "%");
+    cell(w.fireMove ? Math.round(w.move * w.fireMove * 100) + "%" : "—");
     cell(w.melee ? "—" : rarityOf(type));
     tb.appendChild(tr);
   }
@@ -1667,6 +1676,10 @@ function renderWeaponTable() {
 try { if (/[?#&]admin/.test(location.search + location.hash)) localStorage.setItem("lastring-admin-on", "1"); } catch (e) {}
 let adminOn = false;
 try { adminOn = localStorage.getItem("lastring-admin-on") === "1"; } catch (e) {}
+// cheats: radar, god mode, bullet path preview — only work where the admin panel is unlocked
+const CHEATS = { radar: false, god: false, aim: false };
+try { Object.assign(CHEATS, JSON.parse(localStorage.getItem("lastring-cheats") || "{}")); } catch (e) {}
+const cheat = k => adminOn && !!CHEATS[k];
 document.querySelectorAll(".adminBtn").forEach(b => { b.hidden = !adminOn; });
 let adminTab = "weapons";
 function numInput(obj, key, step, onChange) {
@@ -1712,7 +1725,7 @@ function section(title, hint) {
 }
 function renderAdmin() {
   const tabs = $("adminTabs"); tabs.innerHTML = "";
-  for (const [id, label] of [["weapons", "🔫 Оружие"], ["loot", "🎁 Лут и шансы"], ["balance", "⚖️ Лечение, бег, зона, боты"]]) {
+  for (const [id, label] of [["weapons", "🔫 Оружие"], ["loot", "🎁 Лут и шансы"], ["balance", "⚖️ Лечение, бег, зона, боты"], ["cheats", "🕹️ Читы"]]) {
     const b = document.createElement("button"); b.className = "btn"; b.textContent = label;
     b.setAttribute("aria-pressed", adminTab === id);
     b.addEventListener("click", () => { adminTab = id; renderAdmin(); });
@@ -1726,8 +1739,8 @@ function renderAdmin() {
     const out = document.createElement("output"); out.textContent = "×" + TUNE.dmgMul.toFixed(2);
     r.addEventListener("input", () => { TUNE.dmgMul = +r.value; out.textContent = "×" + TUNE.dmgMul.toFixed(2); adminSave(); });
     sl.append(document.createTextNode("Урон ×"), r, out); sec.appendChild(sl);
-    const sec2 = section("Характеристики оружия", "Задержка — секунд между выстрелами (меньше = скорострельнее). Разброс — меньше = точнее. Бег — 1 = как с кулаками. Меняется сразу, даже посреди матча.");
-    const cols = [["dmg", "Урон", "1"], ["pellets", "Дробин", "1"], ["rate", "Задержка, с", "0.01"], ["spread", "Разброс", "0.005"], ["range", "Дальность", "10"], ["speed", "Скор. пули", "50"], ["mag", "Магазин", "1"], ["reload", "Перезар., с", "0.1"], ["shell", "Патрон, с", "0.05"], ["move", "Бег", "0.01"]];
+    const sec2 = section("Характеристики оружия", "Задержка — секунд между выстрелами (меньше = скорострельнее). Разброс — меньше = точнее. Бег — 1 = как с кулаками. Бег при стрельбе — множитель скорости на 0.3 с после выстрела (1 = не тормозит). Меняется сразу, даже посреди матча.");
+    const cols = [["dmg", "Урон", "1"], ["pellets", "Дробин", "1"], ["rate", "Задержка, с", "0.01"], ["spread", "Разброс", "0.005"], ["range", "Дальность", "10"], ["speed", "Скор. пули", "50"], ["mag", "Магазин", "1"], ["reload", "Перезар., с", "0.1"], ["shell", "Патрон, с", "0.05"], ["move", "Бег", "0.01"], ["fireMove", "Бег при стрельбе", "0.01"]];
     const wrap = document.createElement("div"); wrap.className = "tablewrap";
     const tb = document.createElement("table"); tb.className = "wtable";
     const hr = document.createElement("tr");
@@ -1754,7 +1767,7 @@ function renderAdmin() {
     field(f, "Доля военных ящиков", LOOT, "milCrate", "0.01");
     field(f, "Шанс 2-го предмета из ящика", LOOT, "crateExtra", "0.05");
     field(f, "Стволов в каждом здании", LOOT, "vaultGuns", "1");
-    field(f, "M249 в каждом здании", LOOT, "vaultM249", "1");
+    field(f, "Ящиков с M249 в каждом здании", LOOT, "vaultM249", "1");
     field(f, "Доля прицелов в снаряжении (земля)", LOOT, "scopeShare", "0.01");
     field(f, "Доля прицелов (ящики)", LOOT, "scopeShareRich", "0.01");
     const sec2 = section("Шансы выпадения", "Это веса: чем больше число, тем чаще выпадает. Справа — итоговый шанс внутри группы. 0 = не выпадает совсем.");
@@ -1771,6 +1784,18 @@ function renderAdmin() {
     weightGroup(gs, "Уровень снаряжения (ящики)", LOOT.gearLvRich, k => t("lvl", { n: k }));
     weightGroup(gs, "Прицелы (земля)", LOOT.scopes, k => k + "x");
     weightGroup(gs, "Прицелы (ящики)", LOOT.scopesRich, k => k + "x");
+  } else if (adminTab === "cheats") {
+    const sec = section("Читы", "Включаются и выключаются сразу, даже посреди матча (Esc → ⚙️ Админ). Работают только у тебя.");
+    for (const [k, label, hint] of [
+      ["radar", "📡 Радар — все игроки на карте", "Красные точки ботов на мини-карте и на большой карте (G)."],
+      ["god", "🛡️ Бессмертие", "Урон не проходит ни от пуль, ни от взрывов, ни от зоны."],
+      ["aim", "🎯 Траектория пули", "Линия от ствола до точки, куда попадёт пуля, и конус разброса."]]) {
+      const l = document.createElement("label"); l.style.cssText = "display:flex;align-items:center;gap:10px;font-size:1rem;margin:8px 0 2px;cursor:pointer";
+      const c = document.createElement("input"); c.type = "checkbox"; c.checked = CHEATS[k]; c.style.cssText = "width:20px;height:20px;accent-color:var(--red)";
+      c.addEventListener("change", () => { CHEATS[k] = c.checked; try { localStorage.setItem("lastring-cheats", JSON.stringify(CHEATS)); } catch (e) {} });
+      l.append(c, document.createTextNode(label)); sec.appendChild(l);
+      const h = document.createElement("p"); h.className = "hint"; h.style.marginLeft = "30px"; h.textContent = hint; sec.appendChild(h);
+    }
   } else {
     const sec = section("Лечение и буст", "Бинт и аптечка — сколько HP добавляют. Энергетик и адреналин — сколько буста (максимум 100). Расход — сколько буста уходит в секунду.");
     const f = document.createElement("div"); f.className = "fields"; sec.appendChild(f);
@@ -1939,6 +1964,7 @@ function render() {
   const me = G.me && G.me.alive ? G.me : null;
   for (const b of G.bushes) if (inView(b.x, b.y, b.r)) drawBush(b, me && Math.hypot(me.x - b.x, me.y - b.y) < b.r);
   for (const tr of G.trees) if (!tr.dead && inView(tr.x, tr.y, tr.canopy)) drawCanopy(tr, me && Math.hypot(me.x - tr.x, me.y - tr.y) < tr.canopy);
+  if (me && cheat("aim")) drawAimLine(me);
 
   // particles
   for (const q of G.particles) {
@@ -1955,7 +1981,7 @@ function render() {
   ctx.textAlign = "center"; ctx.font = "800 15px Nunito, sans-serif";
   for (const p of G.players) {
     if (!p.alive || p === G.me || !inView(p.x, p.y, 60)) continue;
-    if (p.inBush && me && Math.hypot(me.x - p.x, me.y - p.y) > 150) continue;
+    if (p.inBush && me && Math.hypot(me.x - p.x, me.y - p.y) > 150 && !cheat("radar")) continue;
     ctx.fillStyle = "rgba(35,38,74,.75)"; ctx.fillText(p.name, p.x, p.y - 36);
     if (G.test && G.test.debug && p.ai && !p.ai.dummy) {
       const tg = p.ai.target && p.ai.target.alive ? " → " + p.ai.target.name : "";
@@ -2155,6 +2181,29 @@ function cycleScope(p) {
   p.scope = p.scopes[(i + 1) % p.scopes.length];
   toast(scopeName(p.scope));
 }
+function drawAimLine(p) {
+  // where the next bullet goes: up to the first wall / player within weapon range, plus the spread cone
+  const wk = curWeapon(p); if (wk === "fists") return;
+  const w = WEAPONS[wk], dx = Math.cos(p.angle), dy = Math.sin(p.angle);
+  let len = w.range, hitPl = null;
+  const ho = raycastObs(p.x, p.y, dx, dy, len);
+  if (ho) len = ho.t;
+  for (const o of G.players) {
+    if (o === p || !o.alive) continue;
+    const tt = segCircle(p.x, p.y, dx, dy, len, o.x, o.y, o.r);
+    if (tt >= 0 && tt < len) { len = tt; hitPl = o; }
+  }
+  const x0 = p.x + dx * (p.r + w.len), y0 = p.y + dy * (p.r + w.len), x1 = p.x + dx * len, y1 = p.y + dy * len;
+  const moving = Math.hypot(p.vx, p.vy) > 60, cone = w.spread * (moving ? 1.35 : 1) * .6 * 2;
+  ctx.save();
+  ctx.fillStyle = "rgba(255,255,255,.08)"; ctx.beginPath(); ctx.moveTo(x0, y0);
+  ctx.arc(p.x, p.y, len, p.angle - cone, p.angle + cone); ctx.closePath(); ctx.fill();
+  ctx.setLineDash([14, 10]); ctx.lineWidth = 3; ctx.strokeStyle = hitPl ? "rgba(255,90,95,.95)" : "rgba(255,255,255,.85)";
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = hitPl ? "#ff5a5f" : ho ? "#ffd45c" : "#ffffff"; ctx.strokeStyle = INK; ctx.lineWidth = 2;
+  circle(x1, y1, 7); ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
 function drawLoot(l) {
   const y = l.y + Math.sin(G.time * 3 + l.bob) * 2;
   // ring color tells the ammo type / gear level at a glance
@@ -2214,6 +2263,20 @@ function drawObs(o) {
 }
 function drawCrate(o, hpK) {
   const w = o.hw * hpK, h = o.hh * hpK, x = o.x - w, y = o.y - h;
+  if (o.vault) {
+    // reinforced black-and-gold case with a machine-gun emblem
+    ctx.lineWidth = 3; ctx.strokeStyle = INK;
+    roundRect(ctx, x, y, w * 2, h * 2, 6); ctx.fillStyle = "#2b2e38"; ctx.fill();
+    roundRect(ctx, x + 6, y + 6, w * 2 - 12, h * 2 - 12, 4); ctx.fillStyle = "#ffd45c"; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = "#ffd45c"; ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
+    for (const sx of [-1, 1]) { ctx.fillRect(o.x + sx * w * .6 - 4, y + h * 2 - 4, 8, 7); ctx.strokeRect(o.x + sx * w * .6 - 4, y + h * 2 - 4, 8, 7); }
+    ctx.save(); ctx.globalAlpha = .9;
+    drawGunIcon(ctx, "m249", o.x, o.y + 1, w * 1.45);
+    ctx.restore();
+    if (hpK < .88) { ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(o.x - w * .6, o.y - h * .5); ctx.lineTo(o.x - w * .2, o.y - h * .1); ctx.lineTo(o.x - w * .35, o.y + h * .4); ctx.stroke(); }
+    ctx.strokeStyle = INK; ctx.lineWidth = 3; roundRect(ctx, x, y, w * 2, h * 2, 6); ctx.stroke();
+    return;
+  }
   const base = o.mil ? "#6f8240" : "#d9a066", frame = o.mil ? "#4c5a2a" : "#a8672f", plank = o.mil ? "#5d6e34" : "#c48a52";
   ctx.lineWidth = 3; ctx.strokeStyle = INK;
   roundRect(ctx, x, y, w * 2, h * 2, 5); ctx.fillStyle = base; ctx.fill();
@@ -2306,7 +2369,7 @@ function drawMap(cv, c, big) {
   c.beginPath(); c.rect(0, 0, S, S); c.arc(z.x * k, z.y * k, Math.max(.5, z.r * k), 0, Math.PI * 2, true); c.fill("evenodd");
   c.strokeStyle = "#ff5a5f"; c.lineWidth = 1.5 * px; c.beginPath(); c.arc(z.x * k, z.y * k, Math.max(.5, z.r * k), 0, 7); c.stroke();
   if (z.stage !== "done") { c.strokeStyle = "#fff"; c.setLineDash([4 * px, 3 * px]); c.beginPath(); c.arc(z.toX * k, z.toY * k, Math.max(.5, z.toR * k), 0, 7); c.stroke(); c.setLineDash([]); }
-  if (G.test) for (const p of G.players) if (p.alive && p.isBot) { c.fillStyle = "#ff5a5f"; c.beginPath(); c.arc(p.x * k, p.y * k, 3 * px, 0, 7); c.fill(); }
+  if (G.test || cheat("radar")) for (const p of G.players) if (p.alive && p.isBot) { c.fillStyle = "#ff5a5f"; c.beginPath(); c.arc(p.x * k, p.y * k, 3 * px, 0, 7); c.fill(); }
   const f = G.me && G.me.alive ? G.me : G.spectate;
   if (f) {
     c.fillStyle = "#ffd45c"; c.strokeStyle = INK; c.lineWidth = 1.5 * px;
