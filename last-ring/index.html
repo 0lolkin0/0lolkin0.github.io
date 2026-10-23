@@ -376,7 +376,7 @@ const I18N = {
     bandage: "Бинт", medkit: "Аптечка", soda: "Энергетик", pills: "Адреналин",
     bandageD: "+15% здоровья", medkitD: "до 100%", sodaD: "+25% со временем", pillsD: "полная шкала буста: лечит со временем и ускоряет бег",
     vest: "Бронежилет {n} ур.", helmet: "Каска {n} ур.", pack: "Рюкзак {n} ур.",
-    vestS: "Броня", helmetS: "Каска", packS: "Рюкзак", scope: "Прицел {n}x", scopeS: "Прицел", speedUp: "⚡ +{n}% к скорости", lvl: "ур. {n}", none: "нет",
+    vestS: "Броня", helmetS: "Каска", packS: "Рюкзак", scope: "Прицел {n}x", scopeIndoor: "🏠 в здании только 1x", scopeS: "Прицел", speedUp: "⚡ +{n}% к скорости", lvl: "ур. {n}", none: "нет",
     wBtn: "📋 Оружие", wTitle: "Характеристики оружия", close: "Закрыть",
     wName: "Оружие", wAmmo: "Патроны", wDmg: "Урон", wRate: "Выстр./с", wDps: "Урон/с", wMag: "Магазин", wReload: "Перезарядка",
     wSpread: "Разброс", wHit: "Кучность (300)", wRange: "Дальность", wSpeed: "Скорость пули", wAP: "Пробитие брони", wMove: "Скорость бега", wRarity: "Редкость",
@@ -411,7 +411,7 @@ const I18N = {
     bandage: "Bandaj", medkit: "İlk yardım", soda: "Enerji içeceği", pills: "Adrenalin",
     bandageD: "+%15 can", medkitD: "%100'e kadar", sodaD: "zamanla +%25", pillsD: "tam takviye: zamanla iyileştirir ve hızlandırır",
     vest: "Yelek sv. {n}", helmet: "Kask sv. {n}", pack: "Sırt çantası sv. {n}",
-    vestS: "Yelek", helmetS: "Kask", packS: "Çanta", scope: "Dürbün {n}x", scopeS: "Dürbün", speedUp: "⚡ +%{n} hız", lvl: "sv. {n}", none: "yok",
+    vestS: "Yelek", helmetS: "Kask", packS: "Çanta", scope: "Dürbün {n}x", scopeIndoor: "🏠 binada sadece 1x", scopeS: "Dürbün", speedUp: "⚡ +%{n} hız", lvl: "sv. {n}", none: "yok",
     wBtn: "📋 Silahlar", wTitle: "Silah özellikleri", close: "Kapat",
     wName: "Silah", wAmmo: "Mermi", wDmg: "Hasar", wRate: "Atış/sn", wDps: "Hasar/sn", wMag: "Şarjör", wReload: "Şarjör değişimi",
     wSpread: "Saçılma", wHit: "İsabet (300)", wRange: "Menzil", wSpeed: "Mermi hızı", wAP: "Zırh delme", wMove: "Koşu hızı", wRarity: "Nadirlik",
@@ -446,7 +446,7 @@ const I18N = {
     bandage: "Bandage", medkit: "Medkit", soda: "Soda", pills: "Pills",
     bandageD: "+15% health", medkitD: "up to 100%", sodaD: "+25% over time", pillsD: "full boost bar: heals over time and makes you run faster",
     vest: "Vest lvl {n}", helmet: "Helmet lvl {n}", pack: "Backpack lvl {n}",
-    vestS: "Vest", helmetS: "Helmet", packS: "Backpack", scope: "Scope {n}x", scopeS: "Scope", speedUp: "⚡ +{n}% speed", lvl: "lvl {n}", none: "none",
+    vestS: "Vest", helmetS: "Helmet", packS: "Backpack", scope: "Scope {n}x", scopeIndoor: "🏠 indoors 1x only", scopeS: "Scope", speedUp: "⚡ +{n}% speed", lvl: "lvl {n}", none: "none",
     wBtn: "📋 Weapons", wTitle: "Weapon stats", close: "Close",
     wName: "Weapon", wAmmo: "Ammo", wDmg: "Damage", wRate: "Shots/s", wDps: "DPS", wMag: "Magazine", wReload: "Reload",
     wSpread: "Spread", wHit: "Grouping (300)", wRange: "Range", wSpeed: "Bullet speed", wAP: "Armor pierce", wMove: "Run speed", wRarity: "Rarity",
@@ -1883,7 +1883,7 @@ const INK = "#23264a";
 function viewScale() {
   let s = Math.sqrt(VW * VH) / 1310 * ZOOMS[zoomIdx];
   const f = G.me && G.me.alive ? G.me : null;
-  if (f) s /= SCOPE_VIEW[f.scope];
+  if (f) s /= SCOPE_VIEW[activeScope(f)];
   return s;
 }
 function render() {
@@ -2148,6 +2148,8 @@ function drawScopeIcon(c, n, x, y, size) {
   c.fillText(n + "x", 7, 9);
   c.restore();
 }
+// inside a building only 1x works, the chosen scope comes back outside
+const activeScope = p => insideFloor(p.x, p.y, 0) ? 1 : p.scope;
 function cycleScope(p) {
   const i = p.scopes.indexOf(p.scope);
   p.scope = p.scopes[(i + 1) % p.scopes.length];
@@ -2435,9 +2437,11 @@ function updateHUD() {
     setHTML("eqTxt-" + gk, t(gk + "S") + "<small>" + (lv ? t("lvl", { n: lv }) : t("none")) + "</small>");
     $("eq-" + gk).className = "eq " + (lv ? "l" + lv : "none");
   }
-  if (hudCache.scopeIcon !== me.scope) { hudCache.scopeIcon = me.scope; paintIcon($("eqIcon-scope"), 30, 30, c => drawScopeIcon(c, me.scope, 15, 15, 26)); }
-  setHTML("eqTxt-scope", t("scopeS") + " " + me.scope + "x<small>" + me.scopes.map(n => n === me.scope ? "[" + n + "x]" : n + "x").join(" ") + " · Z</small>");
-  $("eq-scope").className = "eq " + (me.scope === 8 ? "l3" : me.scope === 4 ? "l2" : me.scope === 2 ? "l1" : "none");
+  const sc = activeScope(me);
+  if (hudCache.scopeIcon !== sc) { hudCache.scopeIcon = sc; paintIcon($("eqIcon-scope"), 30, 30, c => drawScopeIcon(c, sc, 15, 15, 26)); }
+  const indoor = me.alive && activeScope(me) !== me.scope;
+  setHTML("eqTxt-scope", t("scopeS") + " " + activeScope(me) + "x<small>" + (indoor ? t("scopeIndoor") : me.scopes.map(n => n === me.scope ? "[" + n + "x]" : n + "x").join(" ") + " · Z") + "</small>");
+  $("eq-scope").className = "eq " + (sc === 8 ? "l3" : sc === 4 ? "l2" : sc === 2 ? "l1" : "none");
   const bs = boostSpeed(me);
   $("boostTxt").hidden = bs <= 1;
   if (bs > 1) setText("boostTxt", t("speedUp", { n: Math.round((bs - 1) * 100) }));
