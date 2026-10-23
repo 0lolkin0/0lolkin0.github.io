@@ -195,6 +195,7 @@ h1 {
   </div>
 
   <p class="help" data-i18n-html="help"><b>Нажми</b> на клетку, чтобы открыть её. Цифра показывает, сколько бомб рядом. <b>Правый клик</b> или <b>долгое нажатие</b> ставит флажок, а нажатие на флажок убирает его. Нажми на цифру, вокруг которой уже стоят все флажки, чтобы открыть соседей.</p>
+  <a class="btn" href="last-ring/" data-i18n="otherGame" style="text-decoration:none">🎯 Новая игра: Последнее кольцо</a>
 </main>
 
 <div class="overlay" id="overlay" hidden>
@@ -221,7 +222,7 @@ h1 {
       help: "<b>Нажми</b> на клетку, чтобы открыть её. Цифра показывает, сколько бомб рядом. <b>Правый клик</b> или <b>долгое нажатие</b> ставит флажок, а нажатие на флажок убирает его. Нажми на цифру, вокруг которой уже стоят все флажки, чтобы открыть соседей.",
       loseTitle: "Бабах!", loseText: "Ты наступил на бомбочку. Попробуешь ещё раз?",
       winTitle: "Победа!", winText: s => `Все бомбочки найдены за ${s} сек.`, best: b => ` Твой рекорд: ${b} сек.`,
-      again: "Играть ещё", closed: "Закрытая клетка", bomb: "Бомба", near: n => n + " рядом", empty: "Пусто", flag: "Флажок"
+      again: "Играть ещё", otherGame: "🎯 Новая игра: Последнее кольцо", closed: "Закрытая клетка", bomb: "Бомба", near: n => n + " рядом", empty: "Пусто", flag: "Флажок"
     },
     tr: {
       docTitle: "Çizgi Film Mayın Tarlası", heading: "Mayın Tarlası!", tagline: "Tüm bombaları bul ve patlama!",
@@ -231,7 +232,7 @@ h1 {
       help: "Kareyi açmak için <b>dokun</b>. Sayı, yanında kaç bomba olduğunu gösterir. <b>Sağ tık</b> ya da <b>uzun basma</b> bayrak koyar, bayrağa dokunmak onu kaldırır. Etrafındaki tüm bayrakları koyduğun bir sayıya dokunursan komşu kareler açılır.",
       loseTitle: "Bum!", loseText: "Bir bombaya bastın. Tekrar dener misin?",
       winTitle: "Kazandın!", winText: s => `Tüm bombaları ${s} saniyede buldun.`, best: b => ` Rekorun: ${b} sn.`,
-      again: "Tekrar oyna", closed: "Kapalı kare", bomb: "Bomba", near: n => "Yanında " + n, empty: "Boş", flag: "Bayrak"
+      again: "Tekrar oyna", otherGame: "🎯 Yeni oyun: Son Halka", closed: "Kapalı kare", bomb: "Bomba", near: n => "Yanında " + n, empty: "Boş", flag: "Bayrak"
     },
     en: {
       docTitle: "Cartoon Minesweeper", heading: "Minesweeper!", tagline: "Find all the bombs and don't go boom",
@@ -241,7 +242,7 @@ h1 {
       help: "<b>Tap</b> a square to open it. A number shows how many bombs are next to it. <b>Right-click</b> or <b>long-press</b> to place a flag, and tap a flag to remove it. Tap a number that already has all its flags around it to open its neighbors.",
       loseTitle: "Kaboom!", loseText: "You stepped on a bomb. Try again?",
       winTitle: "You win!", winText: s => `You found all the bombs in ${s} sec.`, best: b => ` Your best: ${b} sec.`,
-      again: "Play again", closed: "Hidden square", bomb: "Bomb", near: n => n + " nearby", empty: "Empty", flag: "Flag"
+      again: "Play again", otherGame: "🎯 New game: Last Ring", closed: "Hidden square", bomb: "Bomb", near: n => n + " nearby", empty: "Empty", flag: "Flag"
     }
   };
   let lang = "ru";
