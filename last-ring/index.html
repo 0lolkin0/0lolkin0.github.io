@@ -970,6 +970,7 @@ function doMelee(p) {
 }
 function damagePlayer(tg, amt, src, wk) {
   if (!tg.alive) return;
+  if (tg === G.me && cheat("god")) { if (wk !== "zone") tg.hitT = G.time; return; }
   if (wk !== "zone") {
     const ap = WEAPONS[wk] && WEAPONS[wk].ammo ? AMMO_AP[WEAPONS[wk].ammo] : 0;
     amt *= (1 - VEST_RED[tg.vest] * (1 - ap)) * (1 - HELMET_RED[tg.helmet] * (1 - ap));
@@ -1667,6 +1668,10 @@ function renderWeaponTable() {
 try { if (/[?#&]admin/.test(location.search + location.hash)) localStorage.setItem("lastring-admin-on", "1"); } catch (e) {}
 let adminOn = false;
 try { adminOn = localStorage.getItem("lastring-admin-on") === "1"; } catch (e) {}
+// cheats: radar, god mode, bullet path preview — only work where the admin panel is unlocked
+const CHEATS = { radar: false, god: false, aim: false };
+try { Object.assign(CHEATS, JSON.parse(localStorage.getItem("lastring-cheats") || "{}")); } catch (e) {}
+const cheat = k => adminOn && !!CHEATS[k];
 document.querySelectorAll(".adminBtn").forEach(b => { b.hidden = !adminOn; });
 let adminTab = "weapons";
 function numInput(obj, key, step, onChange) {
@@ -1712,7 +1717,7 @@ function section(title, hint) {
 }
 function renderAdmin() {
   const tabs = $("adminTabs"); tabs.innerHTML = "";
-  for (const [id, label] of [["weapons", "🔫 Оружие"], ["loot", "🎁 Лут и шансы"], ["balance", "⚖️ Лечение, бег, зона, боты"]]) {
+  for (const [id, label] of [["weapons", "🔫 Оружие"], ["loot", "🎁 Лут и шансы"], ["balance", "⚖️ Лечение, бег, зона, боты"], ["cheats", "🕹️ Читы"]]) {
     const b = document.createElement("button"); b.className = "btn"; b.textContent = label;
     b.setAttribute("aria-pressed", adminTab === id);
     b.addEventListener("click", () => { adminTab = id; renderAdmin(); });
@@ -1771,6 +1776,18 @@ function renderAdmin() {
     weightGroup(gs, "Уровень снаряжения (ящики)", LOOT.gearLvRich, k => t("lvl", { n: k }));
     weightGroup(gs, "Прицелы (земля)", LOOT.scopes, k => k + "x");
     weightGroup(gs, "Прицелы (ящики)", LOOT.scopesRich, k => k + "x");
+  } else if (adminTab === "cheats") {
+    const sec = section("Читы", "Включаются и выключаются сразу, даже посреди матча (Esc → ⚙️ Админ). Работают только у тебя.");
+    for (const [k, label, hint] of [
+      ["radar", "📡 Радар — все игроки на карте", "Красные точки ботов на мини-карте и на большой карте (G)."],
+      ["god", "🛡️ Бессмертие", "Урон не проходит ни от пуль, ни от взрывов, ни от зоны."],
+      ["aim", "🎯 Траектория пули", "Линия от ствола до точки, куда попадёт пуля, и конус разброса."]]) {
+      const l = document.createElement("label"); l.style.cssText = "display:flex;align-items:center;gap:10px;font-size:1rem;margin:8px 0 2px;cursor:pointer";
+      const c = document.createElement("input"); c.type = "checkbox"; c.checked = CHEATS[k]; c.style.cssText = "width:20px;height:20px;accent-color:var(--red)";
+      c.addEventListener("change", () => { CHEATS[k] = c.checked; try { localStorage.setItem("lastring-cheats", JSON.stringify(CHEATS)); } catch (e) {} });
+      l.append(c, document.createTextNode(label)); sec.appendChild(l);
+      const h = document.createElement("p"); h.className = "hint"; h.style.marginLeft = "30px"; h.textContent = hint; sec.appendChild(h);
+    }
   } else {
     const sec = section("Лечение и буст", "Бинт и аптечка — сколько HP добавляют. Энергетик и адреналин — сколько буста (максимум 100). Расход — сколько буста уходит в секунду.");
     const f = document.createElement("div"); f.className = "fields"; sec.appendChild(f);
@@ -1939,6 +1956,7 @@ function render() {
   const me = G.me && G.me.alive ? G.me : null;
   for (const b of G.bushes) if (inView(b.x, b.y, b.r)) drawBush(b, me && Math.hypot(me.x - b.x, me.y - b.y) < b.r);
   for (const tr of G.trees) if (!tr.dead && inView(tr.x, tr.y, tr.canopy)) drawCanopy(tr, me && Math.hypot(me.x - tr.x, me.y - tr.y) < tr.canopy);
+  if (me && cheat("aim")) drawAimLine(me);
 
   // particles
   for (const q of G.particles) {
@@ -1955,7 +1973,7 @@ function render() {
   ctx.textAlign = "center"; ctx.font = "800 15px Nunito, sans-serif";
   for (const p of G.players) {
     if (!p.alive || p === G.me || !inView(p.x, p.y, 60)) continue;
-    if (p.inBush && me && Math.hypot(me.x - p.x, me.y - p.y) > 150) continue;
+    if (p.inBush && me && Math.hypot(me.x - p.x, me.y - p.y) > 150 && !cheat("radar")) continue;
     ctx.fillStyle = "rgba(35,38,74,.75)"; ctx.fillText(p.name, p.x, p.y - 36);
     if (G.test && G.test.debug && p.ai && !p.ai.dummy) {
       const tg = p.ai.target && p.ai.target.alive ? " → " + p.ai.target.name : "";
@@ -2155,6 +2173,29 @@ function cycleScope(p) {
   p.scope = p.scopes[(i + 1) % p.scopes.length];
   toast(scopeName(p.scope));
 }
+function drawAimLine(p) {
+  // where the next bullet goes: up to the first wall / player within weapon range, plus the spread cone
+  const wk = curWeapon(p); if (wk === "fists") return;
+  const w = WEAPONS[wk], dx = Math.cos(p.angle), dy = Math.sin(p.angle);
+  let len = w.range, hitPl = null;
+  const ho = raycastObs(p.x, p.y, dx, dy, len);
+  if (ho) len = ho.t;
+  for (const o of G.players) {
+    if (o === p || !o.alive) continue;
+    const tt = segCircle(p.x, p.y, dx, dy, len, o.x, o.y, o.r);
+    if (tt >= 0 && tt < len) { len = tt; hitPl = o; }
+  }
+  const x0 = p.x + dx * (p.r + w.len), y0 = p.y + dy * (p.r + w.len), x1 = p.x + dx * len, y1 = p.y + dy * len;
+  const moving = Math.hypot(p.vx, p.vy) > 60, cone = w.spread * (moving ? 1.35 : 1) * .6 * 2;
+  ctx.save();
+  ctx.fillStyle = "rgba(255,255,255,.08)"; ctx.beginPath(); ctx.moveTo(x0, y0);
+  ctx.arc(p.x, p.y, len, p.angle - cone, p.angle + cone); ctx.closePath(); ctx.fill();
+  ctx.setLineDash([14, 10]); ctx.lineWidth = 3; ctx.strokeStyle = hitPl ? "rgba(255,90,95,.95)" : "rgba(255,255,255,.85)";
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = hitPl ? "#ff5a5f" : ho ? "#ffd45c" : "#ffffff"; ctx.strokeStyle = INK; ctx.lineWidth = 2;
+  circle(x1, y1, 7); ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
 function drawLoot(l) {
   const y = l.y + Math.sin(G.time * 3 + l.bob) * 2;
   // ring color tells the ammo type / gear level at a glance
@@ -2306,7 +2347,7 @@ function drawMap(cv, c, big) {
   c.beginPath(); c.rect(0, 0, S, S); c.arc(z.x * k, z.y * k, Math.max(.5, z.r * k), 0, Math.PI * 2, true); c.fill("evenodd");
   c.strokeStyle = "#ff5a5f"; c.lineWidth = 1.5 * px; c.beginPath(); c.arc(z.x * k, z.y * k, Math.max(.5, z.r * k), 0, 7); c.stroke();
   if (z.stage !== "done") { c.strokeStyle = "#fff"; c.setLineDash([4 * px, 3 * px]); c.beginPath(); c.arc(z.toX * k, z.toY * k, Math.max(.5, z.toR * k), 0, 7); c.stroke(); c.setLineDash([]); }
-  if (G.test) for (const p of G.players) if (p.alive && p.isBot) { c.fillStyle = "#ff5a5f"; c.beginPath(); c.arc(p.x * k, p.y * k, 3 * px, 0, 7); c.fill(); }
+  if (G.test || cheat("radar")) for (const p of G.players) if (p.alive && p.isBot) { c.fillStyle = "#ff5a5f"; c.beginPath(); c.arc(p.x * k, p.y * k, 3 * px, 0, 7); c.fill(); }
   const f = G.me && G.me.alive ? G.me : G.spectate;
   if (f) {
     c.fillStyle = "#ffd45c"; c.strokeStyle = INK; c.lineWidth = 1.5 * px;
