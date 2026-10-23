@@ -175,6 +175,19 @@ button.eq { font-family: var(--display); text-align: left; }
 #testBtn { position: absolute; top: calc(max(10px, env(safe-area-inset-top, 0px)) + 160px); right: calc(max(10px, env(safe-area-inset-right, 0px)) + 56px); padding: 4px 10px; font-size: .9rem; }
 body.touch #testBtn { top: calc(max(10px, env(safe-area-inset-top, 0px)) + 120px); }
 .btn.alt { font-size: .95rem; padding: 6px 16px; }
+.card.wide { width: min(1040px, 100%); align-items: stretch; }
+.card.wide h2 { text-align: center; }
+.tablewrap { overflow-x: auto; border: 2px solid var(--ink); border-radius: 14px; }
+.wtable { border-collapse: collapse; width: 100%; font-size: .82rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wtable th, .wtable td { padding: 6px 8px; text-align: right; border-bottom: 1px solid #e3e0d4; }
+.wtable th { font-family: var(--display); font-weight: 700; background: #f4f1e6; position: sticky; top: 0; text-align: right; }
+.wtable th:first-child, .wtable td:first-child { text-align: left; position: sticky; left: 0; background: var(--white); }
+.wtable th:first-child { background: #f4f1e6; }
+.wtable td:first-child { font-family: var(--display); font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.wtable td:first-child canvas { width: 48px; height: 22px; }
+.wtable .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--ink); margin-right: 4px; }
+.wtable tr:last-child td { border-bottom: 0; }
+.wnote { margin: 0; font-size: .8rem; font-weight: 600; color: #4a4e75; text-align: left; }
 #prompt { position: absolute; left: 50%; bottom: 140px; transform: translateX(-50%); font-weight: 700; }
 #vignette { position: absolute; inset: 0; box-shadow: inset 0 0 120px 30px rgba(255, 30, 40, .55); opacity: 0; transition: opacity .25s; }
 .touchbtns { position: absolute; right: max(12px, env(safe-area-inset-right, 0px)); bottom: 190px; display: none; flex-direction: column; gap: 10px; }
@@ -259,7 +272,10 @@ body.touch #pauseBtn { top: calc(max(10px, env(safe-area-inset-top, 0px)) + 120p
     <p class="desc" id="diffDesc"></p>
     <label class="slider"><span data-i18n="bots">Ботов</span><input type="range" id="botCount" min="3" max="40" step="1" value="20"><output id="botOut">20</output></label>
     <button class="btn big" id="playBtn" data-i18n="play">Играть!</button>
-    <button class="btn alt" id="testModeBtn" data-i18n="test">🧪 Тестовый режим</button>
+    <div class="row">
+      <button class="btn alt" id="testModeBtn" data-i18n="test">🧪 Тестовый режим</button>
+      <button class="btn alt" id="weaponsBtn" data-i18n="wBtn">📋 Оружие</button>
+    </div>
     <p class="best" id="bestTxt"></p>
     <p class="help" id="helpTxt"></p>
   </div>
@@ -269,7 +285,17 @@ body.touch #pauseBtn { top: calc(max(10px, env(safe-area-inset-top, 0px)) + 120p
   <div class="card">
     <h2 data-i18n="paused">Пауза</h2>
     <button class="btn big" id="resumeBtn" data-i18n="resume">Продолжить</button>
+    <button class="btn" id="weaponsBtn2" data-i18n="wBtn">📋 Оружие</button>
     <button class="btn" id="quitBtn" data-i18n="toMenu">В меню</button>
+  </div>
+</div>
+
+<div class="overlay" id="weaponsOv" hidden>
+  <div class="card wide">
+    <h2 data-i18n="wTitle">Характеристики оружия</h2>
+    <div class="tablewrap"><table class="wtable" id="wtable"></table></div>
+    <p class="wnote" data-i18n="wNote"></p>
+    <button class="btn" id="weaponsClose" data-i18n="close" style="align-self: center">Закрыть</button>
   </div>
 </div>
 
@@ -314,12 +340,17 @@ const I18N = {
     win: "Победа!", winSub: "Ты последний выживший 🏆", lose: "Ты выбыл", loseBy: "Тебя победил {n}", loseZone: "Тебя накрыла зона",
     loseBoom: "Взрыв бочки", pick: "[ПКМ] Подобрать: {n}", pickT: "Взять: {n}", reload: "Перезарядка", swap: "Сменить", reloading: "Перезарядка…",
     you: "Ты", zone: "зона", boom: "взрыв",
-    fists: "Кулаки", glock: "Glock", fiveseven: "5.7", smg: "MP5", shotgun: "Дробовик", spas: "SPAS-12", m4: "M4", ak: "АК-47", sniper: "Снайперка",
+    fists: "Кулаки", glock: "Glock", fiveseven: "5.7", smg: "MP5", shotgun: "Дробовик", spas: "SPAS-12", p90: "P90", m4: "M4", ak: "АК-47", sniper: "Снайперка",
     a9: "9 мм", a57: "5.7 мм", a556: "5.56 мм", a762: "7.62 мм", a12: "Дробь 12к",
     bandage: "Бинт", medkit: "Аптечка", soda: "Энергетик", pills: "Адреналин",
     bandageD: "+15% здоровья", medkitD: "до 100%", sodaD: "+25% со временем", pillsD: "полная шкала буста: лечит со временем и ускоряет бег",
     vest: "Бронежилет {n} ур.", helmet: "Каска {n} ур.", pack: "Рюкзак {n} ур.",
     vestS: "Броня", helmetS: "Каска", packS: "Рюкзак", scope: "Прицел {n}x", scopeS: "Прицел", speedUp: "⚡ +{n}% к скорости", lvl: "ур. {n}", none: "нет",
+    wBtn: "📋 Оружие", wTitle: "Характеристики оружия", close: "Закрыть",
+    wName: "Оружие", wAmmo: "Патроны", wDmg: "Урон", wRate: "Выстр./с", wDps: "Урон/с", wMag: "Магазин", wReload: "Перезарядка",
+    wSpread: "Разброс", wHit: "Кучность (300)", wRange: "Дальность", wSpeed: "Скорость пули", wAP: "Пробитие брони", wMove: "Скорость бега", wRarity: "Редкость",
+    perShell: "{n} с / патрон", melee: "ближний бой", rCommon: "частое", rNormal: "обычное", rRare: "редкое", rVeryRare: "очень редкое",
+    wNote: "Урон — без брони, у дробовиков «урон × дробин». Урон/с — урон за секунду непрерывной стрельбы. Разброс — угол в градусах (в движении в 1.35 раза больше). Кучность — доля пуль (дробин), попадающих стоя в неподвижного противника на дистанции 300. Пробитие брони — какую часть защиты каски и бронежилета игнорирует пуля. Скорость бега — с этим оружием в руках, 100% — с кулаками.",
     empty: "пусто", zoom: "Масштаб: {n}%", map: "Карта",
     test: "🧪 Тестовый режим", testHud: "Тестовый режим · T — панель", testTitle: "Тестовый полигон",
     tGod: "Бессмертие", tAmmo: "Бесконечные патроны", tZone: "Зона двигается", tPassive: "Боты не стреляют", tDebug: "Мысли ботов",
@@ -344,12 +375,17 @@ const I18N = {
     win: "Zafer!", winSub: "Hayatta kalan son kişi sensin 🏆", lose: "Elendin", loseBy: "Seni {n} yendi", loseZone: "Bölge seni yakaladı",
     loseBoom: "Varil patlaması", pick: "[Sağ tık] Al: {n}", pickT: "Al: {n}", reload: "Şarjör", swap: "Değiştir", reloading: "Şarjör değişiyor…",
     you: "Sen", zone: "bölge", boom: "patlama",
-    fists: "Yumruk", glock: "Glock", fiveseven: "5.7", smg: "MP5", shotgun: "Pompalı", spas: "SPAS-12", m4: "M4", ak: "AK-47", sniper: "Keskin nişancı",
+    fists: "Yumruk", glock: "Glock", fiveseven: "5.7", smg: "MP5", shotgun: "Pompalı", spas: "SPAS-12", p90: "P90", m4: "M4", ak: "AK-47", sniper: "Keskin nişancı",
     a9: "9 mm", a57: "5.7 mm", a556: "5.56 mm", a762: "7.62 mm", a12: "12 kalibre",
     bandage: "Bandaj", medkit: "İlk yardım", soda: "Enerji içeceği", pills: "Adrenalin",
     bandageD: "+%15 can", medkitD: "%100'e kadar", sodaD: "zamanla +%25", pillsD: "tam takviye: zamanla iyileştirir ve hızlandırır",
     vest: "Yelek sv. {n}", helmet: "Kask sv. {n}", pack: "Sırt çantası sv. {n}",
     vestS: "Yelek", helmetS: "Kask", packS: "Çanta", scope: "Dürbün {n}x", scopeS: "Dürbün", speedUp: "⚡ +%{n} hız", lvl: "sv. {n}", none: "yok",
+    wBtn: "📋 Silahlar", wTitle: "Silah özellikleri", close: "Kapat",
+    wName: "Silah", wAmmo: "Mermi", wDmg: "Hasar", wRate: "Atış/sn", wDps: "Hasar/sn", wMag: "Şarjör", wReload: "Şarjör değişimi",
+    wSpread: "Saçılma", wHit: "İsabet (300)", wRange: "Menzil", wSpeed: "Mermi hızı", wAP: "Zırh delme", wMove: "Koşu hızı", wRarity: "Nadirlik",
+    perShell: "{n} sn / mermi", melee: "yakın dövüş", rCommon: "yaygın", rNormal: "normal", rRare: "nadir", rVeryRare: "çok nadir",
+    wNote: "Hasar zırhsızdır, pompalılarda «hasar × saçma». Hasar/sn — sürekli ateşte saniyedeki hasar. Saçılma — derece cinsinden açı (hareket ederken 1,35 kat fazla). İsabet — 300 mesafede duran hedefe, dururken ateş edildiğinde isabet eden mermi oranı. Zırh delme — kask ve yeleğin korumasının ne kadarını yok sayar. Koşu hızı — bu silah eldeyken, %100 — yumrukla.",
     empty: "boş", zoom: "Yakınlaştırma: %{n}", map: "Harita",
     test: "🧪 Test modu", testHud: "Test modu · T — panel", testTitle: "Test alanı",
     tGod: "Ölümsüzlük", tAmmo: "Sonsuz mermi", tZone: "Bölge hareket eder", tPassive: "Botlar ateş etmez", tDebug: "Bot düşünceleri",
@@ -374,12 +410,17 @@ const I18N = {
     win: "Victory!", winSub: "You are the last survivor 🏆", lose: "You're out", loseBy: "Taken down by {n}", loseZone: "The zone got you",
     loseBoom: "Barrel explosion", pick: "[RMB] Pick up: {n}", pickT: "Take: {n}", reload: "Reload", swap: "Swap", reloading: "Reloading…",
     you: "You", zone: "zone", boom: "explosion",
-    fists: "Fists", glock: "Glock", fiveseven: "5.7", smg: "MP5", shotgun: "Shotgun", spas: "SPAS-12", m4: "M4", ak: "AK-47", sniper: "Sniper",
+    fists: "Fists", glock: "Glock", fiveseven: "5.7", smg: "MP5", shotgun: "Shotgun", spas: "SPAS-12", p90: "P90", m4: "M4", ak: "AK-47", sniper: "Sniper",
     a9: "9mm", a57: "5.7mm", a556: "5.56mm", a762: "7.62mm", a12: "12 gauge",
     bandage: "Bandage", medkit: "Medkit", soda: "Soda", pills: "Pills",
     bandageD: "+15% health", medkitD: "up to 100%", sodaD: "+25% over time", pillsD: "full boost bar: heals over time and makes you run faster",
     vest: "Vest lvl {n}", helmet: "Helmet lvl {n}", pack: "Backpack lvl {n}",
     vestS: "Vest", helmetS: "Helmet", packS: "Backpack", scope: "Scope {n}x", scopeS: "Scope", speedUp: "⚡ +{n}% speed", lvl: "lvl {n}", none: "none",
+    wBtn: "📋 Weapons", wTitle: "Weapon stats", close: "Close",
+    wName: "Weapon", wAmmo: "Ammo", wDmg: "Damage", wRate: "Shots/s", wDps: "DPS", wMag: "Magazine", wReload: "Reload",
+    wSpread: "Spread", wHit: "Grouping (300)", wRange: "Range", wSpeed: "Bullet speed", wAP: "Armor pierce", wMove: "Run speed", wRarity: "Rarity",
+    perShell: "{n} s / shell", melee: "melee", rCommon: "common", rNormal: "normal", rRare: "rare", rVeryRare: "very rare",
+    wNote: "Damage is without armor; shotguns show “damage × pellets”. DPS is damage per second of continuous fire. Spread is the angle in degrees (1.35× more while moving). Grouping is the share of bullets (pellets) that hit a standing enemy at range 300 when you shoot standing still. Armor pierce is how much of helmet and vest protection the round ignores. Run speed is with that weapon in hand, 100% = fists.",
     empty: "empty", zoom: "Zoom: {n}%", map: "Map",
     test: "🧪 Test mode", testHud: "Test mode · T — panel", testTitle: "Test range",
     tGod: "God mode", tAmmo: "Infinite ammo", tZone: "Zone moves", tPassive: "Bots hold fire", tDebug: "Bot thoughts",
@@ -416,7 +457,7 @@ function weighted(table) {
 const fmtTime = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
 
 /* ---------- game data ---------- */
-const MAP = 5000;
+const MAP = 5750;
 const WEAPONS = {
   fists:     { move: 1, melee: true, dmg: 24, rate: .42, reach: 30 },
   // Glock: common, fast but weak and loose. 5.7: rare, harder hitting, more accurate, longer range.
@@ -424,20 +465,22 @@ const WEAPONS = {
   fiveseven: { move: .98, dmg: 20, pellets: 1, rate: .15,  mag: 20, reload: 1.35, spread: .04,  speed: 1750, range: 820,  ammo: "a57",  tier: 2, len: 26, col: "#b9a27a", sfx: "shot" },
   smg:       { move: .95, dmg: 12, pellets: 1, rate: .075, mag: 30, reload: 1.7,  spread: .12,  speed: 1500, range: 650,  ammo: "a9",   tier: 2, len: 34, col: "#4a4e5a", sfx: "shot" },
   // shotgun loads one shell at a time and can fire mid-reload
-  shotgun:   { move: .93, dmg: 11, pellets: 10, rate: .9,   mag: 5,  shell: .45,   spread: .22,  speed: 1300, range: 420,  ammo: "a12",  tier: 2, len: 42, col: "#7a4a26", sfx: "shotgun" },
+  shotgun:   { move: .93, dmg: 11, pellets: 10, rate: .9,   mag: 5,  shell: .45,   spread: .19,  speed: 1400, range: 540,  ammo: "a12",  tier: 2, len: 42, col: "#7a4a26", sfx: "shotgun" },
   // SPAS-12: rarer pump shotgun with a tighter choke — fewer pellets, but they stay grouped further out
-  spas:      { move: .91, dmg: 13, pellets: 7, rate: 1.0,  mag: 6,  shell: .5,    spread: .1,   speed: 1650, range: 600,  ammo: "a12",  tier: 3, len: 46, col: "#2b2e38", sfx: "shotgun" },
+  spas:      { move: .91, dmg: 13, pellets: 7, rate: 1.0,  mag: 6,  shell: .5,    spread: .09,  speed: 1700, range: 660,  ammo: "a12",  tier: 3, len: 46, col: "#2b2e38", sfx: "shotgun" },
+  // P90: 5.7, huge fire rate and a 50-round magazine, so-so accuracy, rounds pierce armor (ap = share of armor ignored)
+  p90:       { move: .95, dmg: 10, pellets: 1, rate: .055, mag: 50, reload: 2.5,  spread: .11,  speed: 1600, range: 640,  ammo: "a57",  tier: 3, len: 34, col: "#3b4034", sfx: "shot", ap: .6 },
   // M4: high fire rate, best up close and mid range. AK: heavier rounds, tighter spread, long range.
   m4:        { move: .91, dmg: 16, pellets: 1, rate: .08,  mag: 30, reload: 1.9,  spread: .075, speed: 1650, range: 720,  ammo: "a556", tier: 3, len: 44, col: "#24262e", sfx: "shot" },
   ak:        { move: .9, dmg: 23, pellets: 1, rate: .13,  mag: 30, reload: 2.3,  spread: .035, speed: 2000, range: 1000, ammo: "a762", tier: 3, len: 46, col: "#8a5a2e", sfx: "ak" },
   sniper:    { move: .84, dmg: 90, pellets: 1, rate: 1.3,  mag: 5,  reload: 2.6,  spread: .008, speed: 2800, range: 1500, ammo: "a762", tier: 3, len: 56, col: "#5d6b3a", sfx: "sniper" }
 };
-const PREF_DIST = { fists: 0, glock: 240, fiveseven: 300, smg: 220, shotgun: 130, spas: 230, m4: 280, ak: 460, sniper: 620 };
+const PREF_DIST = { p90: 240, fists: 0, glock: 240, fiveseven: 300, smg: 220, shotgun: 130, spas: 230, m4: 280, ak: 460, sniper: 620 };
 const AMMO_TYPES = ["a9", "a57", "a556", "a762", "a12"];
-const AMMO_PACK = { a9: 30, a57: 25, a556: 30, a762: 30, a12: 10 };
+const AMMO_PACK = { a9: 30, a57: 30, a556: 30, a762: 30, a12: 10 };
 const AMMO_COLOR = { a9: "#ffcf3d", a57: "#b57cff", a556: "#4fbf6a", a762: "#3f8fe0", a12: "#ff5a5f" };
 // capacities by backpack level 0..3
-const AMMO_CAPS = { a9: [90, 180, 240, 300], a57: [60, 120, 180, 240], a556: [90, 180, 240, 300], a762: [90, 180, 240, 300], a12: [15, 30, 45, 60] };
+const AMMO_CAPS = { a9: [90, 180, 240, 300], a57: [90, 150, 210, 270], a556: [90, 180, 240, 300], a762: [90, 180, 240, 300], a12: [15, 30, 45, 60] };
 const ITEMS = {
   bandage: { caps: [5, 10, 15, 30], time: 2.4 },
   medkit:  { caps: [1, 2, 3, 4],    time: 5.5 },
@@ -572,9 +615,11 @@ function pushOut(p) {
 }
 
 /* ---------- world generation ---------- */
+function insideFloor(x, y, pad) { return G.floors.some(f => Math.abs(x - f.x) < f.hw + pad && Math.abs(y - f.y) < f.hh + pad); }
 function freeSpot(r, tries = 60, extra) {
   for (let i = 0; i < tries; i++) {
     const x = rand(r + 40, MAP - r - 40), y = rand(r + 40, MAP - r - 40);
+    if (insideFloor(x, y, r + 30)) continue;
     if (blocked(x, y, r + 12)) continue;
     if (extra && !extra(x, y)) continue;
     return { x, y };
@@ -582,7 +627,45 @@ function freeSpot(r, tries = 60, extra) {
   return null;
 }
 function addObs(o) { o.maxHp = o.hp; G.obs.push(o); gridInsert(o); return o; }
-function addWall(x, y, w, h) { return addObs({ kind: "wall", shape: "r", x, y, hw: w / 2, hh: h / 2, hp: Infinity }); }
+// wooden fences can be shot through over time; concrete, boulders and containers never break
+function addWall(x, y, w, h) { return addObs({ kind: "wall", shape: "r", x, y, hw: w / 2, hh: h / 2, hp: 120 }); }
+function addConcrete(x0, y0, x1, y1) { return addObs({ kind: "concrete", shape: "r", x: (x0 + x1) / 2, y: (y0 + y1) / 2, hw: Math.abs(x1 - x0) / 2, hh: Math.abs(y1 - y0) / 2, hp: Infinity }); }
+function makeBuilding(cx, cy) {
+  // a big concrete building with wooden partitions and a lot of valuable loot
+  const W = 720, H = 520, th = 26, L = cx - W / 2, R = cx + W / 2, T = cy - H / 2, B = cy + H / 2;
+  G.floors.push({ x: cx, y: cy, hw: W / 2, hh: H / 2 });
+  addConcrete(L, T - th / 2, cx - 70, T + th / 2); addConcrete(cx + 70, T - th / 2, R, T + th / 2);
+  addConcrete(L, B - th / 2, R - 270, B + th / 2); addConcrete(R - 150, B - th / 2, R, B + th / 2);
+  addConcrete(L - th / 2, T, L + th / 2, cy - 60); addConcrete(L - th / 2, cy + 60, L + th / 2, B);
+  addConcrete(R - th / 2, T, R + th / 2, B);
+  const wood = (x0, y0, x1, y1) => addWall((x0 + x1) / 2, (y0 + y1) / 2, Math.max(18, Math.abs(x1 - x0)), Math.max(18, Math.abs(y1 - y0)));
+  wood(cx - 110, T + 13, cx - 110, cy + 30);
+  wood(cx + 60, T + 13, cx + 60, cy - 90);
+  wood(cx + 60, cy + 20, cx + 170, cy + 20); wood(cx + 260, cy + 20, R - 13, cy + 20);
+  addCrate(L + 70, T + 70, true); addCrate(R - 70, T + 70, true); addCrate(R - 80, B - 80, true); addCrate(L + 80, B - 80, false);
+  const spot = () => { for (let i = 0; i < 60; i++) { const x = rand(L + 50, R - 50), y = rand(T + 50, B - 50); if (!blocked(x, y, 24)) return [x, y]; } return [cx, cy]; };
+  for (let i = 0; i < 5; i++) {
+    const type = weighted(GUN_WEIGHTS.vault), a = WEAPONS[type].ammo, [x, y] = spot();
+    addLoot(x, y, "gun", type, 1, { mag: WEAPONS[type].mag });
+    addLoot(x + rand(-30, 30), y + rand(-30, 30), "ammo", a, AMMO_PACK[a]);
+    addLoot(x + rand(-30, 30), y + rand(-30, 30), "ammo", a, AMMO_PACK[a]);
+  }
+  for (let i = 0; i < 3; i++) addLoot(...spot(), pick(GEAR), weighted({ 2: 2, 3: 1.5 }), 1);
+  addLoot(...spot(), "scope", "4", 1);
+  if (Math.random() < .5) addLoot(...spot(), "scope", "8", 1);
+  for (const it of ["medkit", "medkit", "pills", "pills", "bandage", "bandage", "bandage", "soda", "soda"]) addLoot(...spot(), "heal", it, 1);
+}
+function placeBuildings() {
+  const placed = [];
+  for (let n = 0; n < 2; n++) {
+    for (let i = 0; i < 300; i++) {
+      const x = rand(800, MAP - 800), y = rand(800, MAP - 800);
+      if (Math.hypot(x - MAP / 2, y - MAP / 2) < 1150) continue; // keep the test range in the middle clear
+      if (placed.some(b => Math.hypot(b.x - x, b.y - y) < MAP * .45)) continue;
+      placed.push({ x, y }); makeBuilding(x, y); break;
+    }
+  }
+}
 function makeRuin(cx, cy) {
   const s = rand(150, 230), th = 22, gap = 80;
   const type = randi(0, 2);
@@ -611,18 +694,32 @@ function addCrate(x, y, mil) {
 }
 function genWorld() {
   grid = Array.from({ length: GW * GW }, () => []);
-  for (let i = 0; i < 17; i++) { const s = freeSpot(170); if (s) makeRuin(s.x, s.y); }
-  for (let i = 0; i < 195; i++) { const s = freeSpot(30); if (s) { const tr = addObs({ kind: "tree", shape: "c", x: s.x, y: s.y, r: 26, hp: Infinity, canopy: rand(85, 110), hue: rand(-12, 12) }); G.trees.push(tr); } }
-  for (let i = 0; i < 90; i++) { const s = freeSpot(55); if (s) addObs({ kind: "rock", shape: "c", x: s.x, y: s.y, r: rand(38, 55), hp: 130 }); }
-  for (let i = 0; i < 100; i++) { const s = freeSpot(36); if (s) addCrate(s.x, s.y, Math.random() < .14); }
-  for (let i = 0; i < 36; i++) { const s = freeSpot(28); if (s) addObs({ kind: "barrel", shape: "c", x: s.x, y: s.y, r: 26, hp: 40 }); }
-  for (let i = 0; i < 125; i++) { const s = freeSpot(20); if (s) G.bushes.push({ x: s.x, y: s.y, r: rand(50, 68), seed: Math.random() * 10 }); }
-  for (let i = 0; i < 130; i++) { const s = freeSpot(22); if (s) spawnLootAt(s.x, s.y, false); }
+  G.floors = [];
+  placeBuildings();
+  // counts: map area +32%, object density -5%; ground loot -5%
+  for (let i = 0; i < 21; i++) { const s = freeSpot(170); if (s) makeRuin(s.x, s.y); }
+  for (let i = 0; i < 12; i++) {
+    const s = freeSpot(120); if (!s) continue;
+    const long = Math.random() < .5;
+    addObs({ kind: "container", shape: "r", x: s.x, y: s.y, hw: long ? 110 : 38, hh: long ? 38 : 110, hp: Infinity, color: pick(["#c0504d", "#4f81bd", "#7aa64a", "#e3a33b"]), long });
+  }
+  for (let i = 0; i < 18; i++) { const s = freeSpot(95); if (s) addObs({ kind: "boulder", shape: "c", x: s.x, y: s.y, r: rand(72, 92), hp: Infinity, seed: Math.random() * 6 }); }
+  for (let i = 0; i < 245; i++) { const s = freeSpot(30); if (s) { const tr = addObs({ kind: "tree", shape: "c", x: s.x, y: s.y, r: 26, hp: 260, canopy: rand(85, 110), hue: rand(-12, 12) }); G.trees.push(tr); } }
+  for (let i = 0; i < 113; i++) { const s = freeSpot(55); if (s) addObs({ kind: "rock", shape: "c", x: s.x, y: s.y, r: rand(38, 55), hp: 200 }); }
+  for (let i = 0; i < 119; i++) { const s = freeSpot(36); if (s) addCrate(s.x, s.y, Math.random() < .14); }
+  for (let i = 0; i < 45; i++) { const s = freeSpot(28); if (s) addObs({ kind: "barrel", shape: "c", x: s.x, y: s.y, r: 26, hp: 40 }); }
+  for (let i = 0; i < 157; i++) { const s = freeSpot(20); if (s) G.bushes.push({ x: s.x, y: s.y, r: rand(50, 68), seed: Math.random() * 10 }); }
+  for (let i = 0; i < 124; i++) { const s = freeSpot(22); if (s) spawnLootAt(s.x, s.y, false); }
   buildMinimapBase();
 }
 
 /* ---------- loot ---------- */
 const GEAR = ["helmet", "vest", "pack"];
+const GUN_WEIGHTS = {
+  ground: { glock: 22, fiveseven: 4, smg: 14, shotgun: 11, spas: 2.5, p90: 2.5, m4: 6, ak: 4, sniper: 2 },
+  rich:   { glock: 6, fiveseven: 4, smg: 11, shotgun: 9, spas: 5, p90: 5, m4: 8, ak: 6, sniper: 4 },
+  vault:  { fiveseven: 3, spas: 4, p90: 4, m4: 4, ak: 4, sniper: 3 }
+};
 // scopes widen how much of the map you can see
 const SCOPES = [1, 2, 4, 8];
 const SCOPE_VIEW = { 1: 1, 2: 1.2, 4: 1.45, 8: 1.75 };
@@ -637,9 +734,7 @@ function spawnLootAt(x, y, rich) {
   const k = weighted(rich ? { gun: 5, ammo: 2, heal: 3, gear: 3 } : { gun: 3, ammo: 4, heal: 4, gear: 2 });
   const sc = () => [x + rand(-30, 30), y + rand(-30, 30)];
   if (k === "gun") {
-    const type = weighted(rich
-      ? { glock: 6, fiveseven: 4, smg: 11, shotgun: 9, spas: 5, m4: 8, ak: 6, sniper: 4 }
-      : { glock: 22, fiveseven: 4, smg: 14, shotgun: 11, spas: 2.5, m4: 6, ak: 4, sniper: 2 });
+    const type = weighted(rich ? GUN_WEIGHTS.rich : GUN_WEIGHTS.ground);
     addLoot(x, y, "gun", type, 1, { mag: WEAPONS[type].mag });
     const a = WEAPONS[type].ammo;
     addLoot(...sc(), "ammo", a, AMMO_PACK[a]);
@@ -795,7 +890,10 @@ function doMelee(p) {
 }
 function damagePlayer(tg, amt, src, wk) {
   if (!tg.alive) return;
-  if (wk !== "zone") amt *= (1 - VEST_RED[tg.vest]) * (1 - HELMET_RED[tg.helmet]);
+  if (wk !== "zone") {
+    const ap = (WEAPONS[wk] && WEAPONS[wk].ap) || 0;
+    amt *= (1 - VEST_RED[tg.vest] * (1 - ap)) * (1 - HELMET_RED[tg.helmet] * (1 - ap));
+  }
   if (G.test) {
     if (wk !== "zone") damageNumber(tg.x, tg.y, amt, tg === G.me ? "#ff5a5f" : "#ffffff");
     if (tg === G.me && G.test.god) { tg.hitT = G.time; G.flash = .2; return; }
@@ -823,7 +921,7 @@ function killPlayer(p, src, wk) {
 function damageObs(o, amt, src) {
   if (o.hp === Infinity || o.dead) return;
   o.hp -= amt;
-  const col = o.kind === "crate" ? "#b9874b" : o.kind === "rock" ? "#9aa0a8" : "#d6453f";
+  const col = { crate: "#b9874b", rock: "#9aa0a8", tree: "#7a5230", wall: "#b07a45" }[o.kind] || "#d6453f";
   particle(o.x + rand(-10, 10), o.y + rand(-10, 10), rand(-120, 120), rand(-120, 120), .35, col, rand(3, 6), "dot");
   if (o.hp <= 0) {
     o.dead = true;
@@ -836,6 +934,7 @@ function damageObs(o, amt, src) {
     }
     else if (o.kind === "barrel") explode(o.x, o.y, src);
     else sfx("crate", o.x, o.y);
+    if (o.kind === "tree" || o.kind === "wall") G.mapDirty = true;
   }
 }
 function explode(x, y, src) {
@@ -946,6 +1045,7 @@ function weaponSuit(type, d) {
     case "m4": return d < 420 ? 4.6 : 2.8;
     case "ak": return d > 320 ? 4.8 : 3.2;
     case "fiveseven": return 2.6;
+    case "p90": return d < 380 ? 4.7 : 2.6;
     case "smg": return d < 350 ? 4.2 : 2;
     default: return 2;
   }
@@ -1265,7 +1365,7 @@ function humanInput(p, dt) {
 
 /* ---------- game lifecycle ---------- */
 function newGame(attract, test) {
-  G = { players: [], bullets: [], loot: [], obs: [], trees: [], bushes: [], particles: [], feed: [],
+  G = { players: [], bullets: [], loot: [], obs: [], trees: [], bushes: [], floors: [], particles: [], feed: [],
     time: 0, me: null, over: false, attract, flash: 0, cam: { x: MAP / 2, y: MAP / 2 }, restartT: 0, spectate: null, test: null, respawnT: 0 };
   genWorld();
   G.zone = initZone();
@@ -1428,6 +1528,61 @@ function toggleTestPanel() { if (G && G.test) { $("testPanel").hidden = !$("test
 $("testBtn").addEventListener("click", e => { toggleTestPanel(); e.currentTarget.blur(); });
 $("testModeBtn").addEventListener("click", () => startMatch(true));
 
+/* ---------- weapon stats table (computed from WEAPONS, so it always matches the game) ---------- */
+function erf(x) {
+  const t1 = 1 / (1 + .3275911 * Math.abs(x));
+  const y = 1 - (((((1.061405429 * t1 - 1.453152027) * t1) + 1.421413741) * t1 - .284496736) * t1 + .254829592) * t1 * Math.exp(-x * x);
+  return x >= 0 ? y : -y;
+}
+function hitChance(w, dist) {
+  if (w.range < dist) return 0;
+  const sd = w.spread * .6, half = Math.atan(24 / dist); // bullets spread as N(0, spread·0.6); target radius 24
+  return erf(half / (sd * Math.SQRT2));
+}
+function rarityOf(type) {
+  const ws = GUN_WEIGHTS.ground, total = Object.values(ws).reduce((a, b) => a + b, 0), share = (ws[type] || 0) / total;
+  return share > .18 ? t("rCommon") : share > .09 ? t("rNormal") : share > .04 ? t("rRare") : t("rVeryRare");
+}
+function renderWeaponTable() {
+  const cols = ["wName", "wAmmo", "wDmg", "wRate", "wDps", "wMag", "wReload", "wSpread", "wHit", "wRange", "wSpeed", "wAP", "wMove", "wRarity"];
+  const tb = $("wtable"); tb.innerHTML = "";
+  const head = document.createElement("tr");
+  for (const c of cols) { const th = document.createElement("th"); th.textContent = t(c); head.appendChild(th); }
+  tb.appendChild(head);
+  for (const type of Object.keys(WEAPONS)) {
+    const w = WEAPONS[type], tr = document.createElement("tr");
+    const cell = (html) => { const td = document.createElement("td"); td.innerHTML = html; tr.appendChild(td); return td; };
+    const first = cell("");
+    const cv = iconCanvas(48, 22);
+    if (w.melee) paintIcon(cv, 48, 22, c => { c.fillStyle = "#f3c89a"; c.strokeStyle = INK; c.lineWidth = 1.5; for (const dx of [16, 32]) { c.beginPath(); c.arc(dx, 11, 7, 0, 7); c.fill(); c.stroke(); } });
+    else paintIcon(cv, 48, 22, c => drawGunIcon(c, type, 24, 12, 44));
+    first.append(cv, document.createTextNode(t(type)));
+    if (w.melee) {
+      cell("—"); cell(String(w.dmg)); cell((1 / w.rate).toFixed(1)); cell(String(Math.round(w.dmg / w.rate)));
+      cell("—"); cell("—"); cell("—"); cell("—"); cell(t("melee")); cell("—"); cell("—");
+    } else {
+      cell('<span class="dot" style="background:' + AMMO_COLOR[w.ammo] + '"></span>' + t(w.ammo));
+      cell(w.pellets > 1 ? w.dmg + " × " + w.pellets : String(w.dmg));
+      cell((1 / w.rate).toFixed(1));
+      cell(String(Math.round(w.dmg * w.pellets / w.rate)));
+      cell(String(w.mag));
+      cell(w.shell ? t("perShell", { n: w.shell }) : w.reload + " " + (lang === "en" ? "s" : lang === "tr" ? "sn" : "с"));
+      cell("±" + (w.spread * .6 * 180 / Math.PI).toFixed(1) + "°");
+      cell(Math.round(hitChance(w, 300) * 100) + "%");
+      cell(String(w.range));
+      cell(String(w.speed));
+      cell(w.ap ? Math.round(w.ap * 100) + "%" : "—");
+    }
+    cell(Math.round(w.move * 100) + "%");
+    cell(w.melee ? "—" : rarityOf(type));
+    tb.appendChild(tr);
+  }
+}
+function showWeapons() { renderWeaponTable(); $("weaponsOv").hidden = false; }
+$("weaponsBtn").addEventListener("click", showWeapons);
+$("weaponsBtn2").addEventListener("click", showWeapons);
+$("weaponsClose").addEventListener("click", () => { $("weaponsOv").hidden = true; });
+
 /* ---------- main update ---------- */
 let paused = false;
 function update(dt) {
@@ -1475,12 +1630,19 @@ function buildMinimapBase() {
   miniBase = document.createElement("canvas"); miniBase.width = S; miniBase.height = S;
   const c = miniBase.getContext("2d"), k = S / MAP;
   c.fillStyle = "#6fb85d"; c.fillRect(0, 0, S, S);
+  c.fillStyle = "#c9b38f";
+  for (const f of G.floors) c.fillRect((f.x - f.hw) * k, (f.y - f.hh) * k, f.hw * 2 * k, f.hh * 2 * k);
   c.fillStyle = "#4f8f45";
   for (const b of G.bushes) { c.beginPath(); c.arc(b.x * k, b.y * k, 2, 0, 7); c.fill(); }
   c.fillStyle = "#2f6b33";
-  for (const tr of G.trees) { c.beginPath(); c.arc(tr.x * k, tr.y * k, 3, 0, 7); c.fill(); }
-  c.fillStyle = "#6b625a";
-  for (const o of G.obs) if (o.kind === "wall") c.fillRect((o.x - o.hw) * k, (o.y - o.hh) * k, Math.max(2, o.hw * 2 * k), Math.max(2, o.hh * 2 * k));
+  for (const tr of G.trees) if (!tr.dead) { c.beginPath(); c.arc(tr.x * k, tr.y * k, 3, 0, 7); c.fill(); }
+  c.fillStyle = "#6f747c";
+  for (const o of G.obs) if (o.kind === "boulder") { c.beginPath(); c.arc(o.x * k, o.y * k, Math.max(2.5, o.r * k), 0, 7); c.fill(); }
+  for (const o of G.obs) {
+    if (o.dead || !(o.kind === "wall" || o.kind === "concrete" || o.kind === "container")) continue;
+    c.fillStyle = o.kind === "wall" ? "#8a6a48" : o.kind === "container" ? o.color : "#5f646b";
+    c.fillRect((o.x - o.hw) * k, (o.y - o.hh) * k, Math.max(2, o.hw * 2 * k), Math.max(2, o.hh * 2 * k));
+  }
 }
 
 function roundRect(c, x, y, w, h, r) { c.beginPath(); c.roundRect ? c.roundRect(x, y, w, h, r) : c.rect(x, y, w, h); }
@@ -1506,6 +1668,14 @@ function render() {
 
   // ground
   ctx.fillStyle = "#7cc36a"; ctx.fillRect(0, 0, MAP, MAP);
+  for (const f of G.floors) {
+    if (!inView(f.x, f.y, Math.max(f.hw, f.hh))) continue;
+    ctx.fillStyle = "#d9c7a4"; ctx.fillRect(f.x - f.hw, f.y - f.hh, f.hw * 2, f.hh * 2);
+    ctx.strokeStyle = "rgba(122,90,48,.25)"; ctx.lineWidth = 2; ctx.beginPath();
+    for (let x = f.x - f.hw + 40; x < f.x + f.hw; x += 40) { ctx.moveTo(x, f.y - f.hh); ctx.lineTo(x, f.y + f.hh); }
+    for (let y = f.y - f.hh + 40; y < f.y + f.hh; y += 40) { ctx.moveTo(f.x - f.hw, y); ctx.lineTo(f.x + f.hw, y); }
+    ctx.stroke();
+  }
   ctx.strokeStyle = "rgba(35,38,74,.08)"; ctx.lineWidth = 2;
   ctx.beginPath();
   for (let x = Math.max(0, Math.floor(vx0 / 100) * 100); x <= Math.min(MAP, vx1); x += 100) { ctx.moveTo(x, Math.max(0, vy0)); ctx.lineTo(x, Math.min(MAP, vy1)); }
@@ -1537,7 +1707,7 @@ function render() {
   // bushes & canopies over players
   const me = G.me && G.me.alive ? G.me : null;
   for (const b of G.bushes) if (inView(b.x, b.y, b.r)) drawBush(b, me && Math.hypot(me.x - b.x, me.y - b.y) < b.r);
-  for (const tr of G.trees) if (inView(tr.x, tr.y, tr.canopy)) drawCanopy(tr, me && Math.hypot(me.x - tr.x, me.y - tr.y) < tr.canopy);
+  for (const tr of G.trees) if (!tr.dead && inView(tr.x, tr.y, tr.canopy)) drawCanopy(tr, me && Math.hypot(me.x - tr.x, me.y - tr.y) < tr.canopy);
 
   // particles
   for (const q of G.particles) {
@@ -1626,6 +1796,12 @@ const GUN_SHAPES = {
     for (let x = -2; x < 30; x += 6) { c.fillStyle = "#6b7080"; c.fillRect(x, -7, 3, 3); }
     box(c, 4, -3, 14, 7, "#4a4e5a");
     box(c, -15, -8, 11, 10, DARK);
+  },
+  p90(c) {
+    poly(c, [-24, -6, 14, -6, 20, -2, 20, 4, 6, 4, 2, 10, -6, 10, -8, 4, -24, 4], "#3b4034");
+    c.fillStyle = "rgba(35,38,74,.25)"; c.beginPath(); c.ellipse(-14, 0, 4, 3, 0, 0, 7); c.fill(); c.stroke();
+    box(c, -20, -10, 32, 4, "#c9b48a");
+    box(c, 20, -3, 7, 3, DARK);
   },
   m4(c) {
     box(c, -29, -7, 15, 8, "#24262e");
@@ -1752,7 +1928,7 @@ function drawObs(o) {
   ctx.lineWidth = 3; ctx.strokeStyle = INK;
   const hpK = o.hp === Infinity ? 1 : .65 + .35 * o.hp / o.maxHp;
   if (o.kind === "tree") {
-    ctx.fillStyle = "#7a5230"; circle(o.x, o.y, o.r); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#7a5230"; circle(o.x, o.y, o.r * hpK); ctx.fill(); ctx.stroke();
   } else if (o.kind === "rock") {
     const r = o.r * hpK;
     ctx.fillStyle = "#9aa0a8"; circle(o.x, o.y, r); ctx.fill(); ctx.stroke();
@@ -1763,7 +1939,33 @@ function drawObs(o) {
     ctx.strokeStyle = "#9c2a25"; ctx.lineWidth = 3; circle(o.x, o.y, o.r * hpK * .6); ctx.stroke();
     ctx.fillStyle = "#ffd45c"; circle(o.x, o.y, 5); ctx.fill();
   } else if (o.kind === "wall") {
-    ctx.fillStyle = "#a89a8a"; ctx.fillRect(o.x - o.hw, o.y - o.hh, o.hw * 2, o.hh * 2); ctx.strokeRect(o.x - o.hw, o.y - o.hh, o.hw * 2, o.hh * 2);
+    // wooden fence: planks across the long side, cracks when damaged
+    const x = o.x - o.hw, y = o.y - o.hh, w = o.hw * 2, h = o.hh * 2, horiz = w >= h;
+    ctx.fillStyle = "#b07a45"; ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = "#7d522b"; ctx.lineWidth = 2; ctx.beginPath();
+    if (horiz) for (let xx = x + 14; xx < x + w; xx += 14) { ctx.moveTo(xx, y); ctx.lineTo(xx, y + h); }
+    else for (let yy = y + 14; yy < y + h; yy += 14) { ctx.moveTo(x, yy); ctx.lineTo(x + w, yy); }
+    ctx.stroke();
+    if (o.hp < o.maxHp * .6) { ctx.strokeStyle = "rgba(35,38,74,.7)"; ctx.beginPath(); ctx.moveTo(o.x - (horiz ? 20 : 0), o.y - (horiz ? 0 : 20)); ctx.lineTo(o.x + 6, o.y + 4); ctx.lineTo(o.x + (horiz ? 18 : -4), o.y + (horiz ? -4 : 22)); ctx.stroke(); }
+    ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.strokeRect(x, y, w, h);
+  } else if (o.kind === "concrete") {
+    ctx.fillStyle = "#9ea4ab"; ctx.fillRect(o.x - o.hw, o.y - o.hh, o.hw * 2, o.hh * 2);
+    ctx.fillStyle = "#b9bec4"; ctx.fillRect(o.x - o.hw + 4, o.y - o.hh + 4, Math.max(0, o.hw * 2 - 8), Math.max(0, o.hh * 2 - 8) / 2);
+    ctx.strokeRect(o.x - o.hw, o.y - o.hh, o.hw * 2, o.hh * 2);
+  } else if (o.kind === "boulder") {
+    ctx.fillStyle = "#6f747c"; circle(o.x, o.y, o.r); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#878d96"; circle(o.x - o.r * .22, o.y - o.r * .25, o.r * .5); ctx.fill();
+    ctx.strokeStyle = "rgba(35,38,74,.55)"; ctx.lineWidth = 3; ctx.beginPath();
+    ctx.moveTo(o.x + Math.cos(o.seed) * o.r * .9, o.y + Math.sin(o.seed) * o.r * .9); ctx.lineTo(o.x + Math.cos(o.seed) * o.r * .3, o.y + Math.sin(o.seed + .4) * o.r * .3); ctx.lineTo(o.x + Math.cos(o.seed + .9) * o.r * .1, o.y); ctx.stroke();
+  } else if (o.kind === "container") {
+    const x = o.x - o.hw, y = o.y - o.hh, w = o.hw * 2, h = o.hh * 2;
+    ctx.fillStyle = o.color; ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = "rgba(0,0,0,.22)"; ctx.lineWidth = 3; ctx.beginPath();
+    if (o.long) for (let xx = x + 12; xx < x + w - 8; xx += 12) { ctx.moveTo(xx, y + 5); ctx.lineTo(xx, y + h - 5); }
+    else for (let yy = y + 12; yy < y + h - 8; yy += 12) { ctx.moveTo(x + 5, yy); ctx.lineTo(x + w - 5, yy); }
+    ctx.stroke();
+    ctx.fillStyle = "rgba(0,0,0,.25)"; if (o.long) ctx.fillRect(x + w - 14, y, 14, h); else ctx.fillRect(x, y + h - 14, w, 14);
+    ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.strokeRect(x, y, w, h);
   }
 }
 function drawCrate(o, hpK) {
@@ -1873,6 +2075,7 @@ function drawMap(cv, c, big) {
 const bigmap = $("bigmap"), bctx = bigmap.getContext("2d");
 function drawMinimap() {
   if ($("hud").hidden || !miniBase) return;
+  if (G.mapDirty && G.time - (G.mapT || 0) > 1) { buildMinimapBase(); G.mapDirty = false; G.mapT = G.time; }
   drawMap(mini, mctx, false);
   if (!bigmap.hidden) {
     const w = Math.round(bigmap.getBoundingClientRect().width * DPR);
