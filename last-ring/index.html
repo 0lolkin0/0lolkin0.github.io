@@ -384,7 +384,7 @@ const I18N = {
     wNote: "Урон — без брони, у дробовиков «урон × дробин». Урон/с — урон за секунду непрерывной стрельбы. Разброс — угол в градусах: отдельно стоя и в движении. Кучность — доля пуль (дробин), попадающих стоя в неподвижного противника на дистанции 300. Пробитие брони — какую часть защиты каски и бронежилета игнорирует пуля. Скорость бега — с этим оружием в руках, 100% — с кулаками. Бег при стрельбе — скорость в момент стрельбы (держится 0.3 с после каждого выстрела).",
     empty: "пусто", zoom: "Масштаб: {n}%", map: "Карта",
     test: "🧪 Тестовый режим", testHud: "Тестовый режим · T — панель", testTitle: "Тестовый полигон",
-    tGod: "Бессмертие", tAmmo: "Бесконечные патроны", tZone: "Зона двигается", tPassive: "Боты не стреляют", tDebug: "Мысли ботов",
+    tGod: "Бессмертие", tAmmo: "Бесконечные патроны", tZone: "Зона двигается", tPassive: "Боты не стреляют", tDebug: "Мысли ботов", tHead: "💥 Хэдшоты (эксперимент)",
     tSpawn: "+ Бот", tDummy: "+ Мишень", tRunner: "+ Бегущая мишень", tClear: "Убрать ботов", tArsenal: "Арсенал заново",
     tGear: "Всё снаряжение 3 ур.", tSpeed: "Скорость", tLevel: "Уровень бота", tHint: "Цифры над целью — урон. Смерть = возрождение.", tClose: "Закрыть (T)"
   },
@@ -419,7 +419,7 @@ const I18N = {
     wNote: "Hasar zırhsızdır, pompalılarda «hasar × saçma». Hasar/sn — sürekli ateşte saniyedeki hasar. Saçılma — derece cinsinden açı: dururken ve hareket halinde ayrı. İsabet — 300 mesafede duran hedefe, dururken ateş edildiğinde isabet eden mermi oranı. Zırh delme — kask ve yeleğin korumasının ne kadarını yok sayar. Koşu hızı — bu silah eldeyken, %100 — yumrukla. Ateş ederken koşu — her atıştan sonra 0,3 sn boyunca hız.",
     empty: "boş", zoom: "Yakınlaştırma: %{n}", map: "Harita",
     test: "🧪 Test modu", testHud: "Test modu · T — panel", testTitle: "Test alanı",
-    tGod: "Ölümsüzlük", tAmmo: "Sonsuz mermi", tZone: "Bölge hareket eder", tPassive: "Botlar ateş etmez", tDebug: "Bot düşünceleri",
+    tGod: "Ölümsüzlük", tAmmo: "Sonsuz mermi", tZone: "Bölge hareket eder", tPassive: "Botlar ateş etmez", tDebug: "Bot düşünceleri", tHead: "💥 Kafa vuruşu (deneysel)",
     tSpawn: "+ Bot", tDummy: "+ Hedef", tRunner: "+ Koşan hedef", tClear: "Botları kaldır", tArsenal: "Cephaneliği yenile",
     tGear: "Tüm ekipman sv. 3", tSpeed: "Hız", tLevel: "Bot seviyesi", tHint: "Hedefin üstündeki sayılar — hasar. Ölünce yeniden doğarsın.", tClose: "Kapat (T)"
   },
@@ -454,7 +454,7 @@ const I18N = {
     wNote: "Damage is without armor; shotguns show “damage × pellets”. DPS is damage per second of continuous fire. Spread is the angle in degrees, standing and moving. Grouping is the share of bullets (pellets) that hit a standing enemy at range 300 when you shoot standing still. Armor pierce is how much of helmet and vest protection the round ignores. Run speed is with that weapon in hand, 100% = fists. Run while firing is your speed for 0.3 s after each shot.",
     empty: "empty", zoom: "Zoom: {n}%", map: "Map",
     test: "🧪 Test mode", testHud: "Test mode · T — panel", testTitle: "Test range",
-    tGod: "God mode", tAmmo: "Infinite ammo", tZone: "Zone moves", tPassive: "Bots hold fire", tDebug: "Bot thoughts",
+    tGod: "God mode", tAmmo: "Infinite ammo", tZone: "Zone moves", tPassive: "Bots hold fire", tDebug: "Bot thoughts", tHead: "💥 Headshots (experimental)",
     tSpawn: "+ Bot", tDummy: "+ Dummy", tRunner: "+ Running dummy", tClear: "Remove bots", tArsenal: "Reset arsenal",
     tGear: "All gear lvl 3", tSpeed: "Speed", tLevel: "Bot level", tHint: "Numbers over targets show damage. Dying respawns you.", tClose: "Close (T)"
   }
@@ -528,6 +528,7 @@ const ammoCap = (p, a) => AMMO_CAPS[a][p.pack];
 const itemCap = (p, it) => ITEMS[it].caps[p.pack];
 const VEST_RED = [0, .2, .3, .4];
 const HELMET_RED = [0, .1, .15, .2];
+const HELMET_HEAD = [0, .25, .4, .55]; // helmet protection against headshots (vests do not help there)
 const LEVEL_COLOR = [null, "#d9dde3", "#5fb8f0", "#ffd45c"];
 const SHIRTS = ["#ff8a3d", "#5fb8f0", "#b57cff", "#ff6fa8", "#3fd0b0", "#ffd45c", "#9ad84f", "#f2f2f2", "#ff5a5f", "#6f7bff"];
 const BOT_NAMES = ["Pixel", "Tofu", "Rocket", "Mango", "Biscuit", "Nugget", "Zigzag", "Kiwi", "Turbo", "Pickle", "Boba", "Waffle",
@@ -777,7 +778,9 @@ const LOOT = {
 const TUNE = {
   dmgMul: 1, zoneMul: 1, barrel: 75, runSpeed: 270,
   bandage: 15, medkit: 100, soda: 25, pills: 100, boostDrain: 1,
-  botAim: 1, botReact: 1, botView: 1
+  botAim: 1, botReact: 1, botView: 1,
+  // experimental precision headshots: a bullet that passes close to the centre of a player
+  headshots: 0, hsZone: .15, hsMul: 1.5, hsMulHeavy: 1.25
 };
 
 /* ---------- admin overrides: stored only in this browser ---------- */
@@ -827,7 +830,7 @@ let presetName = DEFAULT_PRESET;
 function adminSnapshot() {
   const weapons = {};
   for (const w in WEAPONS) { weapons[w] = {}; for (const f of WEAPON_FIELDS) if (typeof WEAPONS[w][f] === "number") weapons[w][f] = WEAPONS[w][f]; }
-  return JSON.parse(JSON.stringify({ weapons, ammoAp: AMMO_AP, armor: { vest: VEST_RED, helmet: HELMET_RED }, guns: GUN_WEIGHTS, loot: LOOT, tune: TUNE, preset: presetName }));
+  return JSON.parse(JSON.stringify({ weapons, ammoAp: AMMO_AP, armor: { vest: VEST_RED, helmet: HELMET_RED, head: HELMET_HEAD }, guns: GUN_WEIGHTS, loot: LOOT, tune: TUNE, preset: presetName }));
 }
 function mergeNumbers(dst, src) {
   for (const k in src) {
@@ -838,7 +841,7 @@ function mergeNumbers(dst, src) {
 }
 function adminApply(snap) {
   mergeNumbers(WEAPONS, snap.weapons || {}); mergeNumbers(AMMO_AP, snap.ammoAp || {});
-  if (snap.armor) { mergeNumbers(VEST_RED, snap.armor.vest || {}); mergeNumbers(HELMET_RED, snap.armor.helmet || {}); }
+  if (snap.armor) { mergeNumbers(VEST_RED, snap.armor.vest || {}); mergeNumbers(HELMET_RED, snap.armor.helmet || {}); mergeNumbers(HELMET_HEAD, snap.armor.head || {}); }
   if (PRESETS[snap.preset]) presetName = snap.preset;
   mergeNumbers(GUN_WEIGHTS, snap.guns || {}); mergeNumbers(LOOT, snap.loot || {}); mergeNumbers(TUNE, snap.tune || {});
 }
@@ -1025,15 +1028,20 @@ function doMelee(p) {
     if (o.hp !== Infinity && overlapsObs(hx, hy, 24, o)) { damageObs(o, WEAPONS.fists.dmg, p); return; }
   }
 }
-function damagePlayer(tg, amt, src, wk) {
+function damagePlayer(tg, amt, src, wk, hs) {
   if (!tg.alive) return;
   if (tg === G.me && cheat("god")) { if (wk !== "zone") tg.hitT = G.time; return; }
   if (wk !== "zone") {
     const ap = WEAPONS[wk] && WEAPONS[wk].ammo ? AMMO_AP[WEAPONS[wk].ammo] : 0;
-    amt *= (1 - VEST_RED[tg.vest] * (1 - ap)) * (1 - HELMET_RED[tg.helmet] * (1 - ap));
+    if (hs) {
+      // headshot: bigger damage, only the helmet protects (and much better than against body shots)
+      const heavy = wk === "sniper" || WEAPONS[wk].pellets > 1;
+      amt *= (heavy ? TUNE.hsMulHeavy : TUNE.hsMul) * (1 - HELMET_HEAD[tg.helmet] * (1 - ap));
+      if (src === G.me || tg === G.me) sfx("headshot", tg.x, tg.y);
+    } else amt *= (1 - VEST_RED[tg.vest] * (1 - ap)) * (1 - HELMET_RED[tg.helmet] * (1 - ap));
   }
   if (G.test) {
-    if (wk !== "zone") damageNumber(tg.x, tg.y, amt, tg === G.me ? "#ff5a5f" : "#ffffff");
+    if (wk !== "zone") damageNumber(tg.x, tg.y, amt, hs ? "#ffd45c" : tg === G.me ? "#ff5a5f" : "#ffffff", hs);
     if (tg === G.me && G.test.god) { tg.hitT = G.time; G.flash = .2; return; }
   }
   tg.hp -= amt; tg.hitT = G.time;
@@ -1116,7 +1124,10 @@ function updateBullets(dt) {
     }
     if (hitT >= 0) {
       const hx = b.x + b.dx * hitT, hy = b.y + b.dy * hitT;
-      if (hitPl) { damagePlayer(hitPl, b.dmg, b.owner, b.wk); particle(hx, hy, b.dx * 80, b.dy * 80, .2, "#ff4d4d", 7, "spark"); if (hitPl === G.me || b.owner === G.me) sfx("hit", hx, hy); }
+      if (hitPl) {
+        const miss = Math.abs((hitPl.x - b.x) * b.dy - (hitPl.y - b.y) * b.dx); // how far the bullet line passes from the centre
+        const hs = TUNE.headshots > 0 && miss <= hitPl.r * TUNE.hsZone;
+        damagePlayer(hitPl, b.dmg, b.owner, b.wk, hs); particle(hx, hy, b.dx * 80, b.dy * 80, .2, "#ff4d4d", 7, "spark"); if (hitPl === G.me || b.owner === G.me) sfx("hit", hx, hy); }
       else { damageObs(hitObs, b.dmg, b.owner); particle(hx, hy, -b.dx * 90, -b.dy * 90, .15, "#ffe9a0", 5, "spark"); }
       B.splice(i, 1); continue;
     }
@@ -1961,8 +1972,8 @@ function respawnMe() {
   G.players[G.players.indexOf(G.me)] = np;
   G.me = np;
 }
-function damageNumber(x, y, amt, color) {
-  if (G.particles.length < 600) G.particles.push({ x: x + rand(-10, 10), y: y - 30, vx: rand(-20, 20), vy: -70, life: .9, max: .9, color, size: 18, type: "text", text: String(Math.round(amt)) });
+function damageNumber(x, y, amt, color, hs) {
+  if (G.particles.length < 600) G.particles.push({ x: x + rand(-10, 10), y: y - 30, vx: rand(-20, 20), vy: -70, life: hs ? 1.2 : .9, max: hs ? 1.2 : .9, color, size: 18, type: "text", text: (hs ? "💥" : "") + Math.round(amt) });
 }
 function buildTestPanel() {
   const P = $("testPanel"), T = G.test;
@@ -1975,6 +1986,12 @@ function buildTestPanel() {
     l.append(c, document.createTextNode(t(label))); P.appendChild(l);
   };
   check("god", "tGod"); check("ammo", "tAmmo"); check("zone", "tZone"); check("passive", "tPassive"); check("debug", "tDebug");
+  {
+    const l = document.createElement("label"), c = document.createElement("input");
+    c.type = "checkbox"; c.checked = TUNE.headshots > 0;
+    c.addEventListener("change", () => { TUNE.headshots = c.checked ? 1 : 0; adminSave(); c.blur(); });
+    l.append(c, document.createTextNode(t("tHead"))); P.appendChild(l);
+  }
   const lv = document.createElement("label"); lv.textContent = t("tLevel") + " ";
   const sel = document.createElement("select");
   for (const d of ["easy", "normal", "hard", "insane"]) { const o = document.createElement("option"); o.value = d; o.textContent = t(d); o.selected = T.level === d; sel.appendChild(o); }
@@ -2208,6 +2225,16 @@ function renderAdmin() {
     const secA = section("Броня", "Какую долю урона снимает броня (0.45 = 45%). Каска и бронежилет складываются: урон × (1 − каска) × (1 − жилет).");
     const fa = document.createElement("div"); fa.className = "fields"; secA.appendChild(fa);
     for (const lv of [1, 2, 3]) { field(fa, "Бронежилет " + lv + " ур.", VEST_RED, lv, "0.01"); field(fa, "Каска " + lv + " ур.", HELMET_RED, lv, "0.005"); }
+    const secH = section("💥 Хэдшоты (эксперимент)", "Хэдшот — когда пуля проходит близко к центру игрока (зависит от точности, а не от удачи). Бронежилет от хэдшота не спасает, каска — сильно. Включаются только у тебя.");
+    const hl = document.createElement("label"); hl.style.cssText = "display:flex;align-items:center;gap:10px;font-size:1rem;margin:4px 0 8px;cursor:pointer";
+    const hc = document.createElement("input"); hc.type = "checkbox"; hc.checked = TUNE.headshots > 0; hc.style.cssText = "width:20px;height:20px;accent-color:var(--red)";
+    hc.addEventListener("change", () => { TUNE.headshots = hc.checked ? 1 : 0; adminSave(); });
+    hl.append(hc, document.createTextNode("Включить хэдшоты")); secH.appendChild(hl);
+    const fh = document.createElement("div"); fh.className = "fields"; secH.appendChild(fh);
+    field(fh, "Размер «головы» (доля радиуса)", TUNE, "hsZone", "0.05");
+    field(fh, "Множитель урона", TUNE, "hsMul", "0.05");
+    field(fh, "Множитель снайперки и дробовиков", TUNE, "hsMulHeavy", "0.05");
+    for (const lv of [1, 2, 3]) field(fh, "Каска " + lv + " ур. против хэдшота", HELMET_HEAD, lv, "0.05");
     const sec3 = section("Боты", "Множители к уровню сложности. Ошибка прицела и реакция: меньше = сильнее бот. Обзор: больше = видят дальше. Применяется к ботам следующего матча.");
     const f3 = document.createElement("div"); f3.className = "fields"; sec3.appendChild(f3);
     field(f3, "Ошибка прицела ×", TUNE, "botAim", "0.05");
@@ -2953,7 +2980,7 @@ function initAudio() {
 }
 const SFX = {
   shot: [1400, .1, .18, "bandpass"], ak: [900, .14, .24, "bandpass"], shell: [2200, .04, .1, "highpass"], shotgun: [700, .22, .3, "lowpass"], sniper: [500, .35, .4, "lowpass"],
-  hit: [2600, .05, .12, "highpass"], punch: [380, .07, .18, "lowpass"], crate: [500, .18, .22, "lowpass"], boom: [140, .6, .7, "lowpass"]
+  hit: [2600, .05, .12, "highpass"], headshot: [4200, .08, .2, "highpass"], punch: [380, .07, .18, "lowpass"], crate: [500, .18, .22, "lowpass"], boom: [140, .6, .7, "lowpass"]
 };
 function sfx(kind, x, y) {
   if (!AC || !G || G.attract || sfxCount > 10) return;
