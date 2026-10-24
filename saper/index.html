@@ -458,9 +458,11 @@ h1 {
     document.getElementById("vibrationText").textContent = t("vibration") + ": " + t(vibration ? "on" : "off");
   }
 
-  // Вибрация. Android умеет navigator.vibrate. iPhone его не поддерживает, но Safari на iOS 18+
+  // Вибрация. В приложении для Android игра зовёт вибромотор напрямую через SaperAndroid.
+  // В браузере Android есть navigator.vibrate. iPhone его не поддерживает, но Safari на iOS 18+
   // даёт лёгкий отклик при переключении системного переключателя — держим скрытый и «щёлкаем» им.
-  const canVibrate = typeof navigator.vibrate === "function";
+  const nativeApp = window.SaperAndroid && typeof window.SaperAndroid.vibrate === "function" ? window.SaperAndroid : null;
+  const canVibrate = !!nativeApp || typeof navigator.vibrate === "function";
   const isTouchDevice = navigator.maxTouchPoints > 0 || "ontouchstart" in window;
   const iosHaptic = (() => {
     if (canVibrate || !isTouchDevice) return null;
@@ -480,6 +482,7 @@ h1 {
   try { vibration = localStorage.getItem("saper-vibration") !== "off"; } catch (e) {}
   function vibrate(kind) {
     const pattern = VIBES[kind];
+    if (nativeApp) { try { nativeApp.vibrate(JSON.stringify(pattern)); } catch (_) {} return; }
     if (canVibrate) { try { navigator.vibrate(pattern); } catch (_) {} return; }
     if (!iosHaptic) return;
     const ticks = Array.isArray(pattern) ? Math.ceil(pattern.length / 2) : 1;
@@ -548,7 +551,7 @@ h1 {
   faceEl.addEventListener("click", newGame);
   document.getElementById("again").addEventListener("click", newGame);
   const vibrationBtn = document.getElementById("vibrationBtn");
-  vibrationBtn.hidden = !(canVibrate && isTouchDevice) && !iosHaptic;
+  vibrationBtn.hidden = !nativeApp && !(canVibrate && isTouchDevice) && !iosHaptic;
   vibrationBtn.setAttribute("aria-pressed", vibration);
   vibrationBtn.addEventListener("click", () => {
     vibration = !vibration;
