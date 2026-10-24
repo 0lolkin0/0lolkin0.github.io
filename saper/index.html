@@ -475,7 +475,7 @@ h1 {
     document.body.appendChild(label);
     return label;
   })();
-  const VIBES = { open: 12, flag: 40, unflag: [15, 50, 15], boom: [120, 60, 240], win: [40, 60, 40, 60, 150] };
+  const VIBES = { open: 35, flag: 80, unflag: [50, 70, 50], boom: [250, 100, 400], win: [80, 80, 80, 80, 250] };
   let vibration = true;
   try { vibration = localStorage.getItem("saper-vibration") !== "off"; } catch (e) {}
   function vibrate(kind) {
