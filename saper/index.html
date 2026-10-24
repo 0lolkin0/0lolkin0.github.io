@@ -193,6 +193,10 @@ h1 {
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v18" stroke="#23264a" stroke-width="2.5" stroke-linecap="round"/><path d="M7 4l11 4-11 4z" fill="#ff5a5f" stroke="#23264a" stroke-width="2" stroke-linejoin="round"/></svg>
       <span id="flagModeText">Режим флажков: выкл</span>
     </button>
+    <button class="btn mode" id="vibrationBtn" aria-pressed="true" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="18" rx="2" fill="#ffd45c" stroke="#23264a" stroke-width="2"/><path d="M4.5 8v8M19.5 8v8M2 10v4M22 10v4" stroke="#23264a" stroke-width="2" stroke-linecap="round"/></svg>
+      <span id="vibrationText">Вибрация: вкл</span>
+    </button>
   </div>
 
   <p class="help" data-i18n-html="help"><b>Нажми</b> на клетку, чтобы открыть её. Цифра показывает, сколько бомб рядом. <b>Правый клик</b> или <b>долгое нажатие</b> ставит флажок, а нажатие на флажок убирает его. Нажми на цифру, вокруг которой уже стоят все флажки, чтобы открыть соседей.</p>
@@ -218,7 +222,7 @@ h1 {
       docTitle: "Мультяшный сапёр", heading: "Сапёр!", tagline: "Найди все бомбочки и не взорвись",
       language: "Язык", difficulty: "Сложность", easy: "Лёгкий", mid: "Средний", hard: "Сложный",
       minesLeft: "Осталось бомб", time: "Время", newGame: "Новая игра", board: "Игровое поле",
-      flagMode: "Режим флажков", on: "вкл", off: "выкл",
+      flagMode: "Режим флажков", vibration: "Вибрация", on: "вкл", off: "выкл",
       help: "<b>Нажми</b> на клетку, чтобы открыть её. Цифра показывает, сколько бомб рядом. <b>Правый клик</b> или <b>долгое нажатие</b> ставит флажок, а нажатие на флажок убирает его. Нажми на цифру, вокруг которой уже стоят все флажки, чтобы открыть соседей.",
       loseTitle: "Бабах!", loseText: "Ты наступил на бомбочку. Попробуешь ещё раз?",
       winTitle: "Победа!", winText: s => `Все бомбочки найдены за ${s} сек.`, best: b => ` Твой рекорд: ${b} сек.`,
@@ -228,7 +232,7 @@ h1 {
       docTitle: "Çizgi Film Mayın Tarlası", heading: "Mayın Tarlası!", tagline: "Tüm bombaları bul ve patlama!",
       language: "Dil", difficulty: "Zorluk", easy: "Kolay", mid: "Orta", hard: "Zor",
       minesLeft: "Kalan bomba", time: "Süre", newGame: "Yeni oyun", board: "Oyun alanı",
-      flagMode: "Bayrak modu", on: "açık", off: "kapalı",
+      flagMode: "Bayrak modu", vibration: "Titreşim", on: "açık", off: "kapalı",
       help: "Kareyi açmak için <b>dokun</b>. Sayı, yanında kaç bomba olduğunu gösterir. <b>Sağ tık</b> ya da <b>uzun basma</b> bayrak koyar, bayrağa dokunmak onu kaldırır. Etrafındaki tüm bayrakları koyduğun bir sayıya dokunursan komşu kareler açılır.",
       loseTitle: "Bum!", loseText: "Bir bombaya bastın. Tekrar dener misin?",
       winTitle: "Kazandın!", winText: s => `Tüm bombaları ${s} saniyede buldun.`, best: b => ` Rekorun: ${b} sn.`,
@@ -238,7 +242,7 @@ h1 {
       docTitle: "Cartoon Minesweeper", heading: "Minesweeper!", tagline: "Find all the bombs and don't go boom",
       language: "Language", difficulty: "Difficulty", easy: "Easy", mid: "Medium", hard: "Hard",
       minesLeft: "Bombs left", time: "Time", newGame: "New game", board: "Game board",
-      flagMode: "Flag mode", on: "on", off: "off",
+      flagMode: "Flag mode", vibration: "Vibration", on: "on", off: "off",
       help: "<b>Tap</b> a square to open it. A number shows how many bombs are next to it. <b>Right-click</b> or <b>long-press</b> to place a flag, and tap a flag to remove it. Tap a number that already has all its flags around it to open its neighbors.",
       loseTitle: "Kaboom!", loseText: "You stepped on a bomb. Try again?",
       winTitle: "You win!", winText: s => `You found all the bombs in ${s} sec.`, best: b => ` Your best: ${b} sec.`,
@@ -364,13 +368,16 @@ h1 {
     for (const j of ns) { if (over) break; if (!cells[j].open && !cells[j].flag) open(j); }
   }
 
-  function toggleFlag(i) {
+  function toggleFlag(i, silent) {
     const c = cells[i];
-    if (over || c.open) return;
+    if (over || c.open) return null;
     c.flag = !c.flag;
     flags += c.flag ? 1 : -1;
     minesLeftEl.textContent = cfg.mines - flags;
     render(i);
+    const kind = c.flag ? "flag" : "unflag";
+    if (!silent) buzz(kind);
+    return kind;
   }
 
   function act(i) {
@@ -379,8 +386,10 @@ h1 {
     if (flagMode && !c.open) return toggleFlag(i);
     if (c.flag) return toggleFlag(i);
     if (!started) { placeMines(i); startTimer(); }
-    if (c.open) { if (c.n) chord(i); return; }
-    open(i);
+    const before = opened;
+    if (c.open) { if (c.n) chord(i); }
+    else open(i);
+    if (!over && opened > before) buzz("open");
   }
 
   function lose(k) {
@@ -391,6 +400,7 @@ h1 {
       if (!c.mine && c.flag) { els[i].classList.add("wrong"); els[i].innerHTML = SVG.cross; }
     });
     faceEl.innerHTML = face("dead");
+    buzz("boom");
     wrap.classList.remove("shake"); void wrap.offsetWidth; wrap.classList.add("shake");
     setTimeout(() => showResult({ kind: "lose" }), 700);
   }
@@ -400,6 +410,7 @@ h1 {
     cells.forEach((c, i) => { if (c.mine && !c.flag) { c.flag = true; render(i); } });
     minesLeftEl.textContent = 0;
     faceEl.innerHTML = face("cool");
+    buzz("win");
     showResult({ kind: "win", seconds, best: saveBest() });
   }
 
@@ -444,7 +455,39 @@ h1 {
   }
   function updateFlagModeText() {
     document.getElementById("flagModeText").textContent = t("flagMode") + ": " + t(flagMode ? "on" : "off");
+    document.getElementById("vibrationText").textContent = t("vibration") + ": " + t(vibration ? "on" : "off");
   }
+
+  // Вибрация. Android умеет navigator.vibrate. iPhone его не поддерживает, но Safari на iOS 18+
+  // даёт лёгкий отклик при переключении системного переключателя — держим скрытый и «щёлкаем» им.
+  const canVibrate = typeof navigator.vibrate === "function";
+  const isTouchDevice = navigator.maxTouchPoints > 0 || "ontouchstart" in window;
+  const iosHaptic = (() => {
+    if (canVibrate || !isTouchDevice) return null;
+    const label = document.createElement("label");
+    label.setAttribute("aria-hidden", "true");
+    label.style.cssText = "position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.setAttribute("switch", "");
+    input.tabIndex = -1;
+    label.appendChild(input);
+    document.body.appendChild(label);
+    return label;
+  })();
+  const VIBES = { open: 12, flag: 40, unflag: [15, 50, 15], boom: [120, 60, 240], win: [40, 60, 40, 60, 150] };
+  let vibration = true;
+  try { vibration = localStorage.getItem("saper-vibration") !== "off"; } catch (e) {}
+  function vibrate(kind) {
+    const pattern = VIBES[kind];
+    if (canVibrate) { try { navigator.vibrate(pattern); } catch (_) {} return; }
+    if (!iosHaptic) return;
+    const ticks = Array.isArray(pattern) ? Math.ceil(pattern.length / 2) : 1;
+    iosHaptic.click();
+    for (let k = 1; k < ticks; k++) setTimeout(() => iosHaptic.click(), k * 110);
+  }
+  // Вибрируем только когда играют пальцем, мышке это не нужно.
+  function buzz(kind) { if (vibration && fromTouch()) vibrate(kind); }
 
   // Мышь: левый клик открывает, правый ставит флажок.
   // Палец: касание обрабатываем сами — короткое нажатие открывает, долгое ставит или убирает флажок.
@@ -472,8 +515,8 @@ h1 {
     p.timer = setTimeout(() => {
       p.long = true;
       b.classList.remove("pressing");
-      toggleFlag(i);
-      if (navigator.vibrate) try { navigator.vibrate(30); } catch (_) {}
+      p.kind = toggleFlag(i, true);
+      if (p.kind && canVibrate) buzz(p.kind);
     }, LONG_PRESS);
     press = p;
   });
@@ -487,6 +530,7 @@ h1 {
     const p = press;
     cancelPress();
     if (!p.long) act(p.i);
+    else if (p.kind && !canVibrate) buzz(p.kind);
   });
   gridEl.addEventListener("pointercancel", cancelPress);
   gridEl.addEventListener("pointerleave", e => { if (e.pointerType === "mouse") resetFace(); });
@@ -503,6 +547,16 @@ h1 {
 
   faceEl.addEventListener("click", newGame);
   document.getElementById("again").addEventListener("click", newGame);
+  const vibrationBtn = document.getElementById("vibrationBtn");
+  vibrationBtn.hidden = !(canVibrate && isTouchDevice) && !iosHaptic;
+  vibrationBtn.setAttribute("aria-pressed", vibration);
+  vibrationBtn.addEventListener("click", () => {
+    vibration = !vibration;
+    try { localStorage.setItem("saper-vibration", vibration ? "on" : "off"); } catch (e) {}
+    vibrationBtn.setAttribute("aria-pressed", vibration);
+    updateFlagModeText();
+    if (vibration) vibrate("flag");
+  });
   flagModeBtn.addEventListener("click", () => {
     flagMode = !flagMode;
     flagModeBtn.setAttribute("aria-pressed", flagMode);
