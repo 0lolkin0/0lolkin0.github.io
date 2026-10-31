@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Фронт 1918</title>
+<meta name="description" content="Шутер о Первой мировой: бои с ботами за флаги, окопы, танки и цеппелины прямо в браузере телефона.">
+<meta name="theme-color" content="#1d1a14">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Фронт 1918">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=PT+Sans:wght@400;700&display=swap">
+<style>
+/* Слои: canvas с миром → canvas с маркерами → HUD и кнопки → экраны (меню, развёртывание, пауза, итоги) */
+:root {
+  --ink: #17140f;
+  --panel: rgba(23, 20, 15, 0.86);
+  --panel2: rgba(38, 34, 25, 0.92);
+  --paper: #ece5d1;
+  --muted: #b5ab92;
+  --brass: #d1a94e;
+  --olive: #4a4d36;
+  --red: #e0493a;
+  --blue: #5fb4ff;
+  --green: #7dff8a;
+  --line: rgba(236, 229, 209, 0.18);
+  --display: "Oswald", "Arial Narrow", system-ui, sans-serif;
+  --body: "PT Sans", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #1d1a14; color: var(--paper); font-family: var(--body); }
+body { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: none; overscroll-behavior: none; }
+canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+canvas#overlay { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.fx { position: fixed; inset: 0; pointer-events: none; }
+#mood { background: radial-gradient(ellipse at center, transparent 55%, rgba(20, 14, 8, 0.45) 100%); }
+#vignette { background: radial-gradient(ellipse at center, transparent 40%, rgba(150, 10, 0, 0.75) 100%); opacity: 0; transition: opacity .3s; }
+#suppress { background: radial-gradient(ellipse at center, transparent 30%, rgba(0, 0, 0, 0.85) 100%); opacity: 0; }
+#dmgFlash { background: rgba(170, 20, 10, 0.45); opacity: 0; transition: opacity .25s; }
+#whiteFlash { background: #fff8e8; opacity: 0; }
+#scope { background:
+  linear-gradient(transparent calc(50% - 0.5px), rgba(0,0,0,.85) calc(50% - 0.5px), rgba(0,0,0,.85) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+  linear-gradient(90deg, transparent calc(50% - 0.5px), rgba(0,0,0,.85) calc(50% - 0.5px), rgba(0,0,0,.85) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+  radial-gradient(circle at center, transparent 0, transparent 40vmin, #050403 40.4vmin); }
+#scope::after { content: ""; position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; margin: -1.5px; background: #c22; border-radius: 50%; }
+
+/* ---------- HUD ---------- */
+#hud { position: fixed; inset: 0; pointer-events: none; font-family: var(--display); }
+#hud * { pointer-events: none; }
+#hud .cbtn, #hud #btnPause, #hud #btnInteract, #hud #btnGiveUp { pointer-events: auto; }
+#topbar { position: absolute; top: max(6px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; }
+.tk { display: flex; flex-direction: column; align-items: center; min-width: 74px; }
+.tk b { font-size: 20px; line-height: 1; text-shadow: 0 1px 2px #000; }
+.tk .tbar { width: 74px; height: 5px; background: rgba(0,0,0,.5); margin-top: 3px; border-radius: 3px; overflow: hidden; }
+.tk .tbar i { display: block; height: 100%; }
+#tkMine b { color: var(--blue); } #tkMine i { background: var(--blue); margin-left: auto; }
+#tkTheirs b { color: var(--red); } #tkTheirs i { background: var(--red); }
+#flagsbar { display: flex; gap: 4px; }
+.fchip { position: relative; width: 26px; height: 26px; border-radius: 50%; background: rgba(15,12,9,.75); border: 2px solid var(--paper); display: grid; place-items: center; overflow: hidden; }
+.fchip i { position: absolute; left: 0; right: 0; bottom: 0; opacity: .45; }
+.fchip b { position: relative; font-size: 13px; }
+.fchip.friend { border-color: var(--blue); color: var(--blue); }
+.fchip.enemy { border-color: var(--red); color: var(--red); }
+.fchip.hot { animation: pulse .6s infinite alternate; }
+.fchip.here { box-shadow: 0 0 0 2px var(--brass); }
+@keyframes pulse { to { transform: scale(1.12); } }
+#timer { position: absolute; top: calc(max(6px, env(safe-area-inset-top)) + 34px); left: 50%; transform: translateX(-50%); font-size: 12px; color: var(--muted); text-shadow: 0 1px 2px #000; }
+#capture { position: absolute; top: calc(max(6px, env(safe-area-inset-top)) + 54px); left: 50%; transform: translateX(-50%); width: 220px; text-align: center; background: var(--panel); border-radius: 8px; padding: 5px 10px 7px; font-size: 13px; }
+#capture .bar { height: 6px; background: rgba(255,255,255,.12); border-radius: 3px; margin-top: 4px; overflow: hidden; }
+#capBar { height: 100%; width: 0; }
+#capCount { position: absolute; right: 8px; top: 5px; font-size: 11px; color: var(--muted); }
+#announce { position: absolute; top: 30%; left: 50%; transform: translate(-50%, -10px); font-size: 24px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; text-shadow: 0 2px 6px #000; opacity: 0; transition: opacity .3s, transform .3s; white-space: nowrap; }
+#announce.show { opacity: 1; transform: translate(-50%, 0); }
+#announce.good { color: #9fd4ff; } #announce.bad { color: #ff8a7a; }
+#scorepops { position: absolute; left: calc(50% + 40px); top: 56%; font-size: 15px; text-shadow: 0 1px 3px #000; }
+.pop b { color: var(--brass); }
+#minimap { position: absolute; top: max(8px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); width: 118px; height: 118px; border-radius: 50%; box-shadow: 0 2px 10px rgba(0,0,0,.5); }
+#killfeed { position: absolute; top: calc(max(8px, env(safe-area-inset-top)) + 44px); right: max(10px, env(safe-area-inset-right)); display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 12px; }
+.kf { background: rgba(15,12,9,.65); padding: 2px 7px; border-radius: 4px; white-space: nowrap; }
+.kf-n.friend { color: var(--blue); } .kf-n.enemy { color: var(--red); } .kf-n.squad { color: var(--green); } .kf-n.me { color: var(--brass); }
+.kf-w { color: var(--muted); font-size: 11px; }
+#status { position: absolute; bottom: max(8px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: flex-end; background: rgba(15,12,9,.45); padding: 4px 10px; border-radius: 10px; }
+#hpBox { width: 120px; }
+#hpBox .lab { font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; }
+#hpBox .bar { height: 7px; background: rgba(255,255,255,.12); border-radius: 4px; overflow: hidden; margin-top: 2px; }
+#hpFill { height: 100%; background: var(--paper); width: 100%; transition: width .15s; }
+#hpFill.low { background: var(--red); }
+#ammoBox { text-align: right; line-height: 1.05; }
+#ammoBox .w { font-size: 11px; color: var(--muted); }
+#ammoBox .n { font-size: 24px; font-weight: 600; }
+#ammoBox .n small { font-size: 13px; color: var(--muted); font-weight: 400; }
+#ammoBox .eq { font-size: 12px; color: var(--paper); }
+#ammoBox.tank .eq { display: none; }
+#btnPause { position: absolute; top: max(8px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); width: 38px; height: 34px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--paper); font: 700 15px var(--display); }
+#btnInteract { position: absolute; right: 230px; bottom: 120px; padding: 10px 16px; border-radius: 22px; border: 2px solid var(--brass); background: rgba(40,34,20,.9); color: var(--brass); font: 600 15px var(--display); text-transform: uppercase; }
+body:not(.touch) #btnInteract::after { content: " [E]"; color: var(--muted); }
+#reviveBar { position: absolute; left: 50%; top: 62%; width: 160px; height: 8px; transform: translateX(-50%); background: rgba(0,0,0,.5); border-radius: 4px; overflow: hidden; }
+#reviveBar i { display: block; height: 100%; background: var(--green); }
+#downed { position: absolute; left: 50%; bottom: 24%; transform: translateX(-50%); text-align: center; background: var(--panel); border: 1px solid var(--line); padding: 10px 18px 12px; border-radius: 12px; min-width: 250px; }
+#downed h2 { margin: 0 0 2px; font-size: 18px; color: #ff8a7a; text-transform: uppercase; }
+#downed .bar { height: 6px; background: rgba(255,255,255,.12); border-radius: 3px; overflow: hidden; margin: 6px 0; }
+#downTimer { height: 100%; background: var(--red); }
+#downed p { margin: 2px 0; font-size: 13px; color: var(--muted); font-family: var(--body); }
+#btnGiveUp { margin-top: 6px; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--line); background: rgba(255,255,255,.08); color: var(--paper); font: 500 14px var(--display); }
+
+/* Сенсорные кнопки */
+#controls { position: absolute; inset: 0; display: none; }
+body.touch #controls { display: block; }
+body.downed #controls, body.ended #controls, body.ended #btnInteract { display: none !important; }
+.cbtn { position: absolute; border-radius: 50%; border: 2px solid rgba(236,229,209,.55); background: rgba(20,17,12,.42); color: var(--paper); display: grid; place-items: center; font: 600 12px var(--display); text-transform: uppercase; touch-action: none; }
+.cbtn span { font-size: 20px; line-height: 1; pointer-events: none; }
+.cbtn em { position: absolute; bottom: -14px; font-style: normal; font-size: 9px; color: rgba(236,229,209,.65); pointer-events: none; white-space: nowrap; }
+.cbtn.held { background: rgba(209,169,78,.45); }
+.cbtn.on { background: rgba(209,169,78,.6); border-color: var(--brass); }
+.cbtn.fire { width: 92px; height: 92px; right: calc(max(24px, env(safe-area-inset-right)) + 6px); bottom: 98px; border-color: rgba(255,120,90,.8); background: rgba(120,30,20,.38); }
+.cbtn.fire span { font-size: 30px; }
+.cbtn.fire2 { width: 66px; height: 66px; left: calc(max(20px, env(safe-area-inset-left)) + 6px); bottom: 190px; border-color: rgba(255,120,90,.7); background: rgba(120,30,20,.3); display: none; }
+body.left-fire .cbtn.fire2 { display: grid; }
+.cbtn.ads { width: 62px; height: 62px; right: calc(max(24px, env(safe-area-inset-right)) + 118px); bottom: 162px; }
+.cbtn.reload { width: 52px; height: 52px; right: calc(max(24px, env(safe-area-inset-right)) + 128px); bottom: 86px; }
+.cbtn.jump { width: 56px; height: 56px; right: calc(max(24px, env(safe-area-inset-right)) + 0px); bottom: 22px; }
+.cbtn.crouch { width: 56px; height: 56px; right: calc(max(24px, env(safe-area-inset-right)) + 70px); bottom: 18px; }
+.cbtn.melee { width: 50px; height: 50px; right: calc(max(24px, env(safe-area-inset-right)) + 140px); bottom: 20px; }
+.cbtn.grenade { width: 50px; height: 50px; right: calc(max(24px, env(safe-area-inset-right)) + 4px); bottom: 210px; }
+.cbtn.gadget { width: 50px; height: 50px; right: calc(max(24px, env(safe-area-inset-right)) + 64px); bottom: 236px; }
+.cbtn.mg, .cbtn.exit { display: none; }
+body.in-tank .cbtn.mg { display: grid; width: 66px; height: 66px; right: calc(max(24px, env(safe-area-inset-right)) + 116px); bottom: 150px; }
+body.in-tank .cbtn.exit { display: grid; width: 54px; height: 54px; right: calc(max(24px, env(safe-area-inset-right)) + 10px); bottom: 24px; }
+body.in-tank .cbtn.ads, body.in-tank .cbtn.reload, body.in-tank .cbtn.jump, body.in-tank .cbtn.crouch,
+body.in-tank .cbtn.melee, body.in-tank .cbtn.grenade, body.in-tank .cbtn.gadget { display: none; }
+#joy { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+#joy .base { position: absolute; left: -60px; top: -60px; width: 120px; height: 120px; border-radius: 50%; border: 2px solid rgba(236,229,209,.35); background: rgba(20,17,12,.25); }
+#knob { position: absolute; left: -26px; top: -26px; width: 52px; height: 52px; border-radius: 50%; background: rgba(236,229,209,.45); }
+#sprintHint { position: absolute; left: -30px; top: -112px; width: 60px; text-align: center; font: 600 11px var(--display); color: rgba(236,229,209,.5); text-transform: uppercase; }
+#sprintHint.on { color: var(--brass); }
+#moveHint { position: absolute; left: calc(max(16px, env(safe-area-inset-left)) + 30px); bottom: 70px; font: 500 12px var(--display); color: rgba(236,229,209,.45); text-transform: uppercase; display: none; }
+body.touch #moveHint { display: block; }
+
+/* ---------- Экраны ---------- */
+.screen { position: fixed; inset: 0; overflow: auto; padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); touch-action: pan-y; }
+.btn { font: 600 15px var(--display); text-transform: uppercase; letter-spacing: .04em; color: var(--paper); background: rgba(255,255,255,.07); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; cursor: pointer; }
+.btn:hover { background: rgba(255,255,255,.13); }
+.btn.big { font-size: 22px; padding: 12px 28px; background: linear-gradient(#b8892f, #8c6420); color: #1b140a; border-color: #e3c57c; box-shadow: 0 3px 0 #4d3712, 0 6px 20px rgba(0,0,0,.4); }
+.btn.big:active { transform: translateY(2px); box-shadow: 0 1px 0 #4d3712; }
+.btn:disabled { opacity: .55; cursor: default; }
+#menu { background: linear-gradient(90deg, rgba(18,15,10,.94) 0%, rgba(18,15,10,.82) 45%, rgba(18,15,10,.45) 100%); display: flex; gap: 26px; align-items: flex-start; }
+#menu .left { flex: 0 0 auto; max-width: 340px; margin: auto 0; }
+#menu h1 { font: 700 54px/0.95 var(--display); margin: 0; letter-spacing: .02em; text-transform: uppercase; }
+#menu h1 em { font-style: normal; color: var(--brass); }
+#menu .sub { color: var(--muted); margin: 6px 0 14px; font-size: 14px; }
+.rank { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin-bottom: 14px; }
+.rank b { font: 600 16px var(--display); color: var(--brass); }
+.xpbar { height: 5px; background: rgba(255,255,255,.12); border-radius: 3px; overflow: hidden; margin: 5px 0 4px; }
+.xpbar i { display: block; height: 100%; background: var(--brass); }
+.rank small { color: var(--muted); font-size: 11px; }
+.menuBtns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+#menu .right { margin: auto 0; flex: 1 1 auto; max-width: 560px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.opt { margin-bottom: 9px; }
+.opt > span { display: block; font: 500 11px var(--display); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 3px; }
+.seg { display: flex; flex-wrap: wrap; gap: 4px; }
+.seg button { font: 500 14px var(--display); color: var(--paper); background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+.seg button.on { background: var(--brass); color: #1b140a; border-color: var(--brass); }
+#mapDesc { font-size: 13px; color: var(--muted); margin: 6px 0 0; line-height: 1.35; }
+.hint { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.35; }
+.hint b { color: var(--paper); }
+
+#deploy { background: rgba(14,12,9,.78); display: grid; grid-template-columns: minmax(200px, 300px) 1fr; grid-template-rows: auto 1fr auto; gap: 8px 14px; }
+#deploy header { grid-column: 1 / 3; display: flex; align-items: center; justify-content: space-between; gap: 10px; font-family: var(--display); }
+#deploy header .t { font-size: 18px; } #deploy header .t b { color: var(--blue); } #deploy header .t b.r { color: var(--red); }
+#dMode { color: var(--muted); font-size: 13px; }
+#classList { display: flex; flex-direction: column; gap: 6px; overflow: auto; min-height: 0; }
+.classBtn { text-align: left; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; color: var(--paper); cursor: pointer; }
+.classBtn b { display: block; font: 600 16px var(--display); text-transform: uppercase; }
+.classBtn span { display: block; font-size: 12px; color: var(--brass); }
+.classBtn small { display: block; font-size: 11px; color: var(--muted); line-height: 1.25; margin-top: 2px; }
+.classBtn.sel { border-color: var(--brass); background: rgba(90,70,30,.6); }
+#mapWrap { position: relative; min-height: 0; }
+#deployMap { position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; touch-action: none; }
+#deploy footer { grid-column: 1 / 3; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+#deploy footer .hint { margin: 0; }
+
+#pause, #settings, #help, #end { background: rgba(14,12,9,.88); display: flex; align-items: center; justify-content: center; }
+.card { background: var(--panel2); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; max-width: 640px; width: 100%; max-height: 100%; overflow: auto; }
+.card h2 { font: 700 26px var(--display); text-transform: uppercase; margin: 0 0 10px; }
+.card .col { display: flex; flex-direction: column; gap: 8px; }
+.srow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.srow input[type=range] { flex: 1; max-width: 220px; accent-color: var(--brass); }
+.srow output { width: 36px; text-align: right; color: var(--brass); font-family: var(--display); }
+.srow select { background: #2b261c; color: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; font: inherit; }
+.srow input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--brass); }
+#help .card { font-size: 14px; line-height: 1.45; }
+#help h3 { font: 600 15px var(--display); text-transform: uppercase; color: var(--brass); margin: 10px 0 4px; }
+#help ul { margin: 0; padding-left: 18px; }
+#help kbd { font: 600 12px var(--display); background: rgba(255,255,255,.1); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
+#endTitle { font: 700 46px var(--display); text-transform: uppercase; margin: 0; }
+#endTitle.good { color: #9fd4ff; } #endTitle.bad { color: #ff8a7a; }
+#endSub { color: var(--muted); margin: 0 0 10px; }
+#endStats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px; }
+#endStats div { background: rgba(255,255,255,.05); border-radius: 8px; padding: 6px 8px; }
+#endStats span { display: block; font-size: 11px; color: var(--muted); }
+#endStats b { font: 600 20px var(--display); }
+#endRank .rk { font: 600 17px var(--display); color: var(--brass); }
+#endRank em { color: var(--green); font-style: normal; }
+#endRank small { color: var(--muted); }
+#endScores { margin-top: 10px; }
+
+#scores { position: fixed; inset: 0; background: rgba(10,9,6,.82); display: flex; align-items: center; justify-content: center; padding: 14px; z-index: 5; }
+#scores .card { max-width: 820px; }
+#scoresBody, #endScores { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.scol h3 { font: 600 15px var(--display); text-transform: uppercase; margin: 0 0 4px; }
+.scol.friend h3 { color: var(--blue); } .scol.enemy h3 { color: var(--red); }
+.scol table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.scol th { text-align: left; color: var(--muted); font-weight: 400; font-size: 11px; }
+.scol td, .scol th { padding: 2px 4px; }
+.scol td:nth-child(n+3), .scol th:nth-child(n+3) { text-align: right; }
+.scol tr.me td { color: var(--brass); } .scol tr.squad td { color: var(--green); }
+.scol td i { color: var(--muted); font-style: normal; }
+
+#rotate { position: fixed; inset: 0; z-index: 20; background: #17140f; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; font-family: var(--display); }
+#rotate .ph { width: 54px; height: 90px; border: 4px solid var(--paper); border-radius: 10px; animation: rot 1.6s infinite ease-in-out; margin-bottom: 20px; }
+@keyframes rot { 50% { transform: rotate(-90deg); } }
+#rotate p { font-size: 20px; margin: 0; text-transform: uppercase; }
+#loading { position: fixed; inset: 0; z-index: 30; background: #17140f; display: flex; align-items: center; justify-content: center; font: 600 22px var(--display); letter-spacing: .1em; text-transform: uppercase; }
+body.ready #loading { display: none; }
+#fatal { position: fixed; inset: 0; z-index: 40; background: #17140f; padding: 20px; overflow: auto; }
+#fatal pre { white-space: pre-wrap; font-size: 12px; color: #ff9a8a; }
+
+@media (max-height: 430px) {
+  #menu h1 { font-size: 40px; }
+  #menu .sub { margin-bottom: 8px; font-size: 13px; }
+  .rank { margin-bottom: 8px; padding: 6px 10px; }
+  .btn.big { font-size: 20px; padding: 10px 22px; }
+  .opt { margin-bottom: 6px; }
+  .seg button { padding: 5px 8px; font-size: 13px; }
+  #menu .right { padding: 9px 12px; }
+  #mapDesc { font-size: 12px; }
+  #minimap { width: 100px; height: 100px; }
+  .classBtn small { display: none; }
+  #endTitle { font-size: 34px; }
+  #endStats b { font-size: 17px; }
+  .card { padding: 12px 14px; }
+}
+@media (max-width: 700px) {
+  #menu { flex-direction: column; align-items: stretch; }
+  #menu .left { max-width: none; }
+  #deploy { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr auto; }
+  #deploy header, #deploy footer { grid-column: 1; }
+  #classList { flex-direction: row; overflow-x: auto; }
+  .classBtn { min-width: 150px; }
+  #mapWrap { min-height: 240px; }
+  #scoresBody, #endScores { grid-template-columns: 1fr; }
+  #endStats { grid-template-columns: repeat(2, 1fr); }
+  #capture { width: 180px; }
+}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<canvas id="overlay"></canvas>
+<div class="fx" id="mood"></div>
+<div class="fx" id="vignette"></div>
+<div class="fx" id="suppress"></div>
+<div class="fx" id="dmgFlash"></div>
+<div class="fx" id="whiteFlash"></div>
+<div class="fx" id="scope" hidden></div>
+
+<div id="hud" hidden>
+  <div id="topbar">
+    <div class="tk" id="tkMine"><b id="tk0">0</b><div class="tbar"><i id="tb0"></i></div></div>
+    <div id="flagsbar"></div>
+    <div class="tk" id="tkTheirs"><b id="tk1">0</b><div class="tbar"><i id="tb1"></i></div></div>
+  </div>
+  <div id="tickets" hidden></div>
+  <div id="timer">0:00</div>
+  <div id="capture" hidden><span id="capLabel"></span><span id="capCount"></span><div class="bar"><div id="capBar"></div></div></div>
+  <div id="announce"></div>
+  <div id="scorepops"></div>
+  <canvas id="minimap"></canvas>
+  <div id="killfeed"></div>
+  <div id="status">
+    <div id="hpBox"><div class="lab"><span>Здоровье</span><span id="hpNum">100</span></div><div class="bar"><div id="hpFill"></div></div></div>
+    <div id="ammoBox"><div class="w" id="wname"></div><div class="n"><span id="mag">0</span> <small id="reserve"></small></div><div class="eq"><span id="nades"></span> &nbsp; <span id="gadget"></span></div></div>
+  </div>
+  <div id="reviveBar" hidden><i></i></div>
+  <div id="downed" hidden>
+    <h2>Вы тяжело ранены</h2>
+    <p id="killerName"></p>
+    <div class="bar"><div id="downTimer"></div></div>
+    <p id="medicNear"></p>
+    <button id="btnGiveUp" data-btn="giveup">Сдаться и развернуться</button>
+  </div>
+  <button id="btnInteract" data-btn="interact" hidden></button>
+  <div id="controls">
+    <div id="moveHint">← двигаться →</div>
+    <div id="joy" hidden><div class="base"></div><div id="knob"></div><div id="sprintHint">бег ↑</div></div>
+    <div class="cbtn fire" data-btn="fire"><span>✸</span></div>
+    <div class="cbtn fire2" data-btn="fire2"><span>✸</span></div>
+    <div class="cbtn ads" data-btn="ads"><span>◎</span><em>прицел</em></div>
+    <div class="cbtn reload" data-btn="reload"><span>↻</span><em>перезарядка</em></div>
+    <div class="cbtn jump" data-btn="jump"><span>⤒</span><em>прыжок</em></div>
+    <div class="cbtn crouch" data-btn="crouch"><span>⤓</span><em>присесть</em></div>
+    <div class="cbtn melee" data-btn="melee"><span>†</span><em>штык</em></div>
+    <div class="cbtn grenade" data-btn="grenade"><span>●</span><em>граната</em></div>
+    <div class="cbtn gadget" data-btn="gadget"><span>✚</span><em>снаряжение</em></div>
+    <div class="cbtn mg" data-btn="mg"><span>⁘</span><em>пулемёт</em></div>
+    <div class="cbtn exit" data-btn="exit"><span>⏏</span><em>выйти</em></div>
+  </div>
+  <button id="btnPause" class="noinput">II</button>
+</div>
+
+<div id="scores" hidden><div class="card"><div id="scoresBody"></div><div style="text-align:right;margin-top:10px"><button class="btn" id="btnScoresClose">Закрыть</button></div></div></div>
+
+<section id="menu" class="screen">
+  <div class="left">
+    <h1>Фронт <em>1918</em></h1>
+    <p class="sub">Великая война. Окопы, штыковые атаки, танки и цеппелины — бой с ботами прямо на телефоне.</p>
+    <div class="rank"><b id="rankName">Рядовой</b><div class="xpbar"><i id="rankXp"></i></div><small id="rankInfo"></small></div>
+    <button class="btn big" id="btnPlay">В бой</button>
+    <div class="menuBtns">
+      <button class="btn" id="btnSettings">Настройки</button>
+      <button class="btn" id="btnHelp">Как играть</button>
+      <button class="btn" id="btnInstall" hidden>Установить на телефон</button>
+    </div>
+    <p class="hint" id="iosHint" hidden>Чтобы игра была на экране телефона как приложение: в Safari нажмите <b>«Поделиться»</b> → <b>«На экран „Домой“»</b>.</p>
+    <p class="hint" id="androidHint" hidden>Чтобы установить: в меню Chrome <b>⋮</b> → <b>«Установить приложение»</b> или <b>«Добавить на главный экран»</b>. После установки игра работает и без интернета.</p>
+  </div>
+  <div class="right">
+    <div class="opt"><span>Карта</span><div class="seg" id="optMap"></div></div>
+    <div class="opt"><span>Режим</span><div class="seg" id="optMode"></div></div>
+    <div class="opt"><span>Сторона</span><div class="seg" id="optTeam"></div></div>
+    <div class="opt"><span>Бойцов в команде</span><div class="seg" id="optBots"></div></div>
+    <div class="opt"><span>Сложность ботов</span><div class="seg" id="optDiff"></div></div>
+    <div class="opt"><span>Длительность</span><div class="seg" id="optLen"></div></div>
+    <p id="mapDesc"></p>
+  </div>
+</section>
+
+<section id="deploy" class="screen" hidden>
+  <header>
+    <div class="t"><b id="dTk0">0</b> <span id="dTeam0"></span> &nbsp;·&nbsp; <b class="r" id="dTk1">0</b> <span id="dTeam1"></span></div>
+    <div id="dMode"></div>
+  </header>
+  <div id="classList"></div>
+  <div id="mapWrap"><canvas id="deployMap"></canvas></div>
+  <footer>
+    <button class="btn" id="btnDeployMenu">Меню</button>
+    <p class="hint">Выберите класс и точку высадки на карте: штаб, наш флаг, отряд или танк.</p>
+    <button class="btn big" id="btnDeploy">В бой</button>
+  </footer>
+</section>
+
+<section id="pause" class="screen" hidden>
+  <div class="card" style="max-width:340px">
+    <h2>Пауза</h2>
+    <div class="col">
+      <button class="btn big" id="btnResume">Продолжить</button>
+      <button class="btn" id="btnScores">Счёт</button>
+      <button class="btn" id="btnRedeploy">Сменить класс / высадиться заново</button>
+      <button class="btn" id="btnSettings2">Настройки</button>
+      <button class="btn" id="btnQuit">Выйти в меню</button>
+    </div>
+  </div>
+</section>
+
+<section id="settings" class="screen" hidden style="z-index:6">
+  <div class="card" style="max-width:520px">
+    <h2>Настройки</h2>
+    <div id="settingsBody"></div>
+    <div style="text-align:right;margin-top:12px"><button class="btn" id="btnSettingsClose">Готово</button></div>
+  </div>
+</section>
+
+<section id="help" class="screen" hidden>
+  <div class="card">
+    <h2>Как играть</h2>
+    <h3>Цель</h3>
+    <p>В режиме «Захват» на карте пять флагов. Стойте в круге флага, чтобы захватить его. Пока у вашей стороны больше флагов, враг теряет подкрепления. Каждая гибель тоже стоит одно подкрепление. Сторона без подкреплений проигрывает. Если одна сторона сильно отстаёт, ей на помощь прилетает цеппелин.</p>
+    <h3>Телефон</h3>
+    <ul>
+      <li>Левая половина экрана — джойстик. Тяните его далеко вверх, чтобы бежать.</li>
+      <li>Правая половина — обзор. Кнопку огня тоже можно тянуть, чтобы целиться на ходу.</li>
+      <li>◎ — прицел, ↻ — перезарядка, ⤒ — прыжок, ⤓ — присесть, † — штык (на бегу — штыковая атака).</li>
+      <li>● — граната, вторая кнопка — снаряжение класса. Рядом с танком или раненым товарищем появится кнопка действия.</li>
+    </ul>
+    <h3>Компьютер</h3>
+    <ul>
+      <li><kbd>W A S D</kbd> — ходьба, <kbd>Shift</kbd> — бег, мышь — обзор (щёлкните по экрану), ЛКМ — огонь, ПКМ — прицел.</li>
+      <li><kbd>R</kbd> перезарядка, <kbd>Пробел</kbd> прыжок, <kbd>C</kbd> присесть, <kbd>G</kbd> граната, <kbd>F</kbd> снаряжение, <kbd>V</kbd> штык, <kbd>E</kbd> действие, <kbd>Tab</kbd> счёт, <kbd>Esc</kbd> пауза.</li>
+      <li>В танке: ЛКМ — орудие, ПКМ — пулемёт, <kbd>E</kbd> — выйти.</li>
+    </ul>
+    <h3>Классы</h3>
+    <ul>
+      <li><b>Штурмовик</b> — пистолет-пулемёт и противотанковые гранаты.</li>
+      <li><b>Медик</b> — поднимает раненых (подойдите и нажмите «Поднять») и ставит аптечки.</li>
+      <li><b>Поддержка</b> — ручной пулемёт и ящики с патронами.</li>
+      <li><b>Разведчик</b> — снайперская винтовка (на 45–85 м убивает с одного попадания) и ракеты, подсвечивающие врагов.</li>
+    </ul>
+    <div style="text-align:right;margin-top:12px"><button class="btn" id="btnHelpClose">Понятно</button></div>
+  </div>
+</section>
+
+<section id="end" class="screen" hidden>
+  <div class="card" style="max-width:760px">
+    <h1 id="endTitle"></h1>
+    <p id="endSub"></p>
+    <div id="endStats"></div>
+    <div id="endRank"></div>
+    <div class="menuBtns" style="justify-content:flex-end">
+      <button class="btn" id="btnEndMenu">Меню</button>
+      <button class="btn big" id="btnAgain">Ещё бой</button>
+    </div>
+    <div id="endScores"></div>
+  </div>
+</section>
+
+<div id="rotate" hidden><div class="ph"></div><p>Поверните телефон горизонтально</p></div>
+<div id="loading">Загрузка…</div>
+<div id="fatal" hidden><h2>Не удалось запустить игру</h2><p>Похоже, браузер не поддерживает WebGL. Попробуйте Chrome или Safari последней версии.</p><pre></pre></div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
