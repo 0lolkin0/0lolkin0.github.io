@@ -1,15 +1,11 @@
 // Интерфейс боя: очки, флаги, миникарта, лента убийств, маркеры над головами, прицел, индикаторы урона
 import * as THREE from './three.module.min.js';
 import { clamp, TAU, DEG, fmtTime, yawTo } from './util.js';
-import { WEAPONS, TEAMS, GADGETS } from './config.js';
+import { WEAPONS, TEAMS, GADGETS, WNAME } from './config.js';
 import { HALF } from './world.js';
 
 const $ = (id) => document.getElementById(id);
 const COL = { friend: '#5fb4ff', squad: '#7dff8a', enemy: '#ff4a3d', neutral: '#e8e2d0' };
-const WNAME = {
-  smg: 'ПП-18', semi: 'СВ-16', lmg: 'РП-15', bolt: 'СН-98', frag: 'граната', at: 'ПТ-граната', melee: 'штык',
-  tank: 'танк', mg: 'пулемёт', airship: 'цеппелин', fall: 'падение', flare: 'ракета',
-};
 const _v = new THREE.Vector3();
 
 export class Hud {
@@ -192,18 +188,23 @@ export class Hud {
     this.set('hpNum', Math.ceil(Math.max(0, p.hp)));
     if (p.vehicle) {
       const v = p.vehicle;
-      this.set('wname', 'Лёгкий танк');
-      this.set('mag', Math.ceil(v.hp / 10));
-      this.set('reserve', v.reload > 0 ? 'заряжание…' : 'орудие готово');
+      this.set('wname', 'Лёгкий танк · броня ' + Math.ceil(v.hp / 10) + '%');
+      this.set('mag', v.reload > 0 ? '…' : '●');
+      this.set('reserve', v.reload > 0 ? 'заряжание' : 'орудие готово');
       $('ammoBox').classList.add('tank');
     } else {
       $('ammoBox').classList.remove('tank');
-      this.set('wname', p.weapon.short + (p.reloadT > 0 ? ' · перезарядка' : ''));
+      const sightTxt = p.sight.optic ? ' · ' + p.sight.name.replace('Оптика ', '') : '';
+      this.set('wname', p.weapon.short + sightTxt + (p.reloadT > 0 ? ' · перезарядка' : p.switchT > 0 ? ' · смена' : ''));
       this.set('mag', p.mag);
       this.set('reserve', '/ ' + p.reserve);
+      const o = p.other, oa = o && p.ammo[o.id];
+      this.set('otherW', o ? `${o.short} ${oa ? oa.mag + '/' + oa.reserve : ''}` : '');
     }
-    this.set('nades', '● ' + p.grenades);
-    this.set('gadget', GADGETS[p.cls.gadget].icon + ' ' + p.gadgets);
+    this.set('nades', 'Гранаты: ' + p.grenades);
+    this.set('gadget', GADGETS[p.cls.gadget].short + ': ' + p.gadgets);
+    const sw = document.querySelector('[data-btn="swap"] em');
+    if (sw && p.other && sw.textContent !== p.other.short) sw.textContent = p.other.short;
     $('vignette').style.opacity = p.state === 'alive' ? clamp((50 - p.hp) / 50, 0, 0.85) : 0;
     $('whiteFlash').style.opacity = this.whiteT;
     $('suppress').style.opacity = this.suppressK * 0.8;
@@ -320,7 +321,7 @@ export class Hud {
     const cx = W / 2, cy = H / 2;
     if (p.state === 'alive' && !p.vehicle) {
       const ads = p.adsT;
-      if (ads < 0.6) {
+      if (ads < 0.6 && p.switchT <= 0) {
         const sp = p.spread();
         const gap = Math.max(5 * D, (Math.tan(sp) / Math.tan((g.camera.fov * DEG) / 2)) * (H / 2));
         c.strokeStyle = 'rgba(255,255,255,0.9)'; c.lineWidth = 2 * D;
@@ -333,11 +334,17 @@ export class Hud {
         c.stroke();
         c.globalAlpha = 1;
       }
-      if (!(p.weapon.scope && ads > 0.85)) { c.fillStyle = 'rgba(255,255,255,0.85)'; c.fillRect(cx - 1.2 * D, cy - 1.2 * D, 2.4 * D, 2.4 * D); }
-    } else if (p.vehicle) {
-      c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = 2 * D;
-      c.beginPath(); c.arc(cx, cy, 14 * D, 0, TAU); c.stroke();
+      if (ads < 0.5) { c.fillStyle = 'rgba(255,255,255,0.85)'; c.fillRect(cx - 1.2 * D, cy - 1.2 * D, 2.4 * D, 2.4 * D); }
+    } else if (p.vehicle && !g.tankZoom) {
+      // Прицел танка: перекрестье с разрывом, дальность до точки прицеливания
+      c.strokeStyle = 'rgba(255,255,255,0.9)'; c.lineWidth = 2 * D;
+      c.beginPath();
+      c.arc(cx, cy, 22 * D, 0, TAU);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { c.moveTo(cx + dx * 8 * D, cy + dy * 8 * D); c.lineTo(cx + dx * 30 * D, cy + dy * 30 * D); }
+      c.stroke();
+      c.fillStyle = 'rgba(255,255,255,0.95)'; c.fillRect(cx - 1.5 * D, cy - 1.5 * D, 3 * D, 3 * D);
       const v = p.vehicle;
+      if (g.tankAimDist) { c.font = `600 ${11 * D}px Oswald, sans-serif`; c.fillText(Math.round(g.tankAimDist) + ' м', cx + 44 * D, cy - 10 * D); }
       if (g.tankAim) {
         const pt = this.project(g.tankAim.x, g.tankAim.y, g.tankAim.z);
         if (pt) {
@@ -438,5 +445,121 @@ export class Hud {
     c.beginPath(); c.moveTo(S / 2, S / 2 - S * 0.05); c.lineTo(S / 2 - S * 0.035, S / 2 + S * 0.035); c.lineTo(S / 2 + S * 0.035, S / 2 + S * 0.035); c.closePath(); c.fill();
     c.strokeStyle = 'rgba(232,226,208,0.5)'; c.lineWidth = 2;
     c.beginPath(); c.arc(S / 2, S / 2, S / 2 - 1, 0, TAU); c.stroke();
+  }
+
+  // ---------- Оптика и прицел танка ----------
+  setScope(kind) {
+    const cv = $('scopeCv');
+    if (!kind) { if (!cv.hidden) cv.hidden = true; return; }
+    cv.hidden = false;
+    const W = innerWidth, H = innerHeight, dpr = this.dpr || 1;
+    const key = kind + W + 'x' + H;
+    if (this.scopeKey === key) return;
+    this.scopeKey = key;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    const c = cv.getContext('2d');
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const cx = W / 2, cy = H / 2, R = Math.min(W, H) * (kind === 'tank' ? 0.48 : 0.46);
+    c.fillStyle = '#060504';
+    c.fillRect(0, 0, W, H);
+    c.globalCompositeOperation = 'destination-out';
+    c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.fill();
+    c.globalCompositeOperation = 'source-over';
+    const gr = c.createRadialGradient(cx, cy, R * 0.72, cx, cy, R);
+    gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,0.8)');
+    c.fillStyle = gr; c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.fill();
+    c.strokeStyle = '#0a0a09'; c.fillStyle = '#0a0a09';
+    if (kind === 'cross') {
+      c.lineWidth = 1.2;
+      c.beginPath(); c.moveTo(cx - R * 0.5, cy); c.lineTo(cx + R * 0.5, cy); c.moveTo(cx, cy - R * 0.5); c.lineTo(cx, cy + R * 0.5); c.stroke();
+      c.lineWidth = 5;
+      c.beginPath();
+      c.moveTo(cx - R, cy); c.lineTo(cx - R * 0.5, cy); c.moveTo(cx + R * 0.5, cy); c.lineTo(cx + R, cy);
+      c.moveTo(cx, cy + R * 0.5); c.lineTo(cx, cy + R); c.moveTo(cx, cy - R * 0.5); c.lineTo(cx, cy - R);
+      c.stroke();
+      c.lineWidth = 1;
+      for (let i = 1; i <= 4; i++) { const y = cy + R * 0.1 * i; c.beginPath(); c.moveTo(cx - 4 - i, y); c.lineTo(cx + 4 + i, y); c.stroke(); }
+      c.fillStyle = '#d02a1e'; c.beginPath(); c.arc(cx, cy, 1.6, 0, TAU); c.fill();
+    } else if (kind === 'post') {
+      c.lineWidth = 1.2;
+      c.beginPath(); c.moveTo(cx - R, cy); c.lineTo(cx + R, cy); c.stroke();
+      c.beginPath();
+      c.moveTo(cx - 3.5, cy + R); c.lineTo(cx - 3.5, cy + 10); c.lineTo(cx, cy); c.lineTo(cx + 3.5, cy + 10); c.lineTo(cx + 3.5, cy + R);
+      c.closePath(); c.fill();
+      c.fillRect(cx - R, cy - 3, R * 0.85, 6);
+      c.fillRect(cx + R * 0.15, cy - 3, R * 0.85, 6);
+    } else if (kind === 'tank') {
+      c.fillStyle = 'rgba(40,60,40,0.12)'; c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.fill();
+      c.strokeStyle = 'rgba(20,20,18,0.95)'; c.fillStyle = 'rgba(20,20,18,0.95)';
+      c.lineWidth = 2;
+      c.beginPath(); c.moveTo(cx - R, cy); c.lineTo(cx - 40, cy); c.moveTo(cx + 40, cy); c.lineTo(cx + R, cy); c.stroke();
+      c.beginPath(); c.moveTo(cx - 18, cy + 14); c.lineTo(cx, cy); c.lineTo(cx + 18, cy + 14); c.stroke();
+      c.lineWidth = 1.5;
+      c.font = '600 11px Oswald, sans-serif'; c.textAlign = 'left'; c.textBaseline = 'middle';
+      for (let i = 1; i <= 5; i++) {
+        const y = cy + i * R * 0.09;
+        c.beginPath(); c.moveTo(cx - 10, y); c.lineTo(cx + 10, y); c.stroke();
+        c.fillText(String(i * 100), cx + 14, y);
+      }
+      for (let i = -3; i <= 3; i++) if (i) { c.beginPath(); c.moveTo(cx + i * R * 0.18, cy - 6); c.lineTo(cx + i * R * 0.18, cy + 6); c.stroke(); }
+    }
+  }
+
+  // ---------- Большая карта ----------
+  drawFullMap(cv, live = true) {
+    const g = this.g, p = g.player, w = g.world;
+    const r = cv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+    const c = cv.getContext('2d');
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const S = Math.min(r.width, r.height), k = S / (HALF * 2 - 10), flip = p.team === 1;
+    const ox = (r.width - S) / 2, oy = (r.height - S) / 2;
+    c.clearRect(0, 0, r.width, r.height);
+    c.save();
+    c.translate(ox + S / 2, oy + S / 2);
+    if (flip) c.rotate(Math.PI);
+    c.scale(k, k);
+    c.drawImage(w.minimap, -HALF, -HALF);
+    c.restore();
+    const toS = (x, z) => [ox + S / 2 + (flip ? -x : x) * k, oy + S / 2 + (flip ? -z : z) * k];
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    for (const f of g.flags) {
+      const [x, y] = toS(f.x, f.z);
+      const rel = this.rel(f.owner);
+      c.fillStyle = 'rgba(15,12,10,0.7)'; c.beginPath(); c.arc(x, y, 16, 0, TAU); c.fill();
+      c.lineWidth = 3;
+      c.strokeStyle = COL[rel]; c.beginPath(); c.arc(x, y, 13, 0, TAU); c.stroke();
+      const prog = f.control * (p.team === 0 ? 1 : -1);
+      c.strokeStyle = prog >= 0 ? COL.friend : COL.enemy; c.lineWidth = 4;
+      c.beginPath(); c.arc(x, y, 18, -Math.PI / 2, -Math.PI / 2 + Math.abs(prog) * TAU); c.stroke();
+      c.fillStyle = COL[rel]; c.font = '700 15px Oswald, sans-serif'; c.fillText(f.id, x, y + 1);
+      c.fillStyle = 'rgba(236,229,209,0.85)'; c.font = '500 10px Oswald, sans-serif'; c.fillText(f.name, x, y + 28);
+    }
+    if (!live) return toS;
+    for (const s of g.soldiers) {
+      if (s === p || s.state === 'dead') continue;
+      const friend = s.team === p.team;
+      if (!friend && s.spottedUntil < g.time) continue;
+      const sp = s.vehicle ? s.vehicle.pos : s.pos;
+      const [x, y] = toS(sp.x, sp.z);
+      c.fillStyle = s.state === 'downed' ? '#ff9a3d' : friend ? (s.squad ? COL.squad : COL.friend) : COL.enemy;
+      c.beginPath(); c.arc(x, y, s.squad ? 4 : 3, 0, TAU); c.fill();
+    }
+    for (const v of g.vehicles) {
+      if (!v.alive) continue;
+      const friend = v.team === p.team;
+      const [x, y] = toS(v.pos.x, v.pos.z);
+      c.fillStyle = friend ? COL.friend : COL.enemy;
+      const rr = v.kind === 'airship' ? 10 : 6;
+      c.fillRect(x - rr, y - rr * 0.6, rr * 2, rr * 1.2);
+    }
+    const pp = p.vehicle ? p.vehicle.pos : p.pos;
+    const [px, py] = toS(pp.x, pp.z);
+    const a = -g.viewYaw + (flip ? Math.PI : 0);
+    c.save(); c.translate(px, py); c.rotate(a);
+    c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(0, -9); c.lineTo(-6, 6); c.lineTo(6, 6); c.closePath(); c.fill(); c.stroke();
+    c.restore();
+    return toS;
   }
 }

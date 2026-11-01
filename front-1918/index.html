@@ -46,16 +46,22 @@ canvas#overlay { position: fixed; inset: 0; width: 100%; height: 100%; pointer-e
 #suppress { background: radial-gradient(ellipse at center, transparent 30%, rgba(0, 0, 0, 0.85) 100%); opacity: 0; }
 #dmgFlash { background: rgba(170, 20, 10, 0.45); opacity: 0; transition: opacity .25s; }
 #whiteFlash { background: #fff8e8; opacity: 0; }
-#scope { background:
-  linear-gradient(transparent calc(50% - 0.5px), rgba(0,0,0,.85) calc(50% - 0.5px), rgba(0,0,0,.85) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
-  linear-gradient(90deg, transparent calc(50% - 0.5px), rgba(0,0,0,.85) calc(50% - 0.5px), rgba(0,0,0,.85) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
-  radial-gradient(circle at center, transparent 0, transparent 40vmin, #050403 40.4vmin); }
-#scope::after { content: ""; position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; margin: -1.5px; background: #c22; border-radius: 50%; }
+canvas#scopeCv { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#bigmap { position: fixed; inset: 0; z-index: 4; background: rgba(12,10,8,.86); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px; touch-action: none; }
+#bigmapCv { width: 100%; flex: 1; min-height: 0; }
+#bigmap p { margin: 6px 0 0; font: 500 13px var(--display); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+#clickPlay { position: fixed; inset: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(12,10,8,.45); cursor: pointer; font-family: var(--display); text-align: center; }
+#clickPlay b { font-size: 26px; text-transform: uppercase; letter-spacing: .05em; }
+#clickPlay span { color: var(--muted); margin-top: 6px; font-size: 14px; }
+.pckeys { position: absolute; left: max(10px, env(safe-area-inset-left)); bottom: max(10px, env(safe-area-inset-bottom)); font: 400 11px var(--body); color: rgba(236,229,209,.7); background: rgba(15,12,9,.45); border-radius: 8px; padding: 5px 8px; line-height: 1.5; max-width: 230px; }
+.pckeys kbd { font: 600 10px var(--display); background: rgba(255,255,255,.12); border-radius: 3px; padding: 0 4px; color: var(--paper); }
+.pckeys .more { display: none; }
+.pckeys.big .more { display: inline; }
 
 /* ---------- HUD ---------- */
 #hud { position: fixed; inset: 0; pointer-events: none; font-family: var(--display); }
 #hud * { pointer-events: none; }
-#hud .cbtn, #hud #btnPause, #hud #btnInteract, #hud #btnGiveUp { pointer-events: auto; }
+#hud .cbtn, #hud #btnPause, #hud #btnInteract, #hud #btnGiveUp, #hud #minimap { pointer-events: auto; }
 #topbar { position: absolute; top: max(6px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; }
 .tk { display: flex; flex-direction: column; align-items: center; min-width: 74px; }
 .tk b { font-size: 20px; line-height: 1; text-shadow: 0 1px 2px #000; }
@@ -82,7 +88,8 @@ canvas#overlay { position: fixed; inset: 0; width: 100%; height: 100%; pointer-e
 #announce.good { color: #9fd4ff; } #announce.bad { color: #ff8a7a; }
 #scorepops { position: absolute; left: calc(50% + 40px); top: 56%; font-size: 15px; text-shadow: 0 1px 3px #000; }
 .pop b { color: var(--brass); }
-#minimap { position: absolute; top: max(8px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); width: 118px; height: 118px; border-radius: 50%; box-shadow: 0 2px 10px rgba(0,0,0,.5); }
+#minimap { position: absolute; top: max(8px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); width: 118px; height: 118px; border-radius: 50%; box-shadow: 0 2px 10px rgba(0,0,0,.5); cursor: pointer; }
+#mapHint { position: absolute; top: calc(max(8px, env(safe-area-inset-top)) + 120px); left: max(8px, env(safe-area-inset-left)); width: 118px; text-align: center; font: 500 9px var(--display); color: rgba(236,229,209,.55); text-transform: uppercase; }
 #killfeed { position: absolute; top: calc(max(8px, env(safe-area-inset-top)) + 44px); right: max(10px, env(safe-area-inset-right)); display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 12px; }
 .kf { background: rgba(15,12,9,.65); padding: 2px 7px; border-radius: 4px; white-space: nowrap; }
 .kf-n.friend { color: var(--blue); } .kf-n.enemy { color: var(--red); } .kf-n.squad { color: var(--green); } .kf-n.me { color: var(--brass); }
@@ -97,10 +104,11 @@ canvas#overlay { position: fixed; inset: 0; width: 100%; height: 100%; pointer-e
 #ammoBox .w { font-size: 11px; color: var(--muted); }
 #ammoBox .n { font-size: 24px; font-weight: 600; }
 #ammoBox .n small { font-size: 13px; color: var(--muted); font-weight: 400; }
-#ammoBox .eq { font-size: 12px; color: var(--paper); }
-#ammoBox.tank .eq { display: none; }
+#ammoBox .eq { font-size: 11px; color: var(--paper); }
+#ammoBox .ow { font-size: 10px; color: var(--muted); }
+#ammoBox.tank .eq, #ammoBox.tank .ow { display: none; }
 #btnPause { position: absolute; top: max(8px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); width: 38px; height: 34px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--paper); font: 700 15px var(--display); }
-#btnInteract { position: absolute; right: 230px; bottom: 120px; padding: 10px 16px; border-radius: 22px; border: 2px solid var(--brass); background: rgba(40,34,20,.9); color: var(--brass); font: 600 15px var(--display); text-transform: uppercase; }
+#btnInteract { position: absolute; right: 250px; bottom: 170px; padding: 10px 16px; border-radius: 22px; border: 2px solid var(--brass); background: rgba(40,34,20,.9); color: var(--brass); font: 600 15px var(--display); text-transform: uppercase; }
 body:not(.touch) #btnInteract::after { content: " [E]"; color: var(--muted); }
 #reviveBar { position: absolute; left: 50%; top: 62%; width: 160px; height: 8px; transform: translateX(-50%); background: rgba(0,0,0,.5); border-radius: 4px; overflow: hidden; }
 #reviveBar i { display: block; height: 100%; background: var(--green); }
@@ -116,25 +124,31 @@ body:not(.touch) #btnInteract::after { content: " [E]"; color: var(--muted); }
 body.touch #controls { display: block; }
 body.downed #controls, body.ended #controls, body.ended #btnInteract { display: none !important; }
 .cbtn { position: absolute; border-radius: 50%; border: 2px solid rgba(236,229,209,.55); background: rgba(20,17,12,.42); color: var(--paper); display: grid; place-items: center; font: 600 12px var(--display); text-transform: uppercase; touch-action: none; }
-.cbtn span { font-size: 20px; line-height: 1; pointer-events: none; }
+.cbtn span { display: block; width: 54%; height: 54%; pointer-events: none; }
+.cbtn span svg { display: block; }
 .cbtn em { position: absolute; bottom: -14px; font-style: normal; font-size: 9px; color: rgba(236,229,209,.65); pointer-events: none; white-space: nowrap; }
 .cbtn.held { background: rgba(209,169,78,.45); }
 .cbtn.on { background: rgba(209,169,78,.6); border-color: var(--brass); }
 .cbtn.fire { width: 92px; height: 92px; right: calc(max(24px, env(safe-area-inset-right)) + 6px); bottom: 98px; border-color: rgba(255,120,90,.8); background: rgba(120,30,20,.38); }
-.cbtn.fire span { font-size: 30px; }
-.cbtn.fire2 { width: 66px; height: 66px; left: calc(max(20px, env(safe-area-inset-left)) + 6px); bottom: 190px; border-color: rgba(255,120,90,.7); background: rgba(120,30,20,.3); display: none; }
+.cbtn.fire span { width: 46%; height: 46%; }
+.cbtn.fire2 { width: 66px; height: 66px; left: calc(max(20px, env(safe-area-inset-left)) + 6px); bottom: 150px; border-color: rgba(255,120,90,.7); background: rgba(120,30,20,.3); display: none; }
 body.left-fire .cbtn.fire2 { display: grid; }
-.cbtn.ads { width: 62px; height: 62px; right: calc(max(24px, env(safe-area-inset-right)) + 118px); bottom: 162px; }
-.cbtn.reload { width: 52px; height: 52px; right: calc(max(24px, env(safe-area-inset-right)) + 128px); bottom: 86px; }
-.cbtn.jump { width: 56px; height: 56px; right: calc(max(24px, env(safe-area-inset-right)) + 0px); bottom: 22px; }
-.cbtn.crouch { width: 56px; height: 56px; right: calc(max(24px, env(safe-area-inset-right)) + 70px); bottom: 18px; }
-.cbtn.melee { width: 50px; height: 50px; right: calc(max(24px, env(safe-area-inset-right)) + 140px); bottom: 20px; }
-.cbtn.grenade { width: 50px; height: 50px; right: calc(max(24px, env(safe-area-inset-right)) + 4px); bottom: 210px; }
-.cbtn.gadget { width: 50px; height: 50px; right: calc(max(24px, env(safe-area-inset-right)) + 64px); bottom: 236px; }
+/* Правая сторона: огонь, прицел, стойки; R — отступ от края с учётом выреза экрана */
+#controls { --R: max(22px, env(safe-area-inset-right)); }
+.cbtn.ads { width: 62px; height: 62px; right: calc(var(--R) + 122px); bottom: 162px; }
+.cbtn.reload { width: 52px; height: 52px; right: calc(var(--R) + 132px); bottom: 94px; }
+.cbtn.swap { width: 50px; height: 50px; right: calc(var(--R) + 196px); bottom: 104px; }
+.cbtn.jump { width: 54px; height: 54px; right: calc(var(--R) + 0px); bottom: 20px; }
+.cbtn.crouch { width: 54px; height: 54px; right: calc(var(--R) + 66px); bottom: 20px; }
+.cbtn.prone { width: 54px; height: 54px; right: calc(var(--R) + 132px); bottom: 20px; }
+.cbtn.melee { width: 48px; height: 48px; right: calc(var(--R) + 200px); bottom: 24px; }
+.cbtn.grenade { width: 50px; height: 50px; right: calc(var(--R) + 4px); bottom: 212px; }
+.cbtn.gadget { width: 50px; height: 50px; right: calc(var(--R) + 66px); bottom: 236px; }
 .cbtn.mg, .cbtn.exit { display: none; }
-body.in-tank .cbtn.mg { display: grid; width: 66px; height: 66px; right: calc(max(24px, env(safe-area-inset-right)) + 116px); bottom: 150px; }
-body.in-tank .cbtn.exit { display: grid; width: 54px; height: 54px; right: calc(max(24px, env(safe-area-inset-right)) + 10px); bottom: 24px; }
-body.in-tank .cbtn.ads, body.in-tank .cbtn.reload, body.in-tank .cbtn.jump, body.in-tank .cbtn.crouch,
+body.in-tank .cbtn.mg { display: grid; width: 66px; height: 66px; right: calc(var(--R) + 120px); bottom: 104px; }
+body.in-tank .cbtn.ads { right: calc(var(--R) + 132px); bottom: 190px; }
+body.in-tank .cbtn.exit { display: grid; width: 54px; height: 54px; right: calc(var(--R) + 6px); bottom: 20px; }
+body.in-tank .cbtn.reload, body.in-tank .cbtn.jump, body.in-tank .cbtn.crouch, body.in-tank .cbtn.prone, body.in-tank .cbtn.swap,
 body.in-tank .cbtn.melee, body.in-tank .cbtn.grenade, body.in-tank .cbtn.gadget { display: none; }
 #joy { position: absolute; left: 0; top: 0; width: 0; height: 0; }
 #joy .base { position: absolute; left: -60px; top: -60px; width: 120px; height: 120px; border-radius: 50%; border: 2px solid rgba(236,229,209,.35); background: rgba(20,17,12,.25); }
@@ -176,7 +190,10 @@ body.touch #moveHint { display: block; }
 #deploy header { grid-column: 1 / 3; display: flex; align-items: center; justify-content: space-between; gap: 10px; font-family: var(--display); }
 #deploy header .t { font-size: 18px; } #deploy header .t b { color: var(--blue); } #deploy header .t b.r { color: var(--red); }
 #dMode { color: var(--muted); font-size: 13px; }
-#classList { display: flex; flex-direction: column; gap: 6px; overflow: auto; min-height: 0; }
+#classCol { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+#classList { display: flex; flex-direction: column; gap: 6px; overflow: auto; min-height: 0; flex: 1; }
+#sightList { align-items: center; }
+#sightList span { font: 500 11px var(--display); color: var(--muted); text-transform: uppercase; margin-right: 4px; }
 .classBtn { text-align: left; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; color: var(--paper); cursor: pointer; }
 .classBtn b { display: block; font: 600 16px var(--display); text-transform: uppercase; }
 .classBtn span { display: block; font-size: 12px; color: var(--brass); }
@@ -270,7 +287,9 @@ body.ready #loading { display: none; }
 <div class="fx" id="suppress"></div>
 <div class="fx" id="dmgFlash"></div>
 <div class="fx" id="whiteFlash"></div>
-<div class="fx" id="scope" hidden></div>
+<canvas id="scopeCv" hidden></canvas>
+<div id="bigmap" class="noinput" hidden><canvas id="bigmapCv"></canvas><p>Карта · нажмите, чтобы закрыть (на ПК — M)</p></div>
+<div id="clickPlay" hidden><b>Щёлкните, чтобы играть</b><span>Мышь захватится для обзора · Esc — пауза</span></div>
 
 <div id="hud" hidden>
   <div id="topbar">
@@ -283,11 +302,14 @@ body.ready #loading { display: none; }
   <div id="capture" hidden><span id="capLabel"></span><span id="capCount"></span><div class="bar"><div id="capBar"></div></div></div>
   <div id="announce"></div>
   <div id="scorepops"></div>
-  <canvas id="minimap"></canvas>
+  <canvas id="minimap" class="noinput"></canvas>
+  <div id="mapHint">карта</div>
+  <div id="pcKeys" class="pckeys" hidden><kbd>WASD</kbd> ход · <kbd>Shift</kbd> бег · <kbd>ПКМ</kbd> прицел · <kbd>C</kbd> присесть · <kbd>Z</kbd> лечь · <kbd>1</kbd>/<kbd>2</kbd> оружие · <kbd>M</kbd> карта · <kbd>H</kbd> ещё<span class="more"><br><kbd>R</kbd> перезарядка · <kbd>Пробел</kbd> прыжок · <kbd>G</kbd> граната · <kbd>F</kbd> снаряжение · <kbd>V</kbd> штык · <kbd>E</kbd> действие · <kbd>Tab</kbd> счёт · <kbd>Shift</kbd> в оптике — задержать дыхание</span></div>
+  <div id="pcKeysTank" class="pckeys" hidden><kbd>WASD</kbd> ехать · <kbd>ЛКМ</kbd> орудие · <kbd>ПКМ</kbd> прицел наводчика · <kbd>Пробел</kbd>/<kbd>F</kbd> пулемёт · <kbd>E</kbd> выйти</div>
   <div id="killfeed"></div>
   <div id="status">
     <div id="hpBox"><div class="lab"><span>Здоровье</span><span id="hpNum">100</span></div><div class="bar"><div id="hpFill"></div></div></div>
-    <div id="ammoBox"><div class="w" id="wname"></div><div class="n"><span id="mag">0</span> <small id="reserve"></small></div><div class="eq"><span id="nades"></span> &nbsp; <span id="gadget"></span></div></div>
+    <div id="ammoBox"><div class="w" id="wname"></div><div class="n"><span id="mag">0</span> <small id="reserve"></small></div><div class="ow" id="otherW"></div><div class="eq"><span id="nades"></span> · <span id="gadget"></span></div></div>
   </div>
   <div id="reviveBar" hidden><i></i></div>
   <div id="downed" hidden>
@@ -301,17 +323,19 @@ body.ready #loading { display: none; }
   <div id="controls">
     <div id="moveHint">← двигаться →</div>
     <div id="joy" hidden><div class="base"></div><div id="knob"></div><div id="sprintHint">бег ↑</div></div>
-    <div class="cbtn fire" data-btn="fire"><span>✸</span></div>
-    <div class="cbtn fire2" data-btn="fire2"><span>✸</span></div>
-    <div class="cbtn ads" data-btn="ads"><span>◎</span><em>прицел</em></div>
-    <div class="cbtn reload" data-btn="reload"><span>↻</span><em>перезарядка</em></div>
-    <div class="cbtn jump" data-btn="jump"><span>⤒</span><em>прыжок</em></div>
-    <div class="cbtn crouch" data-btn="crouch"><span>⤓</span><em>присесть</em></div>
-    <div class="cbtn melee" data-btn="melee"><span>†</span><em>штык</em></div>
-    <div class="cbtn grenade" data-btn="grenade"><span>●</span><em>граната</em></div>
-    <div class="cbtn gadget" data-btn="gadget"><span>✚</span><em>снаряжение</em></div>
-    <div class="cbtn mg" data-btn="mg"><span>⁘</span><em>пулемёт</em></div>
-    <div class="cbtn exit" data-btn="exit"><span>⏏</span><em>выйти</em></div>
+    <div class="cbtn fire" data-btn="fire"><span></span></div>
+    <div class="cbtn fire2" data-btn="fire2"><span></span></div>
+    <div class="cbtn ads" data-btn="ads"><span></span><em>прицел</em></div>
+    <div class="cbtn reload" data-btn="reload"><span></span><em>перезарядка</em></div>
+    <div class="cbtn swap" data-btn="swap"><span></span><em>пистолет</em></div>
+    <div class="cbtn jump" data-btn="jump"><span></span><em>прыжок</em></div>
+    <div class="cbtn crouch" data-btn="crouch"><span></span><em>присесть</em></div>
+    <div class="cbtn prone" data-btn="prone"><span></span><em>лечь</em></div>
+    <div class="cbtn melee" data-btn="melee"><span></span><em>штык</em></div>
+    <div class="cbtn grenade" data-btn="grenade"><span></span><em>граната</em></div>
+    <div class="cbtn gadget" data-btn="gadget"><span></span><em>снаряжение</em></div>
+    <div class="cbtn mg" data-btn="mg"><span></span><em>пулемёт</em></div>
+    <div class="cbtn exit" data-btn="exit"><span></span><em>выйти</em></div>
   </div>
   <button id="btnPause" class="noinput">II</button>
 </div>
@@ -327,9 +351,10 @@ body.ready #loading { display: none; }
     <div class="menuBtns">
       <button class="btn" id="btnSettings">Настройки</button>
       <button class="btn" id="btnHelp">Как играть</button>
-      <button class="btn" id="btnInstall" hidden>Установить на телефон</button>
+      <button class="btn" id="btnInstall" hidden>Установить как приложение</button>
     </div>
     <p class="hint" id="iosHint" hidden>Чтобы игра была на экране телефона как приложение: в Safari нажмите <b>«Поделиться»</b> → <b>«На экран „Домой“»</b>.</p>
+    <p class="hint" id="pcHint" hidden>На компьютере игра работает прямо в браузере: управление мышью и клавиатурой. Чтобы поставить её как отдельное приложение с ярлыком, в Chrome или Edge нажмите значок установки в адресной строке (или «Установить как приложение» здесь).</p>
     <p class="hint" id="androidHint" hidden>Чтобы установить: в меню Chrome <b>⋮</b> → <b>«Установить приложение»</b> или <b>«Добавить на главный экран»</b>. После установки игра работает и без интернета.</p>
   </div>
   <div class="right">
@@ -348,7 +373,7 @@ body.ready #loading { display: none; }
     <div class="t"><b id="dTk0">0</b> <span id="dTeam0"></span> &nbsp;·&nbsp; <b class="r" id="dTk1">0</b> <span id="dTeam1"></span></div>
     <div id="dMode"></div>
   </header>
-  <div id="classList"></div>
+  <div id="classCol"><div id="classList"></div><div id="sightList" class="seg"></div></div>
   <div id="mapWrap"><canvas id="deployMap"></canvas></div>
   <footer>
     <button class="btn" id="btnDeployMenu">Меню</button>
@@ -387,15 +412,22 @@ body.ready #loading { display: none; }
     <ul>
       <li>Левая половина экрана — джойстик. Тяните его далеко вверх, чтобы бежать.</li>
       <li>Правая половина — обзор. Кнопку огня тоже можно тянуть, чтобы целиться на ходу.</li>
-      <li>◎ — прицел, ↻ — перезарядка, ⤒ — прыжок, ⤓ — присесть, † — штык (на бегу — штыковая атака).</li>
-      <li>● — граната, вторая кнопка — снаряжение класса. Рядом с танком или раненым товарищем появится кнопка действия.</li>
+      <li>Кнопка «прицел» включает прицеливание с приближением — даже на бегу (бег при этом прекращается).</li>
+      <li>«Присесть» и «лечь» — отдельные кнопки; «прыжок» поднимает обратно. Лёжа разброс в два раза меньше.</li>
+      <li>«Пистолет» — переключение на личное оружие и обратно. Если в основном стволе кончились патроны, переключение произойдёт само.</li>
+      <li>Нажмите на миникарту, чтобы открыть большую карту.</li>
+      <li>В танке: «огонь» — орудие, «пулемёт», «оптика» — прицел наводчика с приближением ×3.5.</li>
     </ul>
     <h3>Компьютер</h3>
     <ul>
-      <li><kbd>W A S D</kbd> — ходьба, <kbd>Shift</kbd> — бег, мышь — обзор (щёлкните по экрану), ЛКМ — огонь, ПКМ — прицел.</li>
-      <li><kbd>R</kbd> перезарядка, <kbd>Пробел</kbd> прыжок, <kbd>C</kbd> присесть, <kbd>G</kbd> граната, <kbd>F</kbd> снаряжение, <kbd>V</kbd> штык, <kbd>E</kbd> действие, <kbd>Tab</kbd> счёт, <kbd>Esc</kbd> пауза.</li>
-      <li>В танке: ЛКМ — орудие, ПКМ — пулемёт, <kbd>E</kbd> — выйти.</li>
+      <li>Щёлкните по экрану — мышь захватится для обзора. <kbd>Esc</kbd> — пауза.</li>
+      <li><kbd>W A S D</kbd> — ходьба, <kbd>Shift</kbd> — бег, ЛКМ — огонь, ПКМ — прицел, <kbd>Shift</kbd> в оптике — задержать дыхание.</li>
+      <li><kbd>C</kbd> присесть, <kbd>Z</kbd> лечь, <kbd>Пробел</kbd> прыжок / встать, <kbd>1</kbd> <kbd>2</kbd> или колесо мыши — смена оружия.</li>
+      <li><kbd>R</kbd> перезарядка, <kbd>G</kbd> граната, <kbd>F</kbd> снаряжение, <kbd>V</kbd> штык, <kbd>E</kbd> действие, <kbd>M</kbd> карта, <kbd>Tab</kbd> счёт.</li>
+      <li>В танке: ЛКМ — орудие, ПКМ — прицел наводчика, <kbd>Пробел</kbd> или <kbd>F</kbd> — пулемёт, <kbd>E</kbd> — выйти.</li>
     </ul>
+    <h3>Прицелы</h3>
+    <p>На экране высадки под классами выбирается прицел основного оружия: открытый (целик и мушка) или оптика ×2–×10. У разведчика — снайперская оптика ×6 или ×10.</p>
     <h3>Классы</h3>
     <ul>
       <li><b>Штурмовик</b> — пистолет-пулемёт и противотанковые гранаты.</li>
@@ -424,6 +456,7 @@ body.ready #loading { display: none; }
 <div id="rotate" hidden><div class="ph"></div><p>Поверните телефон горизонтально</p></div>
 <div id="loading">Загрузка…</div>
 <div id="fatal" hidden><h2>Не удалось запустить игру</h2><p>Похоже, браузер не поддерживает WebGL. Попробуйте Chrome или Safari последней версии.</p><pre></pre></div>
+<script type="importmap">{ "imports": { "three": "./js/three.module.min.js" } }</script>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

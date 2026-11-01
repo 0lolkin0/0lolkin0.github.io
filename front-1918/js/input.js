@@ -1,13 +1,19 @@
-// Управление: сенсорный джойстик и кнопки на телефоне, клавиатура и мышь на компьютере
+// Управление: сенсорный джойстик и кнопки на телефоне, клавиатура и мышь на компьютере.
+// Режим переключается сам: двинули мышью или нажали клавишу — ПК, коснулись экрана — телефон
+const KEY_EVENTS = {
+  Space: 'jump', KeyR: 'reload', KeyG: 'grenade', KeyF: 'gadget', KeyV: 'melee', KeyQ: 'melee', KeyE: 'interact', KeyX: 'exit',
+  KeyP: 'pause', KeyM: 'map', Digit1: 'slot1', Digit2: 'slot2', KeyH: 'help',
+};
+
 export class Input {
   constructor(game) {
     this.g = game;
     this.moveX = 0; this.moveY = 0; this.sprint = false;
     this.lookDX = 0; this.lookDY = 0;
-    this.fire = false; this.ads = false; this.crouch = false; this.mg = false;
+    this.fire = false; this.ads = false; this.crouch = false; this.prone = false; this.mg = false;
     this.events = new Set();
     this.keys = new Set();
-    this.touchMode = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+    this.touchMode = matchMedia('(pointer: coarse)').matches;
     this.joy = null; this.look = null; this.fireIds = new Set();
     this.enabled = false;
     this.mouseFire = false; this.mouseAds = false;
@@ -25,10 +31,16 @@ export class Input {
     window.addEventListener('keydown', (e) => this.key(e, true));
     window.addEventListener('keyup', (e) => this.key(e, false));
     window.addEventListener('contextmenu', (e) => { if (this.enabled) e.preventDefault(); });
+    window.addEventListener('wheel', (e) => { if (this.enabled && document.pointerLockElement) { this.events.add('swap'); e.preventDefault(); } }, opts);
     document.addEventListener('mousemove', (e) => {
       if (document.pointerLockElement && this.enabled) { this.lookDX += e.movementX * 0.55; this.lookDY += e.movementY * 0.55; }
     });
     window.addEventListener('blur', () => this.reset());
+  }
+  setMode(touch) {
+    if (this.touchMode === touch) return;
+    this.touchMode = touch;
+    this.g.onInputMode && this.g.onInputMode(touch);
   }
   reset() {
     this.moveX = this.moveY = 0; this.sprint = false; this.fire = false; this.mg = false;
@@ -42,38 +54,34 @@ export class Input {
     return el && el.offsetParent !== null ? el : null;
   }
   down(e) {
+    if (e.pointerType === 'touch') this.setMode(true);
     if (!this.enabled) return;
-    if (e.target.closest && e.target.closest('.screen, #btnPause, .noinput')) return;
+    if (e.target.closest && e.target.closest('.screen, .noinput')) return;
     const btn = this.btnOf(e);
     if (e.pointerType === 'mouse') {
       if (btn) return;
-      if (!document.pointerLockElement) {
-        const c = this.g.renderer.domElement;
-        if (c.requestPointerLock) { try { const r = c.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (_) {} }
-        return;
-      }
+      if (!document.pointerLockElement) { this.g.lockPointer && this.g.lockPointer(); return; }
       if (e.button === 0) { this.mouseFire = true; this.fireLatch = true; }
-      if (e.button === 2) { this.mouseAds = true; }
+      if (e.button === 2) this.mouseAds = true;
       e.preventDefault();
       return;
     }
     e.preventDefault();
-    this.touchMode = true;
     if (btn) {
       const b = btn.dataset.btn;
       btn.classList.add('held');
+      btn._pid = e.pointerId;
       if (b === 'fire' || b === 'fire2') {
         this.fireIds.add(e.pointerId);
         this.fire = true;
         this.fireLatch = true;
-        if (!this.look) this.look = { id: e.pointerId, x: e.clientX, y: e.clientY, btn };
-        else this.fireIds.add(e.pointerId);
-        btn._pid = e.pointerId;
+        if (!this.look) this.look = { id: e.pointerId, x: e.clientX, y: e.clientY };
         return;
       }
-      if (b === 'mg') { this.mg = true; this.mgLatch = true; btn._pid = e.pointerId; return; }
-      if (b === 'ads') { this.ads = !this.ads; btn.classList.toggle('on', this.ads); return; }
-      if (b === 'crouch') { this.crouch = !this.crouch; btn.classList.toggle('on', this.crouch); return; }
+      if (b === 'mg') { this.mg = true; this.mgLatch = true; return; }
+      if (b === 'ads') { this.setAds(!this.ads); return; }
+      if (b === 'crouch') { this.setCrouch(!this.crouch); return; }
+      if (b === 'prone') { this.setProne(!this.prone); return; }
       this.events.add(b);
       return;
     }
@@ -90,6 +98,7 @@ export class Input {
     if (!this.look) this.look = { id: e.pointerId, x: e.clientX, y: e.clientY };
   }
   move(e) {
+    if (e.pointerType === 'mouse' && this.touchMode && (e.movementX || e.movementY)) this.setMode(false);
     if (!this.enabled) return;
     if (this.joy && e.pointerId === this.joy.id) {
       e.preventDefault();
@@ -136,45 +145,51 @@ export class Input {
       if (!this.fireIds.size) this.fire = false;
     }
     document.querySelectorAll('.cbtn.held').forEach((b) => {
-      if (b._pid === e.pointerId || !b._pid) b.classList.remove('held');
-      if (b.dataset.btn === 'mg' && b._pid === e.pointerId) this.mg = false;
+      if (b._pid !== e.pointerId) return;
+      b.classList.remove('held');
+      if (b.dataset.btn === 'mg') this.mg = false;
+      b._pid = null;
     });
   }
   key(e, down) {
-    if (!this.enabled) return;
     const k = e.code;
+    if (down) this.setMode(false);
+    if (!this.enabled) return;
+    if (k === 'Tab') { e.preventDefault(); this.g.hud.showScores(down); return; }
     if (down) {
       if (this.keys.has(k)) return;
       this.keys.add(k);
-      const map = { Space: 'jump', KeyR: 'reload', KeyG: 'grenade', KeyF: 'gadget', KeyV: 'melee', KeyQ: 'melee', KeyE: 'interact', KeyX: 'exit', Escape: 'pause', KeyP: 'pause' };
-      if (map[k]) this.events.add(map[k]);
-      if (k === 'KeyC') { this.crouch = !this.crouch; }
-      if (k === 'Tab') { e.preventDefault(); this.g.hud.showScores(true); }
-      if (k === 'KeyM') this.events.add('map');
-      this.touchMode = false;
+      if (KEY_EVENTS[k]) this.events.add(KEY_EVENTS[k]);
+      if (k === 'Escape') this.events.add('pause');
+      if (k === 'KeyC') this.setCrouch(!this.crouch);
+      if (k === 'KeyZ') this.setProne(!this.prone);
+      if (k === 'ControlLeft') this.setCrouch(true);
+      if (k === 'Space' && this.crouch) this.setCrouch(false);
+      if (k === 'Space' && this.prone) this.setProne(false);
     } else {
       this.keys.delete(k);
-      if (k === 'Tab') this.g.hud.showScores(false);
-      if (k === 'ControlLeft') this.crouch = false;
+      if (k === 'ControlLeft') this.setCrouch(false);
     }
-    if (k === 'ControlLeft' && down) this.crouch = true;
   }
   // Снимок ввода за кадр
   read() {
     let mx = this.moveX, my = this.moveY, sprint = this.sprint;
-    if (this.keys.size) {
-      const K = this.keys;
+    const K = this.keys;
+    if (K.size) {
       const kx = (K.has('KeyD') || K.has('ArrowRight') ? 1 : 0) - (K.has('KeyA') || K.has('ArrowLeft') ? 1 : 0);
       const ky = (K.has('KeyS') || K.has('ArrowDown') ? 1 : 0) - (K.has('KeyW') || K.has('ArrowUp') ? 1 : 0);
       if (kx || ky) { const l = Math.hypot(kx, ky); mx = kx / l; my = ky / l; }
       if (K.has('ShiftLeft') || K.has('ShiftRight')) sprint = true;
     }
+    const inTank = !!(this.g.player && this.g.player.vehicle);
     const out = {
       mx, my, sprint,
       dx: this.lookDX, dy: this.lookDY,
       fire: this.fire || this.mouseFire || !!this.fireLatch,
       ads: this.touchMode ? this.ads : this.mouseAds,
-      crouch: this.crouch, mg: this.mg || !!this.mgLatch || this.mouseAds && this.g.player && !!this.g.player.vehicle,
+      crouch: this.crouch, prone: this.prone,
+      mg: this.mg || !!this.mgLatch || (inTank && (K.has('Space') || K.has('KeyF'))),
+      hold: K.has('ShiftLeft') || K.has('ShiftRight'),
       ev: this.events,
     };
     this.lookDX = 0; this.lookDY = 0;
@@ -184,12 +199,20 @@ export class Input {
   }
   setAds(v) {
     this.ads = v;
-    const b = document.querySelector('[data-btn="ads"]');
-    if (b) b.classList.toggle('on', v);
+    document.querySelectorAll('[data-btn="ads"]').forEach((b) => b.classList.toggle('on', v));
   }
   setCrouch(v) {
     this.crouch = v;
-    const b = document.querySelector('[data-btn="crouch"]');
-    if (b) b.classList.toggle('on', v);
+    if (v) this.prone = false;
+    this.syncStance();
+  }
+  setProne(v) {
+    this.prone = v;
+    if (v) this.crouch = false;
+    this.syncStance();
+  }
+  syncStance() {
+    document.querySelectorAll('[data-btn="crouch"]').forEach((b) => b.classList.toggle('on', this.crouch));
+    document.querySelectorAll('[data-btn="prone"]').forEach((b) => b.classList.toggle('on', this.prone));
   }
 }

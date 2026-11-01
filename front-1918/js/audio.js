@@ -6,6 +6,7 @@ const SHOTS = {
   sniper: { dur: 0.38, f: 1300, boom: 75, bd: 0.16, g: 1.0, echo: 0.45 },
   cannon: { dur: 0.9, f: 700, boom: 48, bd: 0.5, g: 1.4, echo: 0.6 },
   mg: { dur: 0.1, f: 1900, boom: 120, bd: 0.07, g: 0.5, echo: 0.25 },
+  pistol: { dur: 0.12, f: 2100, boom: 135, bd: 0.08, g: 0.5, echo: 0.25 },
   aa: { dur: 0.1, f: 1700, boom: 110, bd: 0.07, g: 0.35, echo: 0.2 },
 };
 

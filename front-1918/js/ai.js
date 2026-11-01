@@ -2,7 +2,7 @@
 import { clamp, lerp, angleDiff, yawTo, rand, pick, DEG, TAU } from './util.js';
 import { GRENADE } from './config.js';
 
-const PREF_RANGE = { smg: 28, semi: 60, lmg: 55, bolt: 110 };
+const PREF_RANGE = { smg: 28, semi: 60, lmg: 55, bolt: 110, revolver: 18, pistol: 18 };
 
 export class BotBrain {
   constructor(soldier, game) {
@@ -82,7 +82,7 @@ export class BotBrain {
 
     if (t && t.state === 'alive') {
       const ey = s.eyeY;
-      const ax = t.pos.x, ay = t.pos.y + (t.crouchT > 0.5 ? 0.95 : 1.3), az = t.pos.z;
+      const ax = t.pos.x, ay = t.aimY, az = t.pos.z;
       const dx = ax - s.pos.x, dy = ay - ey, dz = az - s.pos.z;
       const dh = Math.hypot(dx, dz), dist = Math.hypot(dh, dy);
       const wantYaw = yawTo(dx, dz) + this.errYaw;
@@ -124,7 +124,12 @@ export class BotBrain {
       }
       sprint = false;
       inp.crouch = !this.advancing && ((this.crouchHold > 0 && Math.hypot(moveX, moveZ) < 0.3) || (wid === 'bolt' && dist > 40));
-      if (inp.crouch) { moveX *= 0.3; moveZ *= 0.3; }
+      // Снайперы и часть пулемётчиков ложатся, когда стреляют издалека
+      inp.prone = !this.advancing && this.mode !== 'revive' && dist > 45 && (wid === 'bolt' || (wid === 'lmg' && this.personality < 0.4));
+      if (inp.prone) inp.crouch = false;
+      if (inp.crouch || inp.prone) { moveX *= 0.3; moveZ *= 0.3; }
+      // Пусто в основном стволе — к пистолету
+      if (s.slot === 0 && s.mag === 0 && (s.reserve === 0 || (dist < 12 && s.reloadT > 0.6)) && s.switchT <= 0) inp.swap = true;
       inp.ads = dist > 18 || wid === 'bolt';
       // Огонь
       const aimErr = Math.abs(angleDiff(s.yaw, wantYaw - this.errYaw)) + Math.abs(s.pitch - (wantPitch - this.errPitch));
@@ -166,7 +171,10 @@ export class BotBrain {
         faceYaw = this.lookYaw;
       }
       inp.crouch = !next && this.mode === 'hold' && this.personality > 0.3;
+      inp.prone = false;
       if (this.mode === 'revive-near') inp.crouch = true;
+      // Бой окончен — обратно к основному оружию
+      if (s.slot === 1 && s.switchT <= 0 && s.ammo[s.slots[0]] && (s.ammo[s.slots[0]].mag + s.ammo[s.slots[0]].reserve) > 0 && !this.heard) inp.swap = true;
     }
 
     // Ракета/ящик/аптечка
@@ -214,7 +222,7 @@ export class BotBrain {
     cands.sort((a, b) => a[0] - b[0]);
     for (const [sc, o] of cands) {
       if (checks++ > 3) break;
-      const ty = o.pos.y + (o.crouchT > 0.5 ? 1.0 : 1.4);
+      const ty = o.aimY + 0.1;
       if (w.los(ex, ey, ez, o.pos.x, ty, o.pos.z)) { best = o; bestScore = sc; break; }
     }
     if (best && best !== this.target) {
