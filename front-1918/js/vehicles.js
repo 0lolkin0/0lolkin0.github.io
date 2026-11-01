@@ -50,7 +50,7 @@ export class Tank {
     this.maxHp = 1000;
     this.kind = 'tank';
     const g = tankGeos(team);
-    this.mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+    this.mat = game.gfx.triplanar('metal', { local: true, scale: 1.2, roughness: 0.6, metalness: 0.3, strength: 0.8, unique: true });
     this.root = new THREE.Group();
     this.hull = new THREE.Mesh(g.hull, this.mat);
     this.turret = new THREE.Group();
@@ -295,7 +295,7 @@ export class Airship {
     const hq = game.world.def.hq[team];
     this.pos = new THREE.Vector3(hq.x + rand(-40, 40), 95, hq.z + (team === 0 ? 40 : -40));
     this.yaw = hq.yaw;
-    this.mesh = new THREE.Mesh(airshipGeo(team), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+    this.mesh = new THREE.Mesh(airshipGeo(team), game.gfx.triplanar('cloth', { local: true, scale: 0.25, roughness: 0.9 }));
     this.mesh.castShadow = true;
     game.scene.add(this.mesh);
     this.bombCd = 0;
@@ -419,7 +419,7 @@ export class Biplane {
     b.box(3, 0.1, 0.9, 0, 0.2, 2.5, 0xb7ab8a);
     b.box(0.1, 1.1, 0.9, 0, 0.7, 2.6, T.banner);
     b.cyl(0.35, 0.35, 0.3, 8, 0, 0, -2.9, 0x3a3630, Math.PI / 2);
-    this.mesh = new THREE.Mesh(b.build(), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+    this.mesh = new THREE.Mesh(b.build(), game.gfx.triplanar('wood', { local: true, scale: 1, roughness: 0.8, key: 'plane' }));
     const pb = new GeoBuilder();
     pb.box(0.15, 2.6, 0.06, 0, 0, 0, 0x4a3826);
     this.prop = new THREE.Mesh(pb.build(), this.mesh.material);

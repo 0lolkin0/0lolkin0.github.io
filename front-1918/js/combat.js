@@ -43,7 +43,7 @@ export class Combat {
     this.deployables = [];
     this.flares = [];
     this.geos = {};
-    this.mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+    this.mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.1 });
     this.lastWhiz = 0;
   }
   geo(key, fn) { return this.geos[key] || (this.geos[key] = fn()); }
@@ -457,10 +457,13 @@ export class Combat {
             if (s !== d.owner) g.addScore(d.owner, SCORE.heal, null);
           }
         } else {
-          const wpn = s.weapon;
           let gave = false;
-          const cap = wpn.reserve * (s.bot ? 2 : 1);
-          if (s.reserve < cap) { s.reserve = Math.min(cap, s.reserve + Math.ceil(wpn.mag / 2)); gave = true; }
+          for (const [i, wid] of s.slots.entries()) {
+            const wpn = WEAPONS[wid], a = s.ammo[wid];
+            if (!a) continue;
+            const cap = wpn.reserve * (s.bot && i === 0 ? 2 : 1);
+            if (a.reserve < cap) { a.reserve = Math.min(cap, a.reserve + Math.ceil(wpn.mag / 2)); gave = true; }
+          }
           if (d.n % 5 === 0 && s.grenades < s.cls.grenades) { s.grenades++; gave = true; }
           if (d.n % 8 === 0 && s.gadgets < s.cls.gadgetCount) { s.gadgets++; gave = true; }
           if (gave && s !== d.owner) g.addScore(d.owner, SCORE.resupply, null);

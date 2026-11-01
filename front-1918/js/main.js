@@ -11,7 +11,9 @@ import { Combat } from './combat.js';
 import { ViewModel } from './viewmodel.js';
 import { Input } from './input.js';
 import { Hud } from './hud.js';
-import { TEAMS, CLASSES, CLASS_BY_ID, DIFFICULTY, NAMES, SQUAD_NAMES, SCORE, DEFAULT_SETTINGS, MATCH_LENGTH, rankFor, WEAPONS, GADGETS } from './config.js';
+import { Gfx, makeSky, Grass, Post } from './gfx.js';
+import { ICONS } from './icons.js';
+import { TEAMS, CLASSES, CLASS_BY_ID, DIFFICULTY, NAMES, SQUAD_NAMES, SCORE, DEFAULT_SETTINGS, MATCH_LENGTH, rankFor, WEAPONS, GADGETS, SIGHTS } from './config.js';
 import { clamp, lerp, angleDiff, yawTo, DEG, TAU, rand, pick, dirFromYawPitch, fmtTime, smoothstep } from './util.js';
 
 const $ = (id) => document.getElementById(id);
@@ -19,6 +21,9 @@ const SAVE_KEY = 'front1918-save';
 const params = new URLSearchParams(location.search);
 const AUTOPLAY = params.has('autoplay');
 const SPEED = clamp(parseFloat(params.get('speed')) || 1, 0.1, 20);
+
+// Поле зрения при заданной кратности
+const zoomFov = (fov, zoom) => (2 * Math.atan(Math.tan((fov * Math.PI) / 360) / zoom) * 180) / Math.PI;
 
 function loadSave() {
   try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; } catch (_) { return {}; }
@@ -33,16 +38,20 @@ class Game {
     this.settings = { ...DEFAULT_SETTINGS, ...(this.save.settings || {}) };
     for (const k of ['map', 'quality']) if (params.get(k)) this.settings[k] = params.get(k);
     if (!MAPS[this.settings.map]) this.settings.map = 'field';
-    this.touch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+    this.save.sights ||= {};
+    this.touch = matchMedia('(pointer: coarse)').matches;
     this.quality = this.pickQuality();
     const canvas = $('game');
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: this.quality >= 2 && !this.touch, powerPreference: 'high-performance' });
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: this.quality >= 1, powerPreference: 'high-performance' });
     this.renderer.autoClear = false;
-    this.camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 430);
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
+    this.gfx = new Gfx(this.renderer, this.quality);
+    this.camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 700);
     this.camera.rotation.order = 'YXZ';
     this.audio = new GameAudio();
     this.audio.setVolume(this.settings.volume);
-    this.viewmodel = new ViewModel();
+    this.viewmodel = new ViewModel(this.gfx);
     this.viewmodel.mainCam = this.camera;
     this.input = new Input(this);
     this.hud = new Hud(this);
@@ -53,8 +62,13 @@ class Game {
     this.viewYaw = 0;
     this.fpsAcc = 0; this.fpsN = 0; this.fpsT = 0;
     this.applyQuality();
+    this.setupIcons();
     this.bindUI();
     window.addEventListener('resize', () => this.resize());
+    document.addEventListener('pointerlockchange', () => {
+      if (!document.pointerLockElement && this.state === 'play' && !this.input.touchMode && this.player && this.player.state !== 'dead' && !AUTOPLAY) this.pause(true);
+      this.updatePcHint();
+    });
     document.addEventListener('visibilitychange', () => { if (document.hidden && this.state === 'play') this.pause(true); });
     this.resize();
     this.prepareWorld(MAPS[this.settings.map]);
@@ -67,21 +81,38 @@ class Game {
   // ---------- Качество графики ----------
   pickQuality() {
     const q = this.settings.quality;
-    if (q === 'low') return 0;
-    if (q === 'medium') return 1;
-    if (q === 'high') return 2;
-    return this.touch ? 1 : 2;
+    const map = { low: 0, medium: 1, high: 2, ultra: 3 };
+    if (q in map) return map[q];
+    return this.touch ? 2 : 3;
   }
+  // 0 — низкая, 1 — средняя, 2 — высокая (свечение, трава, мягкие тени), 3 — ультра (сглаживание MSAA, больше травы и теней)
   applyQuality() {
     const dpr = window.devicePixelRatio || 1;
-    const pr = [Math.min(dpr, 0.85), Math.min(dpr, 1.25), Math.min(dpr, 2)][this.quality];
+    const q = this.quality;
+    const pr = [Math.min(dpr, 0.8), Math.min(dpr, 1.1), Math.min(dpr, 1.5), Math.min(dpr, 2)][q];
     this.renderer.setPixelRatio(pr);
-    this.renderer.shadowMap.enabled = this.quality >= 2;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.renderer.shadowMap.enabled = q >= 1;
+    this.renderer.shadowMap.type = q >= 2 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    this.gfx.q = q;
     if (this.sun) {
-      this.sun.castShadow = this.quality >= 2;
-      this.scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
+      this.sun.castShadow = q >= 1;
+      const ms = [512, 1024, 2048, 4096][q];
+      if (this.sun.shadow.mapSize.x !== ms) {
+        this.sun.shadow.mapSize.set(ms, ms);
+        if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; }
+      }
+      const R = [40, 50, 70, 90][q];
+      const sc = this.sun.shadow.camera;
+      sc.left = -R; sc.right = R; sc.top = R; sc.bottom = -R; sc.updateProjectionMatrix();
+      this.scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => (m.needsUpdate = true)); });
     }
+    if (this.post) { this.post.dispose(); this.post = null; }
+    if (q >= 2 && this.scene) this.post = new Post(this.renderer, this.scene, this.camera, this.viewmodel.scene, this.viewmodel.camera, q);
+    if (this.scene && this.world) {
+      if (this.grass && this.grass.mesh) this.scene.remove(this.grass.mesh);
+      this.grass = new Grass(this.scene, this.world, q, this.gfx);
+    }
+    $('mood').hidden = q >= 2;
     this.resize();
   }
   resize() {
@@ -90,6 +121,7 @@ class Game {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.hud.resize();
+    if (this.post) this.post.setSize(this.renderer);
     if (this.effects) this.effects.setScale(h * this.renderer.getPixelRatio(), this.camera.fov);
     $('rotate').hidden = !(this.touch && h > w && this.state !== 'menu');
     if (this.state === 'deploy') this.drawDeployMap();
@@ -100,26 +132,32 @@ class Game {
     if (this.world && this.world.def === def) return;
     const scene = (this.scene = new THREE.Scene());
     const T = THEMES[def.theme];
-    this.world = new World(def, this.quality);
+    this.world = new World(def, this.quality, this.gfx);
     scene.add(this.world.group);
     scene.fog = new THREE.Fog(T.fog, T.fogNear, T.fogFar);
     scene.background = new THREE.Color(T.fog);
-    this.hemi = new THREE.HemisphereLight(T.hemiSky, T.hemiGround, T.hemiIntensity);
-    this.sun = new THREE.DirectionalLight(T.sun, T.sunIntensity);
+    this.hemi = new THREE.HemisphereLight(T.hemiSky, T.hemiGround, T.hemiIntensity * 0.55);
+    this.sun = new THREE.DirectionalLight(T.sun, T.sunIntensity * 1.35);
     this.sunDir = new THREE.Vector3(...T.sunDir).normalize();
-    this.sun.castShadow = this.quality >= 2;
-    this.sun.shadow.mapSize.set(2048, 2048);
-    const sc = this.sun.shadow.camera;
-    sc.left = -70; sc.right = 70; sc.top = 70; sc.bottom = -70; sc.near = 1; sc.far = 300;
-    this.sun.shadow.bias = -0.0006;
-    this.sun.shadow.normalBias = 0.04;
+    this.sun.shadow.bias = -0.0004;
+    this.sun.shadow.normalBias = 0.05;
+    this.sun.shadow.camera.near = 1; this.sun.shadow.camera.far = 400;
     scene.add(this.hemi, this.sun, this.sun.target);
-    scene.add(this.makeSky(T));
-    this.viewmodel.setLights(this.world);
+    this.sky = makeSky(T, this.quality);
+    scene.add(this.sky);
+    // Отражения и рассеянный свет от неба
+    const pm = new THREE.PMREMGenerator(this.renderer);
+    const envScene = new THREE.Scene();
+    envScene.add(makeSky(T, 1));
+    if (this.envRT) this.envRT.dispose();
+    this.envRT = pm.fromScene(envScene, 0.02, 1, 600);
+    pm.dispose();
+    scene.environment = this.envRT.texture;
+    this.viewmodel.setEnv(this.world, this.envRT.texture);
     this.effects = new Effects(scene, this.quality, T.weather, def.theme === 'winter');
     this.effects.setScale(innerHeight * this.renderer.getPixelRatio(), this.camera.fov);
     for (const sm of this.world.smokers) this.effects.emitters.push({ ...sm, size: 1 });
-    this.soldierR = new SoldierRenderer(scene, 20);
+    this.soldierR = new SoldierRenderer(scene, 20, this.gfx);
     this.flagObjs = this.world.def.flags.map((f, i) => this.makeFlag(f, this.world.flagPoles[i]));
     this.hqCloth = this.world.hqBanners.map((b) => this.makeCloth(b.x, b.y, b.z, 2.6, 1.6));
     this.planes = [new Biplane(this, 0, 0), new Biplane(this, 1, Math.PI)];
@@ -128,24 +166,7 @@ class Game {
     this.vehicles = [];
     this.tanks = [];
     this.flags = [];
-  }
-  makeSky(T) {
-    const g = new THREE.SphereGeometry(400, 24, 12);
-    const top = new THREE.Color(T.skyTop), hor = new THREE.Color(T.skyHorizon), sun = new THREE.Color(T.sun);
-    const sd = new THREE.Vector3(...T.sunDir).normalize();
-    const col = [], p = g.attributes.position, c = new THREE.Color(), v = new THREE.Vector3();
-    for (let i = 0; i < p.count; i++) {
-      v.fromBufferAttribute(p, i).normalize();
-      c.copy(hor).lerp(top, smoothstep(0.0, 0.55, v.y));
-      const s = Math.max(0, v.dot(sd));
-      c.lerp(sun, Math.pow(s, 12) * 0.6);
-      col.push(c.r, c.g, c.b);
-    }
-    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
-    m.renderOrder = -1;
-    this.sky = m;
-    return m;
+    this.applyQuality();
   }
   makeCloth(x, y, z, w = 1.9, h = 1.15) {
     const geo = new THREE.PlaneGeometry(w, h, 8, 3);
@@ -223,7 +244,7 @@ class Game {
         s.setClass(isPlayer ? (this.save.lastClass || 'assault') : classPool[(i + t * 3) % classPool.length]);
         if (t === pteam && i >= 1 && i <= 3) s.squad = true;
         this.soldiers.push(s);
-        if (isPlayer) this.player = s;
+        if (isPlayer) { this.player = s; s.sights = this.save.sights; }
       }
     }
     this.squadName = pick(SQUAD_NAMES);
@@ -346,9 +367,24 @@ class Game {
       const w = WEAPONS[c.weapon], gd = GADGETS[c.gadget];
       const b = document.createElement('button');
       b.className = 'classBtn' + (this.player.cls.id === c.id ? ' sel' : '');
-      b.innerHTML = `<b>${c.name}</b><span>${w.short} · ${gd.short} ×${c.gadgetCount} · гранат ×${c.grenades}</span><small>${c.desc}</small>`;
+      const side = WEAPONS[TEAMS[this.player.team].sidearm];
+      b.innerHTML = `<b>${c.name}</b><span>${w.short} + ${side.short.toLowerCase()} · ${gd.short} ×${c.gadgetCount} · гранат ×${c.grenades}</span><small>${c.desc}</small>`;
       b.onclick = () => { this.audio.ui(); this.player.setClass(c.id); this.save.lastClass = c.id; this.persist(); this.renderClassList(); };
       box.appendChild(b);
+    }
+    // Выбор прицела для основного оружия выбранного класса
+    const w = WEAPONS[this.player.cls.weapon];
+    const sb = $('sightList');
+    sb.innerHTML = '<span>Прицел:</span>';
+    const cur = this.save.sights[w.id] && w.sights.includes(this.save.sights[w.id]) ? this.save.sights[w.id] : w.sights[0];
+    for (const id of w.sights) {
+      const sg = SIGHTS[id];
+      const bt = document.createElement('button');
+      const z = sg.optic ? sg.zoom : w.ironZoom;
+      bt.textContent = (sg.optic ? sg.name : 'Открытый') + (sg.optic ? '' : ` ×${z}`);
+      bt.className = id === cur ? 'on' : '';
+      bt.onclick = () => { this.audio.ui(); this.save.sights[w.id] = id; this.persist(); this.renderClassList(); };
+      sb.appendChild(bt);
     }
   }
   updateDeploy() {
@@ -469,7 +505,9 @@ class Game {
     this.input.reset();
     this.input.setAds(false);
     this.input.setCrouch(false);
-    this.viewmodel.set(p.team, p.weapon.id);
+    this.input.setProne(false);
+    this.tankZoom = false;
+    this.viewmodel.set(p.team, p.weapon.id, p.sight.optic);
     this.camYaw = p.yaw;
     this.camPitch = 0;
     this.updateControls();
@@ -482,7 +520,41 @@ class Game {
     document.body.classList.toggle('touch', this.input.touchMode);
     document.body.classList.toggle('left-fire', !!this.settings.leftFire);
     const gb = document.querySelector('[data-btn="gadget"] span');
-    if (gb) gb.textContent = GADGETS[p.cls.gadget].icon;
+    if (gb && gb.dataset.k !== p.cls.gadget) { gb.innerHTML = ICONS[p.cls.gadget]; gb.dataset.k = p.cls.gadget; }
+    const ge = document.querySelector('[data-btn="gadget"] em');
+    if (ge) ge.textContent = GADGETS[p.cls.gadget].short.toLowerCase();
+    const ae = document.querySelector('[data-btn="ads"] em');
+    if (ae) ae.textContent = p.vehicle ? 'оптика' : 'прицел';
+    this.updatePcHint();
+  }
+  setupIcons() {
+    document.querySelectorAll('.cbtn[data-btn]').forEach((b) => {
+      const k = b.dataset.btn === 'fire2' ? 'fire' : b.dataset.icon || b.dataset.btn;
+      const sp = b.querySelector('span');
+      if (sp && ICONS[k]) sp.innerHTML = ICONS[k];
+    });
+  }
+  onInputMode(touch) {
+    if (this.state === 'play' || this.state === 'pause') this.updateControls();
+    document.body.classList.toggle('touch', touch);
+  }
+  // На ПК мышь захватывается щелчком; Esc отпускает её и ставит паузу
+  lockPointer() {
+    if (this.input.touchMode || AUTOPLAY) return;
+    const c = this.renderer.domElement;
+    if (document.pointerLockElement === c || !c.requestPointerLock) return;
+    try { const r = c.requestPointerLock({ unadjustedMovement: true }); if (r && r.catch) r.catch(() => { try { c.requestPointerLock(); } catch (_) {} }); } catch (_) {}
+  }
+  updatePcHint() {
+    const pc = !this.input.touchMode && this.state === 'play';
+    $('clickPlay').hidden = !(pc && !document.pointerLockElement && this.player && this.player.state !== 'dead');
+    $('pcKeys').hidden = !pc || !!this.player.vehicle;
+    $('pcKeysTank').hidden = !pc || !this.player.vehicle;
+  }
+  toggleMap(on = $('bigmap').hidden) {
+    if (this.state !== 'play') on = false;
+    $('bigmap').hidden = !on;
+    if (on) { this.hud.drawFullMap($('bigmapCv')); this.mapT = 0.3; }
   }
 
   // ---------- Пауза и меню ----------
@@ -495,7 +567,9 @@ class Game {
     this.input.reset();
     if (on && document.pointerLockElement) document.exitPointerLock();
     this.audio.suspend(on);
-    if (on) this.hud.showScores(false);
+    if (on) { this.hud.showScores(false); this.toggleMap(false); }
+    else this.lockPointer();
+    this.updatePcHint();
   }
   toMenu() {
     this.running = false;
@@ -609,9 +683,11 @@ class Game {
     const p = this.player, st = this.settings;
     if (AUTOPLAY) { if (p.state === 'alive' && p.bot) p.bot.update(dt); return; }
     const touch = this.input.touchMode;
-    let k = touch ? 0.0052 * st.sens : 0.0024 * st.sens;
+    let k = touch ? 0.0052 * st.sens : 0.0024 * (st.mouseSens || 1);
     const inv = st.invertY ? -1 : 1;
     this.lookDX = inp.dx; this.lookDY = inp.dy;
+    if (inp.ev.has('map')) this.toggleMap();
+    if (inp.ev.has('help') && !touch) { this.pcHelp = !this.pcHelp; $('pcKeys').classList.toggle('big', this.pcHelp); }
     if (p.state === 'downed') {
       if (inp.ev.has('giveup')) this.combat.finishOff(p, null);
       return;
@@ -619,8 +695,8 @@ class Game {
     if (p.state !== 'alive') return;
     if (inp.ev.has('pause')) { this.pause(true); return; }
     if (p.vehicle) { this.tankControl(dt, inp, k); return; }
-    const fovK = this.camera.fov / st.fov;
-    k *= lerp(1, fovK * 1.1, p.adsT);
+    // Чем сильнее приближение, тем медленнее обзор
+    k *= lerp(1, 1 / p.zoom, p.adsT);
     // Помощь в прицеливании на сенсоре
     let aaSlow = 1;
     const aa = touch ? st.aimAssist : 0;
@@ -652,14 +728,20 @@ class Game {
     const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw), rx = Math.cos(p.yaw), rz = -Math.sin(p.yaw);
     p.input.mx = fx * -inp.my + rx * inp.mx;
     p.input.mz = fz * -inp.my + rz * inp.mx;
+    // Бег поднимает с колена и с земли; прицел бег прерывает
+    if (inp.sprint && !inp.ads && (this.input.crouch || this.input.prone) && Math.hypot(inp.mx, inp.my) > 0.5) { this.input.setCrouch(false); this.input.setProne(false); }
     p.input.sprint = inp.sprint;
     p.input.fire = inp.fire;
     p.input.ads = inp.ads;
-    if (p.sprinting && this.input.ads && touch) this.input.setAds(false);
-    p.input.crouch = inp.crouch;
-    if (p.sprinting && this.input.crouch) this.input.setCrouch(false);
+    p.input.hold = inp.hold;
+    p.input.crouch = this.input.crouch;
+    p.input.prone = this.input.prone;
     const ev = inp.ev;
-    if (ev.has('jump')) { p.input.jump = true; if (this.input.crouch) this.input.setCrouch(false); }
+    if (ev.has('jump')) {
+      if (this.input.crouch || this.input.prone) { this.input.setCrouch(false); this.input.setProne(false); }
+      else p.input.jump = true;
+    }
+    if (ev.has('swap') || (ev.has('slot1') && p.slot !== 0) || (ev.has('slot2') && p.slot !== 1)) p.input.swap = true;
     if (ev.has('reload')) p.input.reload = true;
     if (ev.has('grenade')) p.input.grenade = true;
     if (ev.has('gadget')) p.input.gadget = true;
@@ -681,13 +763,13 @@ class Game {
       }
     }
     // Подбор патронов с павших
-    if (p.reserve < p.weapon.reserve) {
+    const pw = WEAPONS[p.slots[0]], pa = p.ammo[pw.id];
+    if (pa && pa.reserve < pw.reserve) {
       for (const s of this.soldiers) {
         if (s.state !== 'dead' || s.looted || s === p) continue;
         if ((s.pos.x - p.pos.x) ** 2 + (s.pos.z - p.pos.z) ** 2 < 2.5) {
           s.looted = true;
-          p.reserve = Math.min(p.weapon.reserve, p.reserve + p.weapon.mag);
-          this.hud.scorePop(0, null);
+          pa.reserve = Math.min(pw.reserve, pa.reserve + pw.mag);
           this.hud.announce('+патроны', true);
         }
       }
@@ -701,13 +783,13 @@ class Game {
     let best = 7 * DEG;
     for (const s of this.soldiers) {
       if (s.team === p.team || s.state !== 'alive' || s.vehicle) continue;
-      const dx = s.pos.x - ex, dz = s.pos.z - ez, dy = s.pos.y + (s.crouchT > 0.5 ? 0.9 : 1.25) - ey;
+      const dx = s.pos.x - ex, dz = s.pos.z - ez, dy = s.aimY - ey;
       const d = Math.hypot(dx, dz);
       if (d > 90 || d < 1) continue;
       const yw = yawTo(dx, dz), pt = Math.atan2(dy, d);
       const ang = Math.hypot(angleDiff(p.yaw, yw), pt - p.pitch);
       const lim = Math.max(2.5 * DEG, Math.atan2(1.4, d));
-      if (ang < Math.min(best, lim) && this.world.los(ex, ey, ez, s.pos.x, s.pos.y + 1.3, s.pos.z)) { best = ang; this._aa = { yaw: yw, pitch: pt, s }; }
+      if (ang < Math.min(best, lim) && this.world.los(ex, ey, ez, s.pos.x, s.aimY, s.pos.z)) { best = ang; this._aa = { yaw: yw, pitch: pt, s }; }
     }
     return this._aa;
   }
@@ -732,6 +814,8 @@ class Game {
   tankControl(dt, inp, k) {
     const p = this.player, t = p.vehicle, st = this.settings;
     const inv = st.invertY ? -1 : 1;
+    this.tankZoom = !!inp.ads;
+    if (this.tankZoom) k *= 0.3;
     this.camYaw -= inp.dx * k * 0.9;
     this.camPitch = clamp(this.camPitch - inp.dy * k * 0.9 * inv, -0.35, 0.6);
     t.input.throttle = -inp.my;
@@ -741,6 +825,8 @@ class Game {
     if (inp.ev.has('interact') || inp.ev.has('exit')) {
       t.exit();
       this.audio.engine(0);
+      this.tankZoom = false;
+      this.input.setAds(false);
       this.updateControls();
       p.pitch = 0;
       return;
@@ -760,6 +846,7 @@ class Game {
     t.gunDir(_d);
     const gh = this.world.raycast(m.x, m.y, m.z, _d.x, _d.y, _d.z, 250, null);
     this.tankAim = (this.tankAim || new THREE.Vector3()).copy(m).addScaledVector(_d, Math.min(gh, 250));
+    this.tankAimDist = dist < 300 ? dist : 0;
     p.yaw = t.turretYaw;
   }
 
@@ -1031,6 +1118,15 @@ class Game {
       cam.position.set(Math.sin(t) * r, 85, Math.cos(t) * r);
       cam.lookAt(0, 0, 0);
       this.viewYaw = cam.rotation.y;
+    } else if (p.vehicle && this.tankZoom) {
+      // Прицел наводчика: камера на башне, приближение ×3.5
+      const v = p.vehicle;
+      v.turret.updateWorldMatrix(true, false);
+      _v.set(0, 0.85, -0.2).applyMatrix4(v.turret.matrixWorld);
+      cam.position.copy(_v);
+      cam.rotation.set(this.camPitch + sy * 0.3, this.camYaw + sx * 0.3, 0);
+      this.viewYaw = this.camYaw;
+      fov = zoomFov(st.fov, 3.5);
     } else if (p.vehicle) {
       const v = p.vehicle;
       dirFromYawPitch(this.camYaw, this.camPitch, _d);
@@ -1059,12 +1155,18 @@ class Game {
       cam.rotation.set(0.5 + Math.sin(this.time) * 0.03, p.yaw, Math.sin(this.time * 0.7) * 0.1);
       this.viewYaw = p.yaw;
     } else {
-      const bob = p.onGround ? Math.sin(p.walkPhase * 2) * 0.035 * Math.min(1, Math.hypot(p.vel.x, p.vel.z) / 5) * (1 - p.adsT) : 0;
+      const bob = p.onGround ? Math.sin(p.walkPhase * 2) * 0.035 * Math.min(1, Math.hypot(p.vel.x, p.vel.z) / 5) * (1 - p.adsT) * (1 - p.proneT * 0.6) : 0;
       cam.position.set(p.pos.x, p.eyeY + bob, p.pos.z);
+      // Покачивание оптики: меньше присев и лёжа, почти нет при задержке дыхания (Shift)
       let sway = 0, swayY = 0;
-      if (p.weapon.scope && p.adsT > 0.8) { sway = Math.sin(this.time * 0.9) * 0.0035 * (1 - p.crouchT * 0.6); swayY = Math.sin(this.time * 1.3) * 0.0028 * (1 - p.crouchT * 0.6); }
+      if (p.sight.optic && p.adsT > 0.8) {
+        this.breath = clamp((this.breath ?? 1) + (p.input.hold && this.breath > 0.05 ? -dt / 4 : dt / 3), 0, 1);
+        const calm = p.input.hold && this.breath > 0.05 ? 0.12 : 1;
+        const k = (0.0022 + p.zoom * 0.00022) * (1 - p.crouchT * 0.45 - p.proneT * 0.7) * calm;
+        sway = Math.sin(this.time * 0.9) * k; swayY = Math.sin(this.time * 1.3) * k * 0.8;
+      }
       cam.rotation.set(p.pitch + sy + swayY, p.yaw + sx + sway, p.chargeT > 0 ? Math.sin(this.time * 14) * 0.03 : 0);
-      fov = lerp(st.fov, p.weapon.adsFov * (st.fov / 75), p.adsT);
+      fov = lerp(st.fov, zoomFov(st.fov, p.zoom), p.adsT);
       if (p.sprinting) fov += 5;
       if (p.chargeT > 0) fov += 9;
       this.viewYaw = p.yaw;
@@ -1115,11 +1217,14 @@ class Game {
     this.soldierR.update(this.soldiers, t, (this.state === 'play' || this.state === 'pause' || this.state === 'end') && p.state === 'alive' ? hideSelf : null, this.camera.position);
     const fp = (this.state === 'play' || this.state === 'end') && p.state === 'alive' && !p.vehicle;
     if (fp) {
-      if (this.viewmodel.cur && this.viewmodel.cur.wid !== p.weapon.id) this.viewmodel.set(p.team, p.weapon.id);
+      const vc = this.viewmodel.cur;
+      if (!vc || vc.wid !== p.weapon.id || vc.optic !== p.sight.optic) this.viewmodel.set(p.team, p.weapon.id, p.sight.optic);
       this.viewmodel.update(dt, p, (this.lookDX || 0) * 0.004, (this.lookDY || 0) * 0.004, this.camera.aspect);
     }
-    $('scope').hidden = !(fp && p.weapon.scope && p.adsT > 0.85);
-    this.render(fp);
+    const scopeKind = fp && p.scoped ? p.sight.reticle : this.state === 'play' && p.vehicle && this.tankZoom ? 'tank' : null;
+    this.hud.setScope(scopeKind);
+    if (!$('bigmap').hidden) { this.mapT -= dt; if (this.mapT <= 0) { this.mapT = 0.3; this.hud.drawFullMap($('bigmapCv')); } }
+    this.render(fp && this.viewmodel.visible);
     if (this.state === 'play' || this.state === 'end') this.hud.update(dt);
     this.updateContextUI();
     // Авто-качество
@@ -1134,6 +1239,15 @@ class Game {
   }
   render(fp) {
     const r = this.renderer;
+    this.gfx.time.value = performance.now() / 1000;
+    this.sky.material.uniforms.uTime.value = performance.now() / 1000;
+    if (this.grass) this.grass.update(this.camera.position);
+    if (this.post) {
+      const p = this.player;
+      const dmg = this.state === 'play' && p && p.state === 'alive' ? clamp((45 - p.hp) / 45, 0, 1) * 0.6 : 0;
+      this.post.render(fp, this.time, dmg);
+      return;
+    }
     r.clear();
     r.render(this.scene, this.camera);
     if (fp) this.viewmodel.render(r);
@@ -1205,10 +1319,11 @@ class Game {
     const check = (key) => `<input type="checkbox" data-k="${key}" ${st[key] ? 'checked' : ''}>`;
     const sel = (key, items) => `<select data-k="${key}">${items.map(([v, l]) => `<option value="${v}" ${String(st[key]) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
     box.innerHTML = [
-      row('Чувствительность обзора', range('sens', 0.3, 2.5, 0.05)),
+      row('Чувствительность обзора (экран)', range('sens', 0.3, 2.5, 0.05)),
+      row('Чувствительность мыши', range('mouseSens', 0.2, 3, 0.05)),
       row('Помощь в прицеливании', range('aimAssist', 0, 1, 0.05)),
       row('Поле зрения', range('fov', 60, 95, 1)),
-      row('Графика', sel('quality', [['auto', 'Авто'], ['low', 'Низкая'], ['medium', 'Средняя'], ['high', 'Высокая']])),
+      row('Графика', sel('quality', [['auto', 'Авто'], ['low', 'Низкая'], ['medium', 'Средняя'], ['high', 'Высокая'], ['ultra', 'Ультра']])),
       row('Громкость', range('volume', 0, 1, 0.05)),
       row('Вибрация', check('vibration')),
       row('Кнопка огня слева', check('leftFire')),
@@ -1254,6 +1369,9 @@ class Game {
     on('btnEndMenu', () => this.toMenu());
     on('btnGiveUp', () => { if (this.player.state === 'downed') this.combat.finishOff(this.player, null); });
     $('deployMap').addEventListener('click', (e) => this.deployClick(e));
+    $('minimap').addEventListener('click', (e) => { e.preventDefault(); this.toggleMap(true); });
+    $('bigmap').addEventListener('click', (e) => { e.preventDefault(); this.toggleMap(false); });
+    $('clickPlay').addEventListener('click', (e) => { e.preventDefault(); this.audio.init(); this.lockPointer(); });
     // Установка на телефон
     window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); this.installEv = e; $('btnInstall').hidden = false; });
     on('btnInstall', async () => {
@@ -1263,6 +1381,7 @@ class Game {
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     if (!standalone && ios) $('iosHint').hidden = false;
     if (!standalone && !ios && this.touch) $('androidHint').hidden = false;
+    if (!standalone && !this.touch) $('pcHint').hidden = false;
   }
 }
 

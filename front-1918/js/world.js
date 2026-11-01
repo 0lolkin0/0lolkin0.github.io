@@ -10,12 +10,32 @@ export const NAVC = 1, NAVN = SIZE / NAVC;
 export const STEP = 0.5; // на сколько можно шагнуть вверх без прыжка
 const BLOCK = 255;
 
+// Раскладывает статику по материалам (камень, кирпич, дерево...) по цвету примитива
+class MultiBuilder {
+  constructor(kindOf) { this.kindOf = kindOf; this.b = {}; }
+  get(color) { const k = this.kindOf(color); return this.b[k] || (this.b[k] = new GeoBuilder()); }
+  add(g, m, color, j) { this.get(color).add(g, m, color, j); return this; }
+  box(w, h, d, x, y, z, color, ...r) { this.get(color).box(w, h, d, x, y, z, color, ...r); return this; }
+  cyl(a, b, h, seg, x, y, z, color, ...r) { this.get(color).cyl(a, b, h, seg, x, y, z, color, ...r); return this; }
+  sphere(rad, x, y, z, color, ...r) { this.get(color).sphere(rad, x, y, z, color, ...r); return this; }
+  dome(rad, x, y, z, color, ...r) { this.get(color).dome(rad, x, y, z, color, ...r); return this; }
+  rock(rad, x, y, z, color, ...r) { this.get(color).rock(rad, x, y, z, color, ...r); return this; }
+  get vertexCount() { let n = 0; for (const k in this.b) n += this.b[k].vertexCount; return n; }
+}
+const MAT_OPTS = {
+  stone: { scale: 0.33, roughness: 0.92 }, brick: { scale: 0.5, roughness: 0.9 }, wood: { scale: 0.55, roughness: 0.85 },
+  roof: { scale: 0.5, roughness: 0.78 }, cloth: { scale: 1.3, roughness: 0.97 }, concrete: { scale: 0.4, roughness: 0.95 },
+  metal: { scale: 0.9, roughness: 0.55, metalness: 0.35 }, bark: { scale: 0.9, roughness: 0.95 },
+  leaves: { scale: 0.7, roughness: 0.9, env: 0.35, instColor: true }, plain: { tex: 'concrete', strength: 0.35, key: 'plain' },
+};
+
 function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return h >>> 0; }
 const lin2srgb = (v) => (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055);
 
 export class World {
-  constructor(def, quality = 1) {
+  constructor(def, quality = 1, gfx = null) {
     this.def = def;
+    this.gfx = gfx;
     this.theme = THEMES[def.theme];
     this.quality = quality;
     const seed = hashStr(def.id);
@@ -24,7 +44,7 @@ export class World {
     this.colliders = [];
     this.cells = Array.from({ length: GN * GN }, () => []);
     this.stamp = 1;
-    this.sb = new GeoBuilder(); // вся статика одним мешем
+    this.sb = null;
     this.footprints = [];
     this.craters = [];
     this.wireSegs = [];
@@ -34,6 +54,7 @@ export class World {
     this.group = new THREE.Group();
     this.C = {};
     for (const k of ['stone', 'brick', 'roof', 'wood', 'woodDark', 'canvas']) this.C[k] = this.theme[k];
+    this.sb = new MultiBuilder(this.kindMap());
 
     this.genTerrain();
     this.buildStructures();
@@ -712,7 +733,7 @@ export class World {
       blades.box(1.4, 6.5, 0.05, Math.sin(a) * 4.9 + Math.cos(a) * 0.7, Math.cos(a) * 4.9 - Math.sin(a) * 0.7, 0.05, 0xb8ae94, 0, 0, -a, 0.05);
     }
     blades.cyl(0.5, 0.5, 0.8, 8, 0, 0, 0, C.woodDark, Math.PI / 2);
-    const mesh = new THREE.Mesh(blades.build(), this.mat());
+    const mesh = new THREE.Mesh(blades.build(), this.mat('wood'));
     mesh.position.set(st.x + 0, y + 8.6, st.z + 3.3);
     mesh.castShadow = true;
     this.group.add(mesh);
@@ -931,7 +952,7 @@ export class World {
       }
     }
     const trunkCol = this.def.theme === 'winter' ? 0x4d3d30 : 0x4b4036;
-    const mat = this.mat();
+    const bark = this.mat('bark'), leaves = this.mat('leaves');
     for (const [type, list] of Object.entries(types)) {
       const trunk = new GeoBuilder(), crown = new GeoBuilder();
       if (type === 'dead') {
@@ -939,28 +960,34 @@ export class World {
         trunk.cyl(0.04, 0.08, 1.8, 4, 0.5, 4, 0, 0x3f3a33, 0, 0, -0.9);
         trunk.cyl(0.03, 0.07, 1.4, 4, -0.4, 4.8, 0.2, 0x3f3a33, 0.3, 0, 0.8);
       } else if (type === 'poplar') {
-        trunk.cyl(0.14, 0.26, 4, 6, 0, 2, 0, trunkCol);
-        crown.sphere(1.5, 0, 6.6, 0, 0xffffff, 1, 3.0, 1, 1, 0.08);
+        trunk.cyl(0.14, 0.26, 4, 8, 0, 2, 0, trunkCol);
+        crown.sphere(1.5, 0, 6.6, 0, 0xffffff, 1, 3.0, 1, 2, 0.08);
+        crown.sphere(0.9, 0.5, 5.2, 0.3, 0xe6e6e6, 1, 1.6, 1, 1, 0.08);
+        crown.sphere(0.8, -0.4, 8.4, -0.2, 0xf4f4f4, 1, 1.5, 1, 1, 0.08);
       } else if (type === 'oak') {
-        trunk.cyl(0.25, 0.38, 3.6, 6, 0, 1.8, 0, trunkCol);
-        crown.sphere(2.4, 0, 5.4, 0, 0xffffff, 1, 0.8, 1, 1, 0.08);
-        crown.sphere(1.8, 1.4, 4.8, 0.6, 0xf0f0f0, 1, 0.8, 1, 1, 0.08);
-        crown.sphere(1.7, -1.2, 5.0, -0.8, 0xe8e8e8, 1, 0.8, 1, 1, 0.08);
+        trunk.cyl(0.25, 0.38, 3.6, 8, 0, 1.8, 0, trunkCol);
+        trunk.cyl(0.08, 0.16, 2.2, 6, 0.7, 3.9, 0.2, trunkCol, 0, 0, -0.7);
+        trunk.cyl(0.07, 0.14, 2.0, 6, -0.6, 4.0, -0.3, trunkCol, 0.3, 0, 0.7);
+        crown.sphere(2.4, 0, 5.6, 0, 0xffffff, 1, 0.8, 1, 2, 0.08);
+        crown.sphere(1.8, 1.5, 5.0, 0.6, 0xf0f0f0, 1, 0.8, 1, 1, 0.08);
+        crown.sphere(1.7, -1.3, 5.2, -0.8, 0xe8e8e8, 1, 0.8, 1, 1, 0.08);
+        crown.sphere(1.5, 0.3, 6.6, -1.2, 0xf6f6f6, 1, 0.8, 1, 1, 0.08);
+        crown.sphere(1.4, -0.4, 6.4, 1.3, 0xececec, 1, 0.8, 1, 1, 0.08);
       } else if (type === 'pine') {
-        trunk.cyl(0.14, 0.28, 3, 6, 0, 1.5, 0, trunkCol);
+        trunk.cyl(0.14, 0.28, 3, 8, 0, 1.5, 0, trunkCol);
         const snow = this.def.theme === 'winter';
-        for (let i = 0; i < 4; i++) {
-          const rr = 2.3 - i * 0.5, yy = 2.4 + i * 1.6;
-          crown.cyl(0.05, rr, 2.4, 7, 0, yy + 1.2, 0, 0xffffff, 0, i * 0.7);
-          if (snow) crown.cyl(0.05, rr * 0.55, 1.1, 7, 0, yy + 1.85, 0, 0xffffff, 0, i * 0.7 + 0.2);
+        for (let i = 0; i < 6; i++) {
+          const rr = 2.4 - i * 0.36, yy = 2.0 + i * 1.15;
+          crown.cyl(0.05, rr, 2.0, 9, 0, yy + 1.0, 0, i % 2 ? 0xf2f2f2 : 0xffffff, 0, i * 0.7);
+          if (snow) crown.cyl(0.05, rr * 0.6, 0.9, 9, 0, yy + 1.55, 0, 0xffffff, 0, i * 0.7 + 0.2);
         }
       } else if (type === 'deadpine') {
         trunk.cyl(0.08, 0.26, 7, 6, 0, 3.5, 0, 0x3d342c);
         for (let i = 0; i < 5; i++) trunk.cyl(0.02, 0.06, 1.3, 4, 0, 2.5 + i, 0, 0x3d342c, 0, i * 1.3, 1.2);
       }
       const leafCols = T.leaves.map((h) => new THREE.Color(h));
-      const tm = new THREE.InstancedMesh(trunk.build(), mat, list.length);
-      const cm = crown.vertexCount ? new THREE.InstancedMesh(crown.build(), mat, list.length) : null;
+      const tm = new THREE.InstancedMesh(trunk.build(), bark, list.length);
+      const cm = crown.vertexCount ? new THREE.InstancedMesh(crown.build(), leaves, list.length) : null;
       const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), sc = new THREE.Vector3();
       list.forEach((t, i) => {
         e.set(r.range(-0.05, 0.05), r() * TAU, r.range(-0.05, 0.05));
@@ -974,9 +1001,9 @@ export class World {
           cm.setColorAt(i, lc);
         }
       });
-      tm.castShadow = true;
+      tm.castShadow = true; tm.receiveShadow = true;
       this.group.add(tm);
-      if (cm) { cm.castShadow = true; this.group.add(cm); }
+      if (cm) { cm.castShadow = true; cm.receiveShadow = true; this.group.add(cm); }
     }
   }
   buildRocks() {
@@ -1002,9 +1029,35 @@ export class World {
     }
     return best;
   }
-  mat() {
-    if (!this._mat) this._mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
-    return this._mat;
+  kindMap() {
+    const C = this.C, m = new Map();
+    const set = (k, ...hs) => hs.forEach((h) => m.set(h, k));
+    set('concrete', 0x8a8a82, 0x7d7d76, 0x7d7a74, 0x8c8a86, 0xe8eef2);
+    set('cloth', 0x9a8a62, 0xa79f8a, C.canvas, 0xb3974f, 0xc0a45a, 0xb8ae94);
+    set('metal', 0x5a5c4c, 0x4a4640, 0x4f4235, 0x2e2924, 0x9a7b3f, 0x8a8172);
+    set('wood', C.wood, C.woodDark, 0x7a5c3c, 0x3b3128, 0x6b4a2c);
+    set('roof', C.roof);
+    set('brick', C.brick);
+    set('stone', C.stone);
+    return (c) => m.get(c) || 'plain';
+  }
+  mat(kind = 'plain') {
+    if (!this.gfx) {
+      if (!this._mat) this._mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+      return this._mat;
+    }
+    const o = MAT_OPTS[kind] || MAT_OPTS.plain;
+    return this.gfx.triplanar(o.tex || kind, o);
+  }
+  // Плотность травы и её оттенок в точке
+  grassAt(x, z) {
+    const i = clamp(Math.round(x + HALF), 0, N), j = clamp(Math.round(z + HALF), 0, N);
+    return this.grassW[j * V + i];
+  }
+  tintAt(x, z) {
+    if (this.def.theme === 'winter') return [0.62, 0.52, 0.34];
+    const n = this.noise.get(x * 0.05 + 9, z * 0.05) * 0.5 + 0.5, m = this.noise.get(x * 0.2, z * 0.2 + 4) * 0.5 + 0.5;
+    return [lerp(0.2, 0.4, n) + m * 0.05, lerp(0.27, 0.36, n), lerp(0.07, 0.11, n)];
   }
 
   // ---------- Меши ----------
@@ -1025,9 +1078,12 @@ export class World {
       });
     }
     const winter = this.def.theme === 'winter';
+    const SPL = new Float32Array(V * V * 4), TNT = new Float32Array(V * V * 3), UV = new Float32Array(V * V * 2);
+    this.grassW = new Float32Array(V * V);
     for (let j = 0; j < V; j++) for (let i = 0; i < V; i++) {
       const k = j * V + i, x = i - HALF, z = j - HALF;
       pos[k * 3] = x; pos[k * 3 + 1] = H[k]; pos[k * 3 + 2] = z;
+      UV[k * 2] = x * 0.33; UV[k * 2 + 1] = z * 0.33;
       const n1 = nz.get(x * 0.08, z * 0.08) * 0.5 + 0.5, n2 = nz.get(x * 0.03 + 50, z * 0.03) * 0.5 + 0.5;
       c.copy(cG).lerp(cG2, n1);
       let m = 1 - smoothstep(86, 112, Math.abs(z));
@@ -1045,6 +1101,17 @@ export class World {
       const jt = 0.93 + 0.14 * this.noise.hash(i, j + 7);
       c.multiplyScalar(jt * (1 - clamp(sl * 0.12, 0, 0.25)));
       col[k * 3] = c.r; col[k * 3 + 1] = c.g; col[k * 3 + 2] = c.b;
+      // Веса слоёв: трава/снег, грязь/слякоть, дорога, камень на крутых склонах
+      let w1 = clamp(m * (winter ? 0.75 : 1.05) + (n2 - 0.5) * 0.3, 0, 1);
+      if (dep > 0.2) w1 = Math.max(w1, clamp((dep - 0.2) / 0.9, 0, 1) * (winter ? 0.8 : 1));
+      const w2 = rd < 2.8 ? 1 - smoothstep(1.2, 2.8, rd) : 0;
+      const w3 = sl > 0.55 ? clamp((sl - 0.55) * 1.3, 0, 0.8) : 0;
+      const keep = (1 - w2) * (1 - w3);
+      SPL[k * 4] = (1 - w1) * keep; SPL[k * 4 + 1] = w1 * keep; SPL[k * 4 + 2] = w2 * (1 - w3); SPL[k * 4 + 3] = w3;
+      const ao = 1 - clamp(dep / 2.2, 0, 1) * 0.45;
+      const tv = (0.9 + 0.18 * n1) * ao * jt * (1 - clamp(sl * 0.1, 0, 0.2));
+      TNT[k * 3] = tv * 1.02; TNT[k * 3 + 1] = tv; TNT[k * 3 + 2] = tv * 0.97;
+      this.grassW[k] = dep > 0.3 || w2 > 0.2 ? 0 : SPL[k * 4] * (1 - w3);
       const shade = clamp(1 + (-gx + gz) * 0.25, 0.6, 1.3);
       this.srgb[k * 3] = lin2srgb(c.r) * 255 * shade;
       this.srgb[k * 3 + 1] = lin2srgb(c.g) * 255 * shade;
@@ -1059,11 +1126,15 @@ export class World {
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    const textured = !!this.gfx;
+    g.setAttribute('color', new THREE.BufferAttribute(textured ? TNT : col, 3));
+    g.setAttribute('splat', new THREE.BufferAttribute(SPL, 4));
+    g.setAttribute('uv', new THREE.BufferAttribute(UV, 2));
     g.setIndex(new THREE.BufferAttribute(idx, 1));
     g.computeVertexNormals();
     g.computeBoundingSphere();
-    const terrain = new THREE.Mesh(g, this.mat());
+    const tmat = textured ? this.gfx.terrain(winter ? ['snow', 'slush', 'dirt', 'rock'] : ['grass', 'mud', 'dirt', 'rock'], { rough: winter ? [0.8, 0.75, 0.9, 0.85] : [0.95, 0.62, 0.9, 0.85] }) : this.mat();
+    const terrain = new THREE.Mesh(g, tmat);
     terrain.receiveShadow = true;
     this.group.add(terrain);
     this.terrainMesh = terrain;
@@ -1072,7 +1143,7 @@ export class World {
     const outer = new THREE.Shape([new THREE.Vector2(-700, -700), new THREE.Vector2(700, -700), new THREE.Vector2(700, 700), new THREE.Vector2(-700, 700)]);
     outer.holes.push(new THREE.Path([new THREE.Vector2(-HALF + 1, -HALF + 1), new THREE.Vector2(-HALF + 1, HALF - 1), new THREE.Vector2(HALF - 1, HALF - 1), new THREE.Vector2(HALF - 1, -HALF + 1)]));
     const far = new THREE.Mesh(new THREE.ShapeGeometry(outer).rotateX(-Math.PI / 2),
-      new THREE.MeshLambertMaterial({ color: winter ? 0xd8dfe6 : 0x5d6340 }));
+      new THREE.MeshStandardMaterial({ color: winter ? 0xd8dfe6 : 0x4f5636, roughness: 1 }));
     far.position.y = 4;
     this.group.add(far);
 
@@ -1086,16 +1157,21 @@ export class World {
         pb.add(disc, GeoBuilder.mat(cr.x, hy + Math.min(0.45, cr.d * 0.3), cr.z, 0, 0, 0, cr.r * 0.5, 1, cr.r * 0.5), T.water, 0.05);
       }
       if (pb.vertexCount) {
-        const pm = new THREE.Mesh(pb.build(), new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 90, specular: 0x8a8a8a }));
+        const wm = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.05, metalness: 0.1 });
+        wm.envMapIntensity = 1.4;
+        const pm = new THREE.Mesh(pb.build(), wm);
         pm.receiveShadow = true;
         this.group.add(pm);
       }
     }
 
-    const sm = new THREE.Mesh(this.sb.build(), this.mat());
-    sm.castShadow = true;
-    sm.receiveShadow = true;
-    this.group.add(sm);
+    for (const [kind, b] of Object.entries(this.sb.b)) {
+      if (!b.vertexCount) continue;
+      const sm = new THREE.Mesh(b.build(), this.mat(kind));
+      sm.castShadow = true;
+      sm.receiveShadow = true;
+      this.group.add(sm);
+    }
     this.sb = null;
   }
 

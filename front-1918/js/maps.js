@@ -3,14 +3,16 @@ const P = Math.PI;
 
 export const THEMES = {
   autumn: {
-    skyTop: 0x7f8d9b, skyHorizon: 0xbab3a3, fog: 0xaaa494, fogNear: 30, fogFar: 230,
+    skyTop: 0x6f8296, skyHorizon: 0xc2baa8, fog: 0xaba493, fogNear: 35, fogFar: 270,
+    cloudLight: 0xd9d3c6, cloudDark: 0x76746f, cloudCover: 0.42,
     sun: 0xfff0d2, sunIntensity: 1.9, sunDir: [-0.45, 0.7, -0.35], hemiSky: 0xc6c9cb, hemiGround: 0x5b4a37, hemiIntensity: 1.25,
     grass: 0x67753f, grass2: 0x7d8248, mud: 0x5f4b37, mud2: 0x4d3c2c, dark: 0x352a20, road: 0x7d6a52,
     stone: 0x9a9284, brick: 0x8c6a55, roof: 0x6e3f30, wood: 0x6b5238, woodDark: 0x4a3826, canvas: 0x8f8668,
     leaves: [0x6f7a3a, 0x8d8a3e, 0x9a7a35], water: 0x3d4a4c, weather: 'rain',
   },
   winter: {
-    skyTop: 0x93a6ba, skyHorizon: 0xd9dfe5, fog: 0xd0d7de, fogNear: 25, fogFar: 205,
+    skyTop: 0x8aa0b8, skyHorizon: 0xdde3e9, fog: 0xd2d9e0, fogNear: 30, fogFar: 240,
+    cloudLight: 0xf2f4f6, cloudDark: 0x9ba2ab, cloudCover: 0.36,
     sun: 0xfff6ea, sunIntensity: 1.7, sunDir: [0.4, 0.62, -0.5], hemiSky: 0xdfe8f0, hemiGround: 0x8d8a88, hemiIntensity: 1.35,
     grass: 0xe6ecf1, grass2: 0xd5dde5, mud: 0xb4b3ae, mud2: 0x8e877f, dark: 0x6a6058, road: 0xa79f95,
     stone: 0x8c8a86, brick: 0x7d6b60, roof: 0xdfe5ea, wood: 0x6a5137, woodDark: 0x4a3826, canvas: 0xb8b29c,

@@ -6,10 +6,12 @@ const VS = `
 attribute float size;
 attribute vec4 pcolor;
 varying vec4 vColor;
+varying float vRot;
 uniform float scale;
 #include <fog_pars_vertex>
 void main() {
   vColor = pcolor;
+  vRot = fract(sin(float(gl_VertexID) * 12.9898) * 43758.5453) * 6.2832;
   vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
   gl_PointSize = clamp(size * scale / max(0.1, -mvPosition.z), 0.0, 600.0);
   gl_Position = projectionMatrix * mvPosition;
@@ -17,16 +19,47 @@ void main() {
 }`;
 const FS = `
 varying vec4 vColor;
+varying float vRot;
+uniform sampler2D map;
 #include <fog_pars_fragment>
 void main() {
   vec2 c = gl_PointCoord - 0.5;
-  float d = dot(c, c);
-  if (d > 0.25) discard;
-  float a = vColor.a * (1.0 - smoothstep(0.05, 0.25, d));
-  gl_FragColor = vec4(vColor.rgb, a);
+  float cs = cos(vRot), sn = sin(vRot);
+  vec2 rc = vec2(c.x * cs - c.y * sn, c.x * sn + c.y * cs) + 0.5;
+  vec4 t = texture2D(map, rc);
+  float a = vColor.a * t.a;
+  if (a < 0.004) discard;
+  gl_FragColor = vec4(vColor.rgb * mix(0.75, 1.15, t.r), a);
+  #include <tonemapping_fragment>
   #include <fog_fragment>
   #include <colorspace_fragment>
 }`;
+// Мягкое облачко для дыма, пыли и огня
+let PUFF = null;
+function puffTexture() {
+  if (PUFF) return PUFF;
+  const S = 128, cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  const c = cv.getContext('2d');
+  const img = c.createImageData(S, S);
+  const rnd = (x, y) => { const v = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return v - Math.floor(v); };
+  const vn = (x, y) => {
+    const i = Math.floor(x), j = Math.floor(y), u = x - i, v = y - j, su = u * u * (3 - 2 * u), sv = v * v * (3 - 2 * v);
+    const a = rnd(i, j), b = rnd(i + 1, j), cc = rnd(i, j + 1), d = rnd(i + 1, j + 1);
+    return a + (b - a) * su + (cc - a) * sv + (a - b - cc + d) * su * sv;
+  };
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const dx = (x - S / 2) / (S / 2), dy = (y - S / 2) / (S / 2), d = Math.sqrt(dx * dx + dy * dy);
+    const n = vn(x / 14, y / 14) * 0.5 + vn(x / 7, y / 7) * 0.3 + vn(x / 3.5, y / 3.5) * 0.2;
+    const fall = Math.max(0, 1 - d);
+    const a = Math.max(0, Math.min(1, fall * fall * (0.55 + n * 0.9) * 1.4 - 0.05));
+    const o = (y * S + x) * 4;
+    img.data[o] = img.data[o + 1] = img.data[o + 2] = 120 + n * 135; img.data[o + 3] = a * 255;
+  }
+  c.putImageData(img, 0, 0);
+  PUFF = new THREE.CanvasTexture(cv);
+  return PUFF;
+}
 
 class Particles {
   constructor(cap, additive) {
@@ -52,10 +85,11 @@ class Particles {
     g.setAttribute('size', this.aSize);
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);
     this.mat = new THREE.ShaderMaterial({
-      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { scale: { value: 500 } }]),
+      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { scale: { value: 500 }, map: { value: null } }]),
       vertexShader: VS, fragmentShader: FS, transparent: true, depthWrite: false,
       blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, fog: !additive,
     });
+    this.mat.uniforms.map.value = puffTexture();
     this.points = new THREE.Points(g, this.mat);
     this.points.frustumCulled = false;
     this.points.renderOrder = additive ? 3 : 2;
@@ -114,6 +148,7 @@ class Tracers {
     this.mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({
       vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false,
     }));
+    this.mesh.material.color.setScalar(2.2);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 4;
   }
