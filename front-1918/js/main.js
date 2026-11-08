@@ -11,7 +11,7 @@ import { Combat } from './combat.js';
 import { ViewModel } from './viewmodel.js';
 import { Input } from './input.js';
 import { Hud } from './hud.js';
-import { Gfx, makeSky, Grass, Post } from './gfx.js';
+import { Gfx, makeSky, Grass, Post, QUALITY } from './gfx.js';
 import { ICONS } from './icons.js';
 import { TEAMS, CLASSES, CLASS_BY_ID, DIFFICULTY, NAMES, SQUAD_NAMES, SCORE, DEFAULT_SETTINGS, MATCH_LENGTH, rankFor, WEAPONS, GADGETS, SIGHTS } from './config.js';
 import { clamp, lerp, angleDiff, yawTo, DEG, TAU, rand, pick, dirFromYawPitch, fmtTime, smoothstep } from './util.js';
@@ -63,10 +63,12 @@ class Game {
     this.fpsAcc = 0; this.fpsN = 0; this.fpsT = 0;
     this.applyQuality();
     this.setupIcons();
+    $('fps').hidden = !this.settings.showFps;
     this.bindUI();
     window.addEventListener('resize', () => this.resize());
     document.addEventListener('pointerlockchange', () => {
-      if (!document.pointerLockElement && this.state === 'play' && !this.input.touchMode && this.player && this.player.state !== 'dead' && !AUTOPLAY) this.pause(true);
+      if (!document.pointerLockElement && this.state === 'play' && !this.input.touchMode && this.player && this.player.state === 'alive' && !AUTOPLAY && !this.unlocking) this.pause(true);
+      this.unlocking = false;
       this.updatePcHint();
     });
     document.addEventListener('visibilitychange', () => { if (document.hidden && this.state === 'play') this.pause(true); });
@@ -83,37 +85,62 @@ class Game {
     const q = this.settings.quality;
     const map = { low: 0, medium: 1, high: 2, ultra: 3 };
     if (q in map) return map[q];
-    return this.touch ? 2 : 3;
+    return this.touch ? 1 : 2;
   }
-  // 0 — низкая, 1 — средняя, 2 — высокая (свечение, трава, мягкие тени), 3 — ультра (сглаживание MSAA, больше травы и теней)
+  // Пресеты из QUALITY. Поверх них — динамическое разрешение: если кадров мало, картинка чуть мягче, но игра плавная
   applyQuality() {
-    const dpr = window.devicePixelRatio || 1;
-    const q = this.quality;
-    const pr = [Math.min(dpr, 0.8), Math.min(dpr, 1.1), Math.min(dpr, 1.5), Math.min(dpr, 2)][q];
-    this.renderer.setPixelRatio(pr);
-    this.renderer.shadowMap.enabled = q >= 1;
-    this.renderer.shadowMap.type = q >= 2 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
-    this.gfx.q = q;
+    const Q = QUALITY[this.quality];
+    this.gfx.q = this.quality;
+    this.drs = this.drs || 1;
+    this.applyPixelRatio();
+    this.renderer.shadowMap.enabled = Q.shadow > 0;
+    this.renderer.shadowMap.type = Q.soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    this.renderer.shadowMap.autoUpdate = false;
+    this.renderer.shadowMap.needsUpdate = true;
     if (this.sun) {
-      this.sun.castShadow = q >= 1;
-      const ms = [512, 1024, 2048, 4096][q];
-      if (this.sun.shadow.mapSize.x !== ms) {
-        this.sun.shadow.mapSize.set(ms, ms);
+      this.sun.castShadow = Q.shadow > 0;
+      if (Q.shadow && this.sun.shadow.mapSize.x !== Q.shadow) {
+        this.sun.shadow.mapSize.set(Q.shadow, Q.shadow);
         if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; }
       }
-      const R = [40, 50, 70, 90][q];
-      const sc = this.sun.shadow.camera;
+      const R = Q.shadowR || 40, sc = this.sun.shadow.camera;
       sc.left = -R; sc.right = R; sc.top = R; sc.bottom = -R; sc.updateProjectionMatrix();
       this.scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => (m.needsUpdate = true)); });
     }
     if (this.post) { this.post.dispose(); this.post = null; }
-    if (q >= 2 && this.scene) this.post = new Post(this.renderer, this.scene, this.camera, this.viewmodel.scene, this.viewmodel.camera, q);
+    if (Q.post && this.scene) this.post = new Post(this.renderer, this.scene, this.camera, this.viewmodel.scene, this.viewmodel.camera, this.quality);
     if (this.scene && this.world) {
       if (this.grass && this.grass.mesh) this.scene.remove(this.grass.mesh);
-      this.grass = new Grass(this.scene, this.world, q, this.gfx);
+      this.grass = new Grass(this.scene, this.world, this.quality, this.gfx);
     }
-    $('mood').hidden = q >= 2;
+    $('mood').hidden = !!Q.post;
     this.resize();
+  }
+  applyPixelRatio() {
+    const dpr = window.devicePixelRatio || 1;
+    const pr = Math.min(dpr, QUALITY[this.quality].pr) * this.drs;
+    if (Math.abs(this.renderer.getPixelRatio() - pr) < 0.01) return;
+    this.renderer.setPixelRatio(pr);
+    if (this.post) this.post.setSize(this.renderer);
+    if (this.effects) this.effects.setScale(innerHeight * pr, this.camera.fov);
+  }
+  // Раз в секунду: средний кадр → подстраиваем разрешение; если не помогает при «Авто» — снижаем пресет
+  perfTick(dt) {
+    this.fpsAcc += dt; this.fpsN++;
+    if (this.fpsAcc < 1) return;
+    const fps = this.fpsN / this.fpsAcc;
+    this.fpsAcc = 0; this.fpsN = 0;
+    this.fps = fps;
+    if (this.settings.showFps) $('fps').textContent = Math.round(fps) + ' FPS · ' + Math.round(this.renderer.getPixelRatio() * 100) + '%';
+    if (this.state !== 'play') return;
+    const old = this.drs;
+    if (fps < 48) this.drs = Math.max(0.55, this.drs - (fps < 30 ? 0.15 : 0.08));
+    else if (fps > 58 && this.drs < 1) this.drs = Math.min(1, this.drs + 0.05);
+    if (this.drs !== old) this.applyPixelRatio();
+    this.slowSec = fps < 34 && this.drs <= 0.56 ? (this.slowSec || 0) + 1 : 0;
+    if (this.settings.quality === 'auto' && this.slowSec >= 4 && this.quality > 0) {
+      this.quality--; this.drs = 0.85; this.slowSec = 0; this.applyQuality();
+    }
   }
   resize() {
     const w = innerWidth, h = innerHeight;
@@ -349,9 +376,11 @@ class Game {
     this.state = 'deploy';
     this.input.enabled = false;
     this.input.reset();
-    document.exitPointerLock && document.pointerLockElement && document.exitPointerLock();
+    this.unlockPointer();
     $('hud').hidden = true;
     $('deploy').hidden = false;
+    $('clickPlay').hidden = true;
+    $('bigmap').hidden = true;
     $('pause').hidden = true;
     $('rotate').hidden = !(this.touch && innerHeight > innerWidth);
     this.audio.engine(0);
@@ -540,14 +569,24 @@ class Game {
   }
   // На ПК мышь захватывается щелчком; Esc отпускает её и ставит паузу
   lockPointer() {
-    if (this.input.touchMode || AUTOPLAY) return;
+    if (this.input.touchMode || AUTOPLAY || this.state !== 'play' || !this.player || this.player.state !== 'alive') return;
     const c = this.renderer.domElement;
     if (document.pointerLockElement === c || !c.requestPointerLock) return;
+    // Не дублируем запрос, пока предыдущий не отработал: повторный может сбросить захват и поставить паузу
+    const now = performance.now();
+    if (this.lockReqT && now - this.lockReqT < 600) return;
+    this.lockReqT = now;
     try { const r = c.requestPointerLock({ unadjustedMovement: true }); if (r && r.catch) r.catch(() => { try { c.requestPointerLock(); } catch (_) {} }); } catch (_) {}
+  }
+  // Отпустить мышь (ранен, смерть, экран высадки) — без паузы
+  unlockPointer() {
+    if (!document.pointerLockElement) return;
+    this.unlocking = true;
+    document.exitPointerLock();
   }
   updatePcHint() {
     const pc = !this.input.touchMode && this.state === 'play';
-    $('clickPlay').hidden = !(pc && !document.pointerLockElement && this.player && this.player.state !== 'dead');
+    $('clickPlay').hidden = !(pc && !document.pointerLockElement && this.player && this.player.state === 'alive' && $('bigmap').hidden);
     $('pcKeys').hidden = !pc || !!this.player.vehicle;
     $('pcKeysTank').hidden = !pc || !this.player.vehicle;
   }
@@ -642,6 +681,9 @@ class Game {
       $('downed').hidden = false;
       $('killerName').textContent = attacker && attacker !== t ? `Вас ранил: ${attacker.name}` : 'Вы тяжело ранены';
       this.vibrate(120);
+      // На ПК отпускаем мышь, чтобы можно было нажать «Сдаться»
+      this.unlockPointer();
+      this.updatePcHint();
     }
   }
   onDeath(t) {
@@ -652,6 +694,7 @@ class Game {
       this.deathT = 2.2;
       this.input.enabled = false;
       this.input.reset();
+      this.updatePcHint();
     }
   }
   onRevived(t, medic) {
@@ -660,6 +703,7 @@ class Game {
       this.hud.announce(`Вас поднял ${medic.name}`, true);
       this.input.enabled = true;
       this.camPitch = 0;
+      this.updatePcHint();
     }
     if (medic.isPlayer) this.hud.announce(`Вы подняли: ${t.name}`, true);
   }
@@ -689,7 +733,7 @@ class Game {
     if (inp.ev.has('map')) this.toggleMap();
     if (inp.ev.has('help') && !touch) { this.pcHelp = !this.pcHelp; $('pcKeys').classList.toggle('big', this.pcHelp); }
     if (p.state === 'downed') {
-      if (inp.ev.has('giveup')) this.combat.finishOff(p, null);
+      if (inp.ev.has('giveup') || inp.ev.has('jump')) this.combat.finishOff(p, null);
       return;
     }
     if (p.state !== 'alive') return;
@@ -1192,7 +1236,8 @@ class Game {
   // ---------- Цикл ----------
   loop(now) {
     requestAnimationFrame((t) => this.loop(t));
-    let dt = Math.min(0.05, (now - this.last) / 1000);
+    const rawDt = Math.min(1, (now - this.last) / 1000);
+    let dt = Math.min(0.05, rawDt);
     this.last = now;
     if (this.state === 'menu') {
       this.updateCamera(dt);
@@ -1227,21 +1272,16 @@ class Game {
     this.render(fp && this.viewmodel.visible);
     if (this.state === 'play' || this.state === 'end') this.hud.update(dt);
     this.updateContextUI();
-    // Авто-качество
-    if (this.settings.quality === 'auto' && this.state === 'play') {
-      this.fpsAcc += dt; this.fpsN++;
-      if (this.fpsAcc > 4) {
-        const fps = this.fpsN / this.fpsAcc;
-        this.fpsAcc = 0; this.fpsN = 0;
-        if (fps < 38 && this.quality > 0) { this.quality--; this.applyQuality(); }
-      }
-    }
+    this.perfTick(rawDt);
   }
   render(fp) {
     const r = this.renderer;
     this.gfx.time.value = performance.now() / 1000;
     this.sky.material.uniforms.uTime.value = performance.now() / 1000;
     if (this.grass) this.grass.update(this.camera.position);
+    // Тени обновляем не каждый кадр (на средних и высоких настройках)
+    this.frameN = (this.frameN || 0) + 1;
+    if (this.renderer.shadowMap.enabled) this.renderer.shadowMap.needsUpdate = this.frameN % (QUALITY[this.quality].shadowEvery || 1) === 0;
     if (this.post) {
       const p = this.player;
       const dmg = this.state === 'play' && p && p.state === 'alive' ? clamp((45 - p.hp) / 45, 0, 1) * 0.6 : 0;
@@ -1324,6 +1364,7 @@ class Game {
       row('Помощь в прицеливании', range('aimAssist', 0, 1, 0.05)),
       row('Поле зрения', range('fov', 60, 95, 1)),
       row('Графика', sel('quality', [['auto', 'Авто'], ['low', 'Низкая'], ['medium', 'Средняя'], ['high', 'Высокая'], ['ultra', 'Ультра']])),
+      row('Показывать FPS', check('showFps')),
       row('Громкость', range('volume', 0, 1, 0.05)),
       row('Вибрация', check('vibration')),
       row('Кнопка огня слева', check('leftFire')),
@@ -1336,7 +1377,8 @@ class Game {
         st[k] = v;
         if (el.nextElementSibling && el.nextElementSibling.tagName === 'OUTPUT') el.nextElementSibling.textContent = v;
         if (k === 'volume') this.audio.setVolume(v);
-        if (k === 'quality') { this.quality = this.pickQuality(); this.applyQuality(); }
+        if (k === 'quality') { this.quality = this.pickQuality(); this.drs = 1; this.applyQuality(); }
+        if (k === 'showFps') $('fps').hidden = !v;
         if (k === 'leftFire') this.updateControls();
         this.persist();
       };

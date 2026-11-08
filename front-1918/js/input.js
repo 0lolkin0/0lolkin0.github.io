@@ -2,7 +2,7 @@
 // Режим переключается сам: двинули мышью или нажали клавишу — ПК, коснулись экрана — телефон
 const KEY_EVENTS = {
   Space: 'jump', KeyR: 'reload', KeyG: 'grenade', KeyF: 'gadget', KeyV: 'melee', KeyQ: 'melee', KeyE: 'interact', KeyX: 'exit',
-  KeyP: 'pause', KeyM: 'map', Digit1: 'slot1', Digit2: 'slot2', KeyH: 'help',
+  KeyP: 'pause', KeyM: 'map', Digit1: 'slot1', Digit2: 'slot2', KeyH: 'help', Enter: 'giveup',
 };
 
 export class Input {
@@ -28,12 +28,20 @@ export class Input {
     window.addEventListener('pointermove', (e) => this.move(e), opts);
     window.addEventListener('pointerup', (e) => this.up(e), opts);
     window.addEventListener('pointercancel', (e) => this.up(e), opts);
+    // Кнопки мыши — через mousedown/mouseup: pointerdown не приходит, если другая кнопка уже зажата
+    window.addEventListener('mousedown', (e) => this.mouseDown(e));
+    window.addEventListener('mouseup', (e) => this.mouseUp(e));
     window.addEventListener('keydown', (e) => this.key(e, true));
     window.addEventListener('keyup', (e) => this.key(e, false));
     window.addEventListener('contextmenu', (e) => { if (this.enabled) e.preventDefault(); });
     window.addEventListener('wheel', (e) => { if (this.enabled && document.pointerLockElement) { this.events.add('swap'); e.preventDefault(); } }, opts);
     document.addEventListener('mousemove', (e) => {
-      if (document.pointerLockElement && this.enabled) { this.lookDX += e.movementX * 0.55; this.lookDY += e.movementY * 0.55; }
+      if (document.pointerLockElement && this.enabled) {
+        this.lookDX += e.movementX * 0.55; this.lookDY += e.movementY * 0.55;
+        // Только подхватываем зажатые кнопки; отпускание — по mouseup (некоторые браузеры шлют движения с buttons = 0)
+        if (e.buttons & 1) this.mouseFire = true;
+        if (e.buttons & 2) this.mouseAds = true;
+      }
     });
     window.addEventListener('blur', () => this.reset());
   }
@@ -57,15 +65,8 @@ export class Input {
     if (e.pointerType === 'touch') this.setMode(true);
     if (!this.enabled) return;
     if (e.target.closest && e.target.closest('.screen, .noinput')) return;
+    if (e.pointerType === 'mouse') return;
     const btn = this.btnOf(e);
-    if (e.pointerType === 'mouse') {
-      if (btn) return;
-      if (!document.pointerLockElement) { this.g.lockPointer && this.g.lockPointer(); return; }
-      if (e.button === 0) { this.mouseFire = true; this.fireLatch = true; }
-      if (e.button === 2) this.mouseAds = true;
-      e.preventDefault();
-      return;
-    }
     e.preventDefault();
     if (btn) {
       const b = btn.dataset.btn;
@@ -128,12 +129,20 @@ export class Input {
       this.look.x = e.clientX; this.look.y = e.clientY;
     }
   }
+  mouseDown(e) {
+    if (this.touchMode || !this.enabled) return;
+    if (e.target.closest && e.target.closest('.screen, .noinput, [data-btn], button, #clickPlay')) return;
+    if (!document.pointerLockElement) { this.g.lockPointer && this.g.lockPointer(); return; }
+    if (e.button === 0) { this.mouseFire = true; this.fireLatch = true; }
+    if (e.button === 2) this.mouseAds = true;
+    e.preventDefault();
+  }
+  mouseUp(e) {
+    if (e.button === 0) this.mouseFire = false;
+    if (e.button === 2) this.mouseAds = false;
+  }
   up(e) {
-    if (e.pointerType === 'mouse') {
-      if (e.button === 0) this.mouseFire = false;
-      if (e.button === 2) this.mouseAds = false;
-      return;
-    }
+    if (e.pointerType === 'mouse') return;
     if (this.joy && e.pointerId === this.joy.id) {
       this.joy = null; this.moveX = 0; this.moveY = 0; this.sprint = false;
       if (this.joyEl) this.joyEl.hidden = true;
@@ -155,6 +164,12 @@ export class Input {
     const k = e.code;
     if (down) this.setMode(false);
     if (!this.enabled) return;
+    // Alt — лечь; гасим действие браузера, чтобы Alt не уводил фокус в меню
+    if (k === 'AltLeft' || k === 'AltRight') {
+      e.preventDefault();
+      if (down && !e.repeat) this.setProne(!this.prone);
+      return;
+    }
     if (k === 'Tab') { e.preventDefault(); this.g.hud.showScores(down); return; }
     if (down) {
       if (this.keys.has(k)) return;
@@ -162,7 +177,6 @@ export class Input {
       if (KEY_EVENTS[k]) this.events.add(KEY_EVENTS[k]);
       if (k === 'Escape') this.events.add('pause');
       if (k === 'KeyC') this.setCrouch(!this.crouch);
-      if (k === 'KeyZ') this.setProne(!this.prone);
       if (k === 'ControlLeft') this.setCrouch(true);
       if (k === 'Space' && this.crouch) this.setCrouch(false);
       if (k === 'Space' && this.prone) this.setProne(false);

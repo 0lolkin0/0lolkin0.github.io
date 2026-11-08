@@ -9,6 +9,14 @@ import { OutputPass } from './addons/postprocessing/OutputPass.js';
 import { FXAAShader } from './addons/shaders/FXAAShader.js';
 import { rng, clamp, smoothstep, lerp } from './util.js';
 
+// Пресеты качества: разрешение, тени (размер карты, радиус, как часто обновлять), трава, пост-обработка
+export const QUALITY = [
+  { name: 'low', pr: 0.75, shadow: 0, grass: null, post: false, hq: false, clouds: 3 },
+  { name: 'medium', pr: 1.0, shadow: 1024, soft: false, shadowR: 45, shadowEvery: 3, grass: { r: 20, d: 0.45, cap: 5000 }, post: false, hq: false, clouds: 4 },
+  { name: 'high', pr: 1.0, shadow: 2048, soft: true, shadowR: 60, shadowEvery: 2, grass: { r: 30, d: 0.8, cap: 14000 }, post: true, bloom: 0.5, hq: true, clouds: 5 },
+  { name: 'ultra', pr: 1.5, shadow: 2048, soft: true, shadowR: 75, shadowEvery: 1, grass: { r: 42, d: 1.1, cap: 30000 }, post: true, bloom: 0.75, hq: true, clouds: 6 },
+];
+
 // ---------- Бесшовный шум ----------
 function noiseLayer(size, cells, seed) {
   const r = rng(seed);
@@ -324,6 +332,44 @@ const DETAIL_RECIPES = {
   },
 };
 
+// ---------- Листва ----------
+// Светлые листья/хвоя на прозрачном фоне: оттенок задаёт цвет экземпляра дерева
+function foliageTexture(kind) {
+  const S = 256;
+  const [cv, c] = canvasOf(S);
+  const r = rng(kind === 'needles' ? 71 : 37);
+  c.clearRect(0, 0, S, S);
+  if (kind === 'needles') {
+    for (let k = 0; k < 9; k++) {
+      const x0 = S * (0.15 + r() * 0.7), y0 = S * (0.1 + r() * 0.3), len = S * (0.45 + r() * 0.35), ang = Math.PI / 2 + (r() - 0.5) * 0.7;
+      c.strokeStyle = '#8a7a62'; c.lineWidth = 2.5;
+      const x1 = x0 + Math.cos(ang) * len, y1 = y0 + Math.sin(ang) * len;
+      c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+      for (let i = 0; i < 46; i++) {
+        const t = i / 46, px = x0 + (x1 - x0) * t, py = y0 + (y1 - y0) * t, side = i % 2 ? 1 : -1, nl = S * 0.09 * (1 - t * 0.5);
+        const na = ang + side * (0.9 + r() * 0.3);
+        const g = 170 + r() * 70;
+        c.strokeStyle = `rgb(${g * 0.85},${g},${g * 0.8})`; c.lineWidth = 1.6;
+        c.beginPath(); c.moveTo(px, py); c.lineTo(px + Math.cos(na) * nl, py + Math.sin(na) * nl); c.stroke();
+      }
+    }
+  } else {
+    for (let i = 0; i < 260; i++) {
+      const a = r() * Math.PI * 2, d = Math.sqrt(r()) * S * 0.44;
+      const x = S / 2 + Math.cos(a) * d, y = S / 2 + Math.sin(a) * d, l = 9 + r() * 10, w = l * 0.45, rot = r() * Math.PI * 2;
+      const g = 165 + r() * 90;
+      c.fillStyle = `rgb(${g * 0.92},${g},${g * 0.78})`;
+      c.save(); c.translate(x, y); c.rotate(rot);
+      c.beginPath(); c.moveTo(-l, 0); c.quadraticCurveTo(0, -w, l, 0); c.quadraticCurveTo(0, w, -l, 0); c.fill();
+      c.strokeStyle = 'rgba(60,70,40,0.35)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(-l, 0); c.lineTo(l, 0); c.stroke();
+      c.restore();
+    }
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 // ---------- Менеджер ----------
 export class Gfx {
   constructor(renderer, quality) {
@@ -343,6 +389,18 @@ export class Gfx {
     const key = 'd_' + kind;
     if (!this.cache[key]) this.cache[key] = finishTex(DETAIL_RECIPES[kind](kind === 'fabric' ? 128 : 256, 500 + kind.charCodeAt(0) * 7), false, this.aniso);
     return this.cache[key];
+  }
+  foliage(kind) {
+    const key = 'f_' + kind;
+    if (this.mats[key]) return this.mats[key];
+    const m = new THREE.MeshLambertMaterial({ map: foliageTexture(kind), alphaTest: 0.5, side: THREE.DoubleSide, vertexColors: true });
+    // Нормали листвы смотрят наружу от центра кроны — обе стороны карточки освещаются одинаково
+    m.onBeforeCompile = (sh) => {
+      sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin.replaceAll('normal *= faceDirection;', ''));
+    };
+    m.customProgramCacheKey = () => 'foliage';
+    this.mats[key] = m;
+    return m;
   }
   groundNormal() {
     if (!this.cache.gn) this.cache.gn = finishTex(normalTexture(256, 77), false, this.aniso);
@@ -393,8 +451,10 @@ export class Gfx {
   // Рельеф: четыре слоя по весам вершин + цвет вершин как общий оттенок и затенение
   terrain(layers, opts = {}) {
     const texs = layers.map((k) => this.terrainTex(k));
-    const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0, normalMap: this.groundNormal() });
+    const hq = QUALITY[this.q].hq;
+    const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0, normalMap: hq ? this.groundNormal() : null });
     m.normalScale.set(0.9, 0.9);
+    m.defines = { TERRAIN_HQ: hq ? 1 : 0 };
     m.envMapIntensity = 0.45;
     const rough = opts.rough || [0.95, 0.7, 0.9, 0.85];
     m.onBeforeCompile = (sh) => {
@@ -408,10 +468,15 @@ export class Gfx {
         .replace('#include <common>', '#include <common>\nuniform sampler2D tL0; uniform sampler2D tL1; uniform sampler2D tL2; uniform sampler2D tL3; uniform vec4 uRough;\nvarying vec4 vSplat;\nvarying vec2 vGround;')
         .replace('#include <map_fragment>', `
           vec2 uvA = vGround * 0.21;
-          vec2 uvB = vGround * 0.043 + vec2(0.37, 0.11);
           vec4 sw = vSplat / max(1e-3, dot(vSplat, vec4(1.0)));
-          vec3 c0 = mix(texture2D(tL0, uvA).rgb, texture2D(tL0, uvB).rgb, 0.4);
-          vec3 c1 = mix(texture2D(tL1, uvA).rgb, texture2D(tL1, uvB).rgb, 0.4);
+          #if TERRAIN_HQ == 1
+            vec2 uvB = vGround * 0.043 + vec2(0.37, 0.11);
+            vec3 c0 = mix(texture2D(tL0, uvA).rgb, texture2D(tL0, uvB).rgb, 0.4);
+            vec3 c1 = mix(texture2D(tL1, uvA).rgb, texture2D(tL1, uvB).rgb, 0.4);
+          #else
+            vec3 c0 = texture2D(tL0, uvA).rgb;
+            vec3 c1 = texture2D(tL1, uvA).rgb;
+          #endif
           vec3 c2 = texture2D(tL2, uvA).rgb;
           vec3 c3 = texture2D(tL3, uvA * 0.7).rgb;
           diffuseColor.rgb *= c0 * sw.x + c1 * sw.y + c2 * sw.z + c3 * sw.w;`)
@@ -472,7 +537,7 @@ export function makeSky(T, quality) {
       uCloudLight: { value: c(T.cloudLight || 0xe8e4dc) }, uCloudDark: { value: c(T.cloudDark || 0x8a8a88) },
       uTime: { value: 0 }, uCover: { value: T.cloudCover ?? 0.45 },
     },
-    defines: { CLOUD_OCT: quality >= 2 ? 6 : 4 },
+    defines: { CLOUD_OCT: QUALITY[quality].clouds },
     vertexShader: SKY_VS, fragmentShader: SKY_FS, side: THREE.BackSide, depthWrite: false, fog: false,
   });
   const m = new THREE.Mesh(new THREE.SphereGeometry(500, 32, 16), mat);
@@ -510,7 +575,7 @@ export class Grass {
   constructor(scene, world, quality, gfx) {
     this.world = world;
     this.dry = world.def.theme === 'winter';
-    const cfg = [null, { r: 22, d: 0.55, cap: 6000 }, { r: 36, d: 1.0, cap: 22000 }, { r: 52, d: 1.35, cap: 50000 }][quality];
+    const cfg = QUALITY[quality].grass;
     this.enabled = !!cfg;
     if (!cfg) return;
     this.R = cfg.r; this.density = cfg.d * (this.dry ? 0.35 : 1); this.cap = cfg.cap;
@@ -528,13 +593,15 @@ export class Grass {
     g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
     g.setIndex(idx);
-    const mat = new THREE.MeshStandardMaterial({ map: grassTuftTexture(this.dry), alphaTest: 0.45, side: THREE.DoubleSide, roughness: 1, metalness: 0 });
-    mat.envMapIntensity = 0.3;
+    // Ламберт дешевле PBR, а для травы разницы не видно
+    const mat = new THREE.MeshLambertMaterial({ map: grassTuftTexture(this.dry), alphaTest: 0.45, side: THREE.DoubleSide });
     this.uCam = { value: new THREE.Vector3() };
     this.uR = { value: this.R };
     const time = gfx.time;
     mat.onBeforeCompile = (sh) => {
       sh.uniforms.uTime = time; sh.uniforms.uCam = this.uCam; sh.uniforms.uR = this.uR;
+      // Нормаль травинки всегда «вверх» с обеих сторон: иначе изнанка у Ламберта получается чёрной
+      sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin.replaceAll('normal *= faceDirection;', ''));
       sh.vertexShader = sh.vertexShader
         .replace('#include <common>', '#include <common>\nuniform float uTime; uniform vec3 uCam; uniform float uR;')
         .replace('#include <begin_vertex>', `#include <begin_vertex>
@@ -550,7 +617,7 @@ export class Grass {
     this.mesh = new THREE.InstancedMesh(g, mat, this.cap);
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;
-    this.mesh.receiveShadow = true;
+    this.mesh.receiveShadow = quality >= 2;
     this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(this.cap * 3), 3);
     scene.add(this.mesh);
     this.chunks = new Map();
@@ -632,23 +699,24 @@ const GradeShader = {
 export class Post {
   constructor(renderer, scene, camera, vmScene, vmCam, quality) {
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: quality >= 3 ? 4 : 0 });
+    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType });
     this.composer = new EffectComposer(renderer, rt);
     this.main = new RenderPass(scene, camera);
     this.vm = new RenderPass(vmScene, vmCam);
     this.vm.clear = false;
     this.vm.clearDepth = true;
     this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.32, 0.55, 0.92);
+    // Свечение считаем в пониженном разрешении — его всё равно размывают
+    const k = QUALITY[quality].bloom || 0.5, bs = this.bloom.setSize.bind(this.bloom);
+    this.bloom.setSize = (w, h) => bs(Math.max(64, Math.round(w * k)), Math.max(64, Math.round(h * k)));
     this.grade = new ShaderPass(GradeShader);
     this.composer.addPass(this.main);
     this.composer.addPass(this.vm);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
     this.composer.addPass(this.grade);
-    if (quality < 3) {
-      this.fxaa = new ShaderPass(FXAAShader);
-      this.composer.addPass(this.fxaa);
-    }
+    this.fxaa = new ShaderPass(FXAAShader);
+    this.composer.addPass(this.fxaa);
     this.setSize(renderer);
   }
   setScene(scene) { this.main.scene = scene; }

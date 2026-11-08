@@ -96,11 +96,11 @@ function prim(key, make) {
   return PRIMS[key];
 }
 export class GeoBuilder {
-  constructor() { this.pos = []; this.norm = []; this.col = []; }
+  constructor() { this.pos = []; this.norm = []; this.col = []; this.uv = []; }
   get vertexCount() { return this.pos.length / 3; }
   add(geo, matrix, color, jitter = 0) {
     const g = geo.index ? geo.toNonIndexed() : geo;
-    const p = g.attributes.position, n = g.attributes.normal;
+    const p = g.attributes.position, n = g.attributes.normal, t = g.attributes.uv;
     _nm.getNormalMatrix(matrix);
     _c.set(color);
     if (jitter) {
@@ -113,6 +113,7 @@ export class GeoBuilder {
       _v.fromBufferAttribute(n, i).applyMatrix3(_nm).normalize();
       this.norm.push(_v.x, _v.y, _v.z);
       this.col.push(_c.r, _c.g, _c.b);
+      if (t) this.uv.push(t.getX(i), t.getY(i)); else this.uv.push(0, 0);
     }
     return this;
   }
@@ -149,6 +150,7 @@ export class GeoBuilder {
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
     g.setAttribute('normal', new THREE.Float32BufferAttribute(this.norm, 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
+    if (this.uv.length) g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
     g.computeBoundingSphere();
     return g;
   }
