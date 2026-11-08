@@ -230,6 +230,13 @@ export class GameAudio {
     this.tone(this.master, this.t, 0.12, 70, 45, 0.3);
     this.tone(this.master, this.t + 0.22, 0.12, 62, 40, 0.22);
   }
+  // Гильза звякнула о землю
+  casing() {
+    if (!this.ctx) return;
+    const f = 2600 + Math.random() * 900;
+    this.tone(this.master, this.t, 0.035, f, f * 0.92, 0.025, 'triangle');
+    this.tone(this.master, this.t + 0.07, 0.03, f * 1.1, f, 0.015, 'triangle');
+  }
   // Пометка врага: короткий двойной сигнал
   spot() {
     if (!this.ctx) return;

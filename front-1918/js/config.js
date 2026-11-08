@@ -132,7 +132,7 @@ export const SQUAD_NAMES = ['Альфа', 'Браво', 'Чарли', 'Дель�
 
 export const DEFAULT_SETTINGS = {
   map: 'field', mode: 'conquest', team: 0, bots: 12, difficulty: 1, length: 1,
-  sens: 1.0, mouseSens: 1.0, aimAssist: 0.6, quality: 'auto', volume: 0.8, vibration: true, fov: 75, leftFire: true, invertY: false, showFps: false, res: '100',
+  sens: 1.0, mouseSens: 1.0, aimAssist: 0.6, quality: 'auto', volume: 0.8, vibration: true, fov: 75, leftFire: true, invertY: false, showFps: false, gfx: null,
 };
 // Названия оружия для ленты убийств
 export const WNAME = {

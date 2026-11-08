@@ -13,9 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=PT+Sans:wght@400;700&display=swap">
+<link rel="stylesheet" href="fonts/fonts.css">
 <style>
 /* Слои: canvas с миром → canvas с маркерами → HUD и кнопки → экраны (меню, развёртывание, пауза, итоги) */
 :root {
@@ -221,6 +219,12 @@ body.touch #moveHint { display: block; }
 .srow output { width: 36px; text-align: right; color: var(--brass); font-family: var(--display); }
 .srow select { background: #2b261c; color: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; font: inherit; }
 .srow input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--brass); }
+.srow span small { display: block; font-size: 11px; color: var(--muted); margin-top: 1px; }
+.srow .gpu { font: 500 12px var(--display); color: #ffb08a; text-align: right; max-width: 60%; }
+.srow .gpu.ok { color: #9be38a; }
+#settingsBody h3 { margin: 14px 0 4px; font: 600 15px var(--display); color: var(--brass); text-transform: uppercase; letter-spacing: .05em; }
+#settingsBody h3:first-child { margin-top: 0; }
+#settings .card { max-height: calc(100vh - 24px); overflow-y: auto; }
 #help .card { font-size: 14px; line-height: 1.45; }
 #help h3 { font: 600 15px var(--display); text-transform: uppercase; color: var(--brass); margin: 10px 0 4px; }
 #help ul { margin: 0; padding-left: 18px; }
@@ -356,13 +360,14 @@ body.ready #loading { display: none; }
 <section id="menu" class="screen">
   <div class="left">
     <h1>Фронт <em>1918</em></h1>
-    <p class="sub">Великая война. Окопы, штыковые атаки, танки и цеппелины — бой с ботами прямо на телефоне.</p>
+    <p class="sub">Великая война. Окопы, штыковые атаки, танки и цеппелины — бой с ботами на телефоне и компьютере.</p>
     <div class="rank"><b id="rankName">Рядовой</b><div class="xpbar"><i id="rankXp"></i></div><small id="rankInfo"></small></div>
     <button class="btn big" id="btnPlay">В бой</button>
     <div class="menuBtns">
       <button class="btn" id="btnSettings">Настройки</button>
       <button class="btn" id="btnHelp">Как играть</button>
       <button class="btn" id="btnInstall" hidden>Установить как приложение</button>
+      <button class="btn" id="btnQuit" hidden>Выход из игры</button>
     </div>
     <p class="hint" id="iosHint" hidden>Чтобы игра была на экране телефона как приложение: в Safari нажмите <b>«Поделиться»</b> → <b>«На экран „Домой“»</b>.</p>
     <p class="hint" id="pcHint" hidden>На компьютере игра работает прямо в браузере: управление мышью и клавиатурой. Чтобы поставить её как отдельное приложение с ярлыком, в Chrome или Edge нажмите значок установки в адресной строке (или «Установить как приложение» здесь).</p>

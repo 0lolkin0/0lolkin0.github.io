@@ -2,6 +2,7 @@
 import * as THREE from './three.module.min.js';
 import { GeoBuilder, clamp, lerp, smoothstep, rand, DEG, TAU, raySphere, rayCapsule, pointSegDist3, dirFromYawPitch } from './util.js';
 import { WEAPONS, GRENADE, SCORE, TEAMS } from './config.js';
+const _c1 = new THREE.Vector3(), _c2 = new THREE.Vector3(), _c3 = new THREE.Vector3();
 
 const _d = new THREE.Vector3(), _o = new THREE.Vector3(), _m = new THREE.Vector3(), _r = new THREE.Vector3(), _u = new THREE.Vector3();
 const _hit = {}, _shape = {};
@@ -117,8 +118,21 @@ export class Combat {
     else s.muzzle(_m);
     s.shotN = (s.shotN || 0) + 1;
     if (s.shotN % w.tracerEvery === 0) g.effects.tracers.add(_m.x, _m.y, _m.z, hx, hy, hz, w.id === 'bolt' ? 600 : 430);
-    if (!s.isPlayer) g.effects.muzzle(_m.x, _m.y, _m.z, _d.x, _d.y, _d.z, w.id === 'lmg' || w.id === 'bolt');
-    else g.effects.flash(_m.x, _m.y, _m.z, w.id === 'bolt' ? 6 : 3.5, 12, 0.06, 0xffc070, 2);
+    if (!s.isPlayer) {
+      // Вспышка у дула освещает окоп вокруг стрелка, если он недалеко от камеры
+      const cp = g.camera.position, near = (cp.x - _m.x) ** 2 + (cp.z - _m.z) ** 2 < 40 * 40;
+      g.effects.muzzle(_m.x, _m.y, _m.z, _d.x, _d.y, _d.z, w.id === 'lmg' || w.id === 'bolt', near);
+    } else {
+      g.effects.flash(_m.x, _m.y, _m.z, w.id === 'bolt' ? 6 : 3.5, 12, 0.06, 0xffc070);
+      // Гильза из затвора (у револьвера гильзы остаются в барабане)
+      if (w.id !== 'revolver') {
+        const c = g.camera, cq = c.quaternion;
+        _c1.set(1, 0, 0).applyQuaternion(cq); _c2.set(0, 1, 0).applyQuaternion(cq); _c3.set(0, 0, -1).applyQuaternion(cq);
+        const ex = c.position.x + _c3.x * 0.35 + _c1.x * 0.1 - _c2.x * 0.1, ey = c.position.y + _c3.y * 0.35 + _c1.y * 0.1 - _c2.y * 0.1, ez = c.position.z + _c3.z * 0.35 + _c1.z * 0.1 - _c2.z * 0.1;
+        const sp = rand(1.8, 2.8);
+        g.effects.casing(ex, ey, ez, _c1.x * sp + _c2.x * 1.4 + s.vel.x, _c1.y * sp + _c2.y * 1.4 + rand(0.5, 1.2), _c1.z * sp + _c2.z * 1.4 + s.vel.z);
+      }
+    }
     g.audio.shot(w.snd, _m.x, _m.y, _m.z, s.isPlayer);
     if (s.isPlayer) {
       const k = lerp(1, 0.7, s.adsT) * lerp(1, 0.8, s.crouchT);
@@ -186,7 +200,20 @@ export class Combat {
     if (target.isPlayer) g.onPlayerHurt(amount, attacker, dx, dz);
     if (attacker && attacker.isPlayer && attacker !== target) g.hud.hitMarker(head, killed);
     if (target.bot) target.bot.onDamaged(attacker);
-    if (killed) this.down(target, attacker, wid, head, explosive && target.hp < -70);
+    if (killed) {
+      // Удар пули или взрывной волны: тело падает от стрелка, взрыв отбрасывает и подкидывает
+      const L = Math.hypot(dx, dz);
+      if (L > 1e-4) {
+        const ux = dx / L, uz = dz / L;
+        target.fallYaw = Math.atan2(ux, uz);
+        target.fallRoll = explosive ? rand(-0.6, 0.6) : rand(-0.25, 0.25);
+        const push = explosive ? clamp(amount / 18, 2.5, 7) : head ? 2.4 : 1.5;
+        target.vel.x += ux * push; target.vel.z += uz * push;
+        if (explosive) { target.vel.y = Math.max(target.vel.y, clamp(amount / 28, 2.5, 6.5)); target.onGround = false; }
+        target.knock = true;
+      }
+      this.down(target, attacker, wid, head, explosive && target.hp < -70);
+    }
   }
   down(t, attacker, wid, head, gib) {
     const g = this.g;
@@ -195,7 +222,7 @@ export class Combat {
     t.downT = t.isPlayer ? 15 : 11;
     t.lieT = 0;
     t.reloadT = 0; t.adsT = 0; t.chargeT = 0; t.throwT = 0;
-    t.vel.x *= 0.3; t.vel.z *= 0.3;
+    if (!t.knock) { t.vel.x *= 0.3; t.vel.z *= 0.3; }
     t.downAt = g.time;
     t.stats.deaths++;
     t.killer = attacker;
@@ -232,6 +259,7 @@ export class Combat {
     t.state = 'alive';
     t.hp = 80;
     t.lieT = 0;
+    t.fallYaw = undefined; t.knock = false;
     t.invuln = 1.5;
     t.lastDamage = g.time;
     t.stats.deaths = Math.max(0, t.stats.deaths - 1);

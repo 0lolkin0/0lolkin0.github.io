@@ -264,6 +264,76 @@ const C = {
   sand: COL(0xb09a6a), flare: COL(0xff5040), flareCore: COL(0xffffff), dust: COL(0xa49a88),
 };
 
+// Обломки с физикой: комья земли, камни и щепки от взрывов, гильзы. Летят, вращаются, отскакивают от земли
+// и укрытий, скользят и останавливаются; через несколько секунд уходят в землю
+const _dm = new THREE.Matrix4(), _dq = new THREE.Quaternion(), _de = new THREE.Euler(), _dp = new THREE.Vector3(), _ds = new THREE.Vector3(), _dc = new THREE.Color();
+class Debris {
+  constructor(scene, geo, mat, cap) {
+    this.cap = cap;
+    this.mesh = new THREE.InstancedMesh(geo, mat, cap);
+    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
+    this.mesh.castShadow = true;
+    this.mesh.receiveShadow = true;
+    this.mesh.frustumCulled = false;
+    this.mesh.count = 0;
+    scene.add(this.mesh);
+    this.d = [];
+    this.ptr = 0;
+    this.onBounce = null;
+  }
+  spawn(x, y, z, vx, vy, vz, sx, sy, sz, color, life) {
+    let o;
+    if (this.d.length < this.cap) { o = { i: this.d.length }; this.d.push(o); } else { o = this.d[this.ptr]; this.ptr = (this.ptr + 1) % this.cap; }
+    o.x = x; o.y = y; o.z = z; o.vx = vx; o.vy = vy; o.vz = vz;
+    o.rx = Math.random() * 6; o.ry = Math.random() * 6; o.rz = Math.random() * 6;
+    o.wx = rand(-14, 14); o.wy = rand(-10, 10); o.wz = rand(-14, 14);
+    o.sx = sx; o.sy = sy; o.sz = sz; o.life = life; o.max = life; o.rest = false; o.bounced = false;
+    _dc.set(color);
+    this.mesh.instanceColor.setXYZ(o.i, _dc.r, _dc.g, _dc.b);
+    this.mesh.instanceColor.needsUpdate = true;
+  }
+  update(dt, world) {
+    const M = this.mesh;
+    let n = 0;
+    for (let i = 0; i < this.d.length; i++) {
+      const o = this.d[i];
+      if (o.life <= 0) { _dm.makeScale(0, 0, 0); M.setMatrixAt(i, _dm); continue; }
+      o.life -= dt;
+      n = i + 1;
+      if (!o.rest && world) {
+        o.vy -= 18 * dt;
+        o.x += o.vx * dt; o.y += o.vy * dt; o.z += o.vz * dt;
+        o.rx += o.wx * dt; o.ry += o.wy * dt; o.rz += o.wz * dt;
+        const r = Math.max(o.sx, o.sy, o.sz) * 0.5;
+        const gy = world.groundAt(o.x, o.z, o.y + 0.4) + r * 0.6;
+        if (o.y < gy) {
+          o.y = gy;
+          if (o.vy < -1.6) {
+            // Отскок: теряет скорость и закручивается иначе
+            o.vy = -o.vy * 0.32; o.vx *= 0.62; o.vz *= 0.62;
+            o.wx *= -0.6; o.wz *= 0.6;
+            if (!o.bounced && this.onBounce) this.onBounce(o.x, o.y, o.z);
+            o.bounced = true;
+          } else {
+            o.vy = 0;
+            const f = Math.exp(-dt * 7);
+            o.vx *= f; o.vz *= f; o.wx *= f; o.wy *= f; o.wz *= f;
+            if (Math.abs(o.vx) + Math.abs(o.vz) < 0.05) o.rest = true;
+          }
+        }
+      }
+      // В конце жизни медленно уходит в землю
+      const sink = o.life < 1.2 ? (1.2 - o.life) * 0.12 : 0;
+      _dq.setFromEuler(_de.set(o.rx, o.ry, o.rz));
+      _dm.compose(_dp.set(o.x, o.y - sink, o.z), _dq, _ds.set(o.sx, o.sy, o.sz));
+      M.setMatrixAt(i, _dm);
+    }
+    M.count = n;
+    M.instanceMatrix.needsUpdate = true;
+  }
+}
+
 export class Effects {
   constructor(scene, quality, weather, winter) {
     this.scene = scene;
@@ -275,12 +345,13 @@ export class Effects {
     this.tracers = new Tracers();
     scene.add(this.tracers.mesh);
     this.lights = [];
-    for (let i = 0; i < 3; i++) {
-      const l = new THREE.PointLight(0xffb060, 0, 30, 1.6);
-      scene.add(l);
-      this.lights.push({ l, t: 0, dur: 1, peak: 0 });
-    }
-    this.li = 0;
+    this.setLights(3);
+    // Обломки и гильзы
+    const chunkGeo = new THREE.DodecahedronGeometry(0.5, 0);
+    this.debris = new Debris(scene, chunkGeo, new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 }), quality >= 2 ? 360 : 160);
+    const caseGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 7);
+    this.brass = new Debris(scene, caseGeo, new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.85 }), 60);
+    this.world = null;
     this.weather = weather ? new Weather(weather) : null;
     if (this.weather) scene.add(this.weather.obj);
     this.emitters = [];
@@ -291,8 +362,27 @@ export class Effects {
     this.normal.mat.uniforms.scale.value = s;
     this.add.mat.uniforms.scale.value = s;
   }
+  // Пул точечных источников для вспышек: их число постоянно (иначе шейдеры пересобираются), лишние гаснут
+  setLights(n) {
+    n = Math.max(1, Math.min(8, n | 0));
+    while (this.lights.length < n) {
+      const l = new THREE.PointLight(0xffb060, 0, 30, 1.6);
+      this.scene.add(l);
+      this.lights.push({ l, t: 0, dur: 1, peak: 0 });
+    }
+    while (this.lights.length > n) this.scene.remove(this.lights.pop().l);
+  }
+  // Берём источник, который сейчас светит слабее всех: взрыв не «перебьёт» вспышка выстрела рядом
   flash(x, y, z, peak, dist, dur, color = 0xffb060, slot = -1) {
-    const L = slot >= 0 ? this.lights[slot] : this.lights[(this.li = (this.li + 1) % 2)];
+    let L = slot >= 0 ? this.lights[slot] : null;
+    if (!L) {
+      let best = Infinity;
+      for (const c of this.lights) {
+        const k = c.t > 0 ? c.peak * (c.t / c.dur) : 0;
+        if (k < best) { best = k; L = c; }
+      }
+      if (L.t > 0 && L.peak * (L.t / L.dur) > peak) return;
+    }
     L.l.position.set(x, y, z);
     L.l.color.setHex(color);
     L.l.distance = dist;
@@ -307,6 +397,14 @@ export class Effects {
         rand(1.6, 3.2) * s, 1.8, rand(0.25, 0.45), i % 2 ? C.fire1 : C.fire2, 0.95, -2, 3);
     }
     const dirt = this.winter ? C.snow : C.dirt;
+    // Тяжёлые комья земли и камни разлетаются и катятся
+    const nChunks = Math.round((this.q >= 2 ? 16 : 8) * Math.min(2, s));
+    for (let i = 0; i < nChunks; i++) {
+      const a = Math.random() * TAU, sp = rand(2.5, 8) * s, sz = rand(0.07, 0.2) * Math.sqrt(s);
+      const stone = Math.random() < 0.25;
+      this.debris.spawn(x + Math.cos(a) * 0.4, y + 0.4, z + Math.sin(a) * 0.4, Math.cos(a) * sp, rand(5, 12) * s, Math.sin(a) * sp,
+        sz, sz * rand(0.6, 1), sz * rand(0.7, 1.1), stone ? 0x6d6a62 : this.winter ? 0x4a4038 : 0x4b3a2a, rand(7, 11));
+    }
     for (let i = 0; i < 28; i++) {
       const a = Math.random() * TAU, sp = rand(2, 8) * s;
       Nn.spawn(x, y + 0.3, z, Math.cos(a) * sp, rand(5, 15) * s, Math.sin(a) * sp, rand(0.2, 0.55) * s, 0.2, rand(1.0, 1.9), i % 3 ? dirt : C.dirtL, 1, 17, 0.3);
@@ -339,6 +437,12 @@ export class Effects {
         rand(0.06, 0.14), 0, rand(0.4, 0.8), col, 1, 12, 0.5);
     }
     N.spawn(x + nx * 0.2, y + ny * 0.2, z + nz * 0.2, nx * 0.6, 0.5, nz * 0.6, 0.35, 2.2, 0.9, light, 0.5, -0.1, 1.5);
+    // Сколы камня и щепки
+    if ((mat === 'stone' || mat === 'wood') && Math.random() < 0.6) {
+      const sz = rand(0.025, 0.05);
+      this.debris.spawn(x + nx * 0.05, y + ny * 0.05, z + nz * 0.05, nx * rand(1, 3) + rand(-1, 1), ny * 2 + rand(1, 3), nz * rand(1, 3) + rand(-1, 1),
+        mat === 'wood' ? sz * 0.5 : sz, sz, mat === 'wood' ? sz * 2.5 : sz, mat === 'wood' ? 0x7a5a3a : 0x8a857a, rand(4, 6));
+    }
     for (let i = 0; i < sparks; i++) this.add.spawn(x, y, z, nx * 4 + rand(-3, 3), ny * 4 + rand(-1, 3), nz * 4 + rand(-3, 3), 0.07, 0, 0.18, C.spark, 1, 10, 1);
   }
   blood(x, y, z, dx, dy, dz) {
@@ -348,7 +452,8 @@ export class Effects {
     }
     this.normal.spawn(x, y, z, dx * 0.6, 0.2, dz * 0.6, 0.3, 1.4, 0.35, C.blood, 0.45, 0, 2);
   }
-  muzzle(x, y, z, dx, dy, dz, big = false) {
+  muzzle(x, y, z, dx, dy, dz, big = false, light = false) {
+    if (light) this.flash(x + dx * 0.4, y + dy * 0.4, z + dz * 0.4, big ? 9 : 5, big ? 12 : 8, 0.06, 0xffc070);
     this.add.spawn(x, y, z, dx * 2, dy * 2, dz * 2, big ? 0.9 : 0.55, 0.4, 0.05, C.flash, 1, 0, 0);
     if (Math.random() < 0.5) this.normal.spawn(x + dx * 0.3, y + dy * 0.3, z + dz * 0.3, dx * 0.8, 0.3, dz * 0.8, 0.25, 3, 0.6, C.smokeL, 0.25, -0.2, 1);
   }
@@ -363,6 +468,10 @@ export class Effects {
     this.add.spawn(x, y, z, 0, 0, 0, 0.5, 0, 0.08, C.flareCore, 1, 0, 0);
     if (Math.random() < 0.4) this.normal.spawn(x, y, z, rand(-0.2, 0.2), rand(-0.2, 0.3), rand(-0.2, 0.2), 0.5, 3, 2, C.smokeL, 0.3, 0, 0.2);
   }
+  // Гильза: вылетает вправо-вверх от затвора, звенит о землю
+  casing(x, y, z, vx, vy, vz) {
+    this.brass.spawn(x, y, z, vx, vy, vz, 0.011, 0.032, 0.011, 0xc9a24a, 4);
+  }
   heal(x, y, z) {
     this.add.spawn(x + rand(-0.4, 0.4), y, z + rand(-0.4, 0.4), 0, 1.2, 0, 0.18, 0, 0.7, COL(0x70ff90), 0.8, 0, 0);
   }
@@ -370,6 +479,8 @@ export class Effects {
     this.normal.update(dt);
     this.add.update(dt);
     this.tracers.update(dt, cam);
+    this.debris.update(dt, this.world);
+    this.brass.update(dt, this.world);
     for (const L of this.lights) {
       if (L.t > 0) {
         L.t -= dt;

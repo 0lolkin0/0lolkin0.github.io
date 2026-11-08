@@ -1,10 +1,14 @@
 // Офлайн-кэш: игра целиком сохраняется на телефоне после первого запуска
-const VERSION = 'front1918-v4';
+const VERSION = 'front1918-v5';
 const CORE = [
   './', 'index.html', 'manifest.webmanifest',
   'js/main.js', 'js/three.module.min.js', 'js/util.js', 'js/config.js', 'js/maps.js', 'js/world.js', 'js/effects.js',
   'js/audio.js', 'js/soldier.js', 'js/ai.js', 'js/vehicles.js', 'js/combat.js', 'js/viewmodel.js', 'js/input.js', 'js/hud.js',
-  'js/gfx.js', 'js/models.js', 'js/icons.js',
+  'js/gfx.js', 'js/post.js', 'js/models.js', 'js/icons.js',
+  'js/addons/postprocessing/GTAOPass.js', 'js/addons/postprocessing/SMAAPass.js', 'js/addons/shaders/GTAOShader.js',
+  'js/addons/shaders/PoissonDenoiseShader.js', 'js/addons/shaders/SMAAShader.js', 'js/addons/math/SimplexNoise.js',
+  'fonts/fonts.css', 'fonts/Oswald-cyrillic.woff2', 'fonts/Oswald-latin.woff2', 'fonts/PTSans-cyrillic-400.woff2',
+  'fonts/PTSans-cyrillic-700.woff2', 'fonts/PTSans-latin-400.woff2', 'fonts/PTSans-latin-700.woff2',
   'js/addons/postprocessing/EffectComposer.js', 'js/addons/postprocessing/RenderPass.js', 'js/addons/postprocessing/ShaderPass.js',
   'js/addons/postprocessing/MaskPass.js', 'js/addons/postprocessing/Pass.js', 'js/addons/postprocessing/UnrealBloomPass.js',
   'js/addons/postprocessing/OutputPass.js', 'js/addons/shaders/CopyShader.js', 'js/addons/shaders/LuminosityHighPassShader.js',
