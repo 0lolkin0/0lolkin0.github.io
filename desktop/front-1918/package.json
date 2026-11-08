@@ -1,0 +1,9 @@
+{
+  "name": "front1918",
+  "productName": "Front 1918",
+  "version": "1.4.0",
+  "description": "Фронт 1918 — шутер о Первой мировой с ботами",
+  "main": "main.js",
+  "author": "0lolkin0",
+  "license": "UNLICENSED"
+}
