@@ -122,6 +122,7 @@ body:not(.touch) #btnInteract::after { content: " [E]"; color: var(--muted); }
 /* Сенсорные кнопки */
 #controls { position: absolute; inset: 0; display: none; }
 body.touch #controls { display: block; }
+body.touch .pconly { display: none; }
 body.downed #controls, body.ended #controls, body.ended #btnInteract { display: none !important; }
 .cbtn { position: absolute; border-radius: 50%; border: 2px solid rgba(236,229,209,.55); background: rgba(20,17,12,.42); color: var(--paper); display: grid; place-items: center; font: 600 12px var(--display); text-transform: uppercase; touch-action: none; }
 .cbtn span { display: block; width: 54%; height: 54%; pointer-events: none; }
@@ -159,7 +160,7 @@ body.in-tank .cbtn.melee, body.in-tank .cbtn.grenade, body.in-tank .cbtn.gadget 
 body.touch #moveHint { display: block; }
 
 /* ---------- Экраны ---------- */
-.screen { position: fixed; inset: 0; overflow: auto; padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); touch-action: pan-y; }
+.screen { position: fixed; inset: 0; z-index: 5; overflow: auto; padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); touch-action: pan-y; }
 .btn { font: 600 15px var(--display); text-transform: uppercase; letter-spacing: .04em; color: var(--paper); background: rgba(255,255,255,.07); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; cursor: pointer; }
 .btn:hover { background: rgba(255,255,255,.13); }
 .btn.big { font-size: 22px; padding: 12px 28px; background: linear-gradient(#b8892f, #8c6420); color: #1b140a; border-color: #e3c57c; box-shadow: 0 3px 0 #4d3712, 0 6px 20px rgba(0,0,0,.4); }
@@ -241,6 +242,7 @@ body.touch #moveHint { display: block; }
 .scol tr.me td { color: var(--brass); } .scol tr.squad td { color: var(--green); }
 .scol td i { color: var(--muted); font-style: normal; }
 
+#fps { position: fixed; z-index: 6; top: max(46px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); font: 600 11px var(--display); color: #9fd48a; background: rgba(0,0,0,.45); padding: 2px 6px; border-radius: 4px; pointer-events: none; }
 #rotate { position: fixed; inset: 0; z-index: 20; background: #17140f; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; font-family: var(--display); }
 #rotate .ph { width: 54px; height: 90px; border: 4px solid var(--paper); border-radius: 10px; animation: rot 1.6s infinite ease-in-out; margin-bottom: 20px; }
 @keyframes rot { 50% { transform: rotate(-90deg); } }
@@ -304,7 +306,7 @@ body.ready #loading { display: none; }
   <div id="scorepops"></div>
   <canvas id="minimap" class="noinput"></canvas>
   <div id="mapHint">карта</div>
-  <div id="pcKeys" class="pckeys" hidden><kbd>WASD</kbd> ход · <kbd>Shift</kbd> бег · <kbd>ПКМ</kbd> прицел · <kbd>C</kbd> присесть · <kbd>Z</kbd> лечь · <kbd>1</kbd>/<kbd>2</kbd> оружие · <kbd>M</kbd> карта · <kbd>H</kbd> ещё<span class="more"><br><kbd>R</kbd> перезарядка · <kbd>Пробел</kbd> прыжок · <kbd>G</kbd> граната · <kbd>F</kbd> снаряжение · <kbd>V</kbd> штык · <kbd>E</kbd> действие · <kbd>Tab</kbd> счёт · <kbd>Shift</kbd> в оптике — задержать дыхание</span></div>
+  <div id="pcKeys" class="pckeys" hidden><kbd>WASD</kbd> ход · <kbd>Shift</kbd> бег · <kbd>ПКМ</kbd> прицел · <kbd>C</kbd> присесть · <kbd>Alt</kbd> лечь · <kbd>1</kbd>/<kbd>2</kbd> оружие · <kbd>M</kbd> карта · <kbd>H</kbd> ещё<span class="more"><br><kbd>R</kbd> перезарядка · <kbd>Пробел</kbd> прыжок · <kbd>G</kbd> граната · <kbd>F</kbd> снаряжение · <kbd>V</kbd> штык · <kbd>E</kbd> действие · <kbd>Tab</kbd> счёт · <kbd>Shift</kbd> в оптике — задержать дыхание</span></div>
   <div id="pcKeysTank" class="pckeys" hidden><kbd>WASD</kbd> ехать · <kbd>ЛКМ</kbd> орудие · <kbd>ПКМ</kbd> прицел наводчика · <kbd>Пробел</kbd>/<kbd>F</kbd> пулемёт · <kbd>E</kbd> выйти</div>
   <div id="killfeed"></div>
   <div id="status">
@@ -318,6 +320,7 @@ body.ready #loading { display: none; }
     <div class="bar"><div id="downTimer"></div></div>
     <p id="medicNear"></p>
     <button id="btnGiveUp" data-btn="giveup">Сдаться и развернуться</button>
+    <p class="pconly">или клавиша <b>Пробел</b> / <b>Enter</b></p>
   </div>
   <button id="btnInteract" data-btn="interact" hidden></button>
   <div id="controls">
@@ -422,7 +425,7 @@ body.ready #loading { display: none; }
     <ul>
       <li>Щёлкните по экрану — мышь захватится для обзора. <kbd>Esc</kbd> — пауза.</li>
       <li><kbd>W A S D</kbd> — ходьба, <kbd>Shift</kbd> — бег, ЛКМ — огонь, ПКМ — прицел, <kbd>Shift</kbd> в оптике — задержать дыхание.</li>
-      <li><kbd>C</kbd> присесть, <kbd>Z</kbd> лечь, <kbd>Пробел</kbd> прыжок / встать, <kbd>1</kbd> <kbd>2</kbd> или колесо мыши — смена оружия.</li>
+      <li><kbd>C</kbd> присесть, <kbd>Alt</kbd> лечь, <kbd>Пробел</kbd> прыжок / встать, <kbd>1</kbd> <kbd>2</kbd> или колесо мыши — смена оружия.</li>
       <li><kbd>R</kbd> перезарядка, <kbd>G</kbd> граната, <kbd>F</kbd> снаряжение, <kbd>V</kbd> штык, <kbd>E</kbd> действие, <kbd>M</kbd> карта, <kbd>Tab</kbd> счёт.</li>
       <li>В танке: ЛКМ — орудие, ПКМ — прицел наводчика, <kbd>Пробел</kbd> или <kbd>F</kbd> — пулемёт, <kbd>E</kbd> — выйти.</li>
     </ul>
@@ -453,6 +456,7 @@ body.ready #loading { display: none; }
   </div>
 </section>
 
+<div id="fps" hidden></div>
 <div id="rotate" hidden><div class="ph"></div><p>Поверните телефон горизонтально</p></div>
 <div id="loading">Загрузка…</div>
 <div id="fatal" hidden><h2>Не удалось запустить игру</h2><p>Похоже, браузер не поддерживает WebGL. Попробуйте Chrome или Safari последней версии.</p><pre></pre></div>

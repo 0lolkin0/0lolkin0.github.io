@@ -2,6 +2,7 @@
 import * as THREE from './three.module.min.js';
 import { GeoBuilder, Noise2D, rng, clamp, smoothstep, lerp, segDist, TAU } from './util.js';
 import { THEMES } from './maps.js';
+import { limb } from './models.js';
 
 export const HALF = 150, SIZE = 300, PLAY = 141;
 const N = 300, V = N + 1;
@@ -488,7 +489,36 @@ export class World {
       if (win) {
         this.solid(seg, 1.05, t, wx, y0, wz, wyaw, color, opt.mat);
         this.solid(seg, sh - 2.0, t, wx, y0 + 2.0, wz, wyaw, color, opt.mat);
+        this.frame(wx, wz, wyaw, y0 + 1.05, y0 + 2.0, seg * 0.8, t, r() < 0.5);
       } else this.solid(seg, sh, t, wx, y0, wz, wyaw, color, opt.mat);
+      // Рваный верх разрушенной стены
+      if (ruin && sh < h * 0.97) {
+        const c = Math.cos(wyaw), si = Math.sin(wyaw);
+        for (let q = 0; q < 2; q++) {
+          const off = (r() - 0.5) * seg * 0.6, bw = seg * (0.25 + r() * 0.3), bh = 0.2 + r() * 0.6;
+          this.sb.box(bw, bh, t * 0.96, wx + c * off, y0 + sh + bh / 2 - 0.05, wz - si * off, color, wyaw, 0, (r() - 0.5) * 0.3, 0.1);
+        }
+      }
+    }
+    // Дверная коробка
+    if (opt.door !== undefined && (opt.ruin || 0) < 0.6) {
+      const k = Math.floor(opt.door * n);
+      const [dx, dz] = this.L(st, ax + ux * seg * (k + 0.5), az + uz * seg * (k + 0.5));
+      this.frame(dx, dz, wyaw, y0, y0 + 2.25, seg * 0.86, t, false, true);
+    }
+  }
+  // Деревянная рама проёма: перекладины, стойки и иногда створка ставни
+  frame(x, z, yaw, y0, y1, w, t, shutter, door = false) {
+    const C = this.C, h = y1 - y0, c = Math.cos(yaw), s = Math.sin(yaw);
+    const nx = -s, nz = -c;
+    for (const side of [-1, 1]) this.sb.box(0.1, h, t + 0.06, x + c * side * w / 2, y0 + h / 2, z - s * side * w / 2, C.woodDark, yaw, 0, 0, 0.08);
+    this.sb.box(w + 0.2, 0.12, t + 0.08, x, y1 + 0.06, z, C.woodDark, yaw, 0, 0, 0.08);
+    if (!door) this.sb.box(w + 0.16, 0.08, t + 0.14, x, y0 + 0.04, z, C.stone, yaw, 0, 0, 0.06);
+    if (shutter) {
+      const open = 0.6 + this.rand() * 0.8, side = this.rand() < 0.5 ? -1 : 1;
+      const hx = x + c * side * (w / 2 + 0.05) + nx * (t / 2 + 0.02), hz = z - s * side * (w / 2 + 0.05) + nz * (t / 2 + 0.02);
+      const px = hx + (c * side * Math.cos(open) + nx * Math.sin(open)) * w * 0.25, pz = hz + (-s * side * Math.cos(open) + nz * Math.sin(open)) * w * 0.25;
+      this.sb.box(w * 0.48, h * 0.95, 0.05, px, y0 + h / 2, pz, C.wood, yaw - side * open, 0, (this.rand() - 0.5) * 0.15, 0.12);
     }
   }
   rubble(x, z, y0, color) {
@@ -519,7 +549,23 @@ export class World {
     this.wallLine(st, -w / 2, -d / 2 + t / 2, -w / 2, d / 2 - t / 2, y0, h, t, color, { ...o, door: ruin > 0.5 ? undefined : 0.3 });
     this.wallLine(st, w / 2, -d / 2 + t / 2, w / 2, d / 2 - t / 2, y0, h, t, color, o);
     this.sb.box(w - 0.2, 0.12, d - 0.2, st.x, y0 + 0.04, st.z, this.C.woodDark, st.yaw || 0);
-    if (st.roof && ruin < 0.5) this.roof(st, w, d, y0 + h, 2.6, this.C.roof);
+    // Угловые камни и цоколь
+    if (mat === 'stone') {
+      for (const [cx, cz] of [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]]) {
+        const [qx, qz] = this.L(st, cx, cz);
+        const top = h * (ruin ? 0.4 + this.rand() * 0.5 : 1);
+        for (let yy = 0, k = 0; yy < top - 0.3; yy += 0.42, k++) {
+          this.sb.box(k % 2 ? 0.62 : 0.48, 0.38, k % 2 ? 0.48 : 0.62, qx, y0 + yy + 0.2, qz, 0xb3ab9a, st.yaw || 0, 0, 0, 0.08);
+        }
+      }
+    }
+    if (st.roof && ruin < 0.5) {
+      this.roof(st, w, d, y0 + h, 2.6, this.C.roof);
+      this.sb.box(0.16, 0.14, d + 0.8, st.x, y0 + h + 2.62, st.z, this.C.woodDark, st.yaw || 0);
+      const [cx, cz] = this.L(st, w * 0.22, -d * 0.22);
+      this.solid(0.6, 3.6, 0.6, cx, y0 + h - 0.2, cz, st.yaw, mat === 'wood' ? this.C.stone : color, 'stone', 0.06);
+      this.sb.box(0.72, 0.12, 0.72, cx, y0 + h + 3.42, cz, 0x4a4540, st.yaw || 0);
+    }
     else if (ruin < 0.8) {
       for (let i = 0; i < 3; i++) {
         if (this.rand() < 0.4) continue;
@@ -532,6 +578,11 @@ export class World {
       if (ruin > 0.3) this.rubble(rx, rz, y0, color);
     }
   }
+  // Мешок с песком — сплюснутая «подушка»
+  bag(x, y, z, half, yaw, col) {
+    if (!this._bag) this._bag = new THREE.IcosahedronGeometry(1, 1);
+    this.sb.add(this._bag, GeoBuilder.mat(x, y, z, 0, yaw, (Math.random() - 0.5) * 0.08, half, 0.14, 0.23), col, 0.1);
+  }
   sandbags(x, z, yaw, len, rows = 3) {
     const c = Math.cos(yaw), s = Math.sin(yaw);
     let y0 = Infinity;
@@ -543,7 +594,7 @@ export class World {
     for (let row = 0; row < rows; row++) {
       for (let i = 0; i < n - (row % 2); i++) {
         const lx = -len / 2 + bw * (i + 0.5 + (row % 2) * 0.5);
-        this.sb.box(bw * 0.96, 0.26, 0.42, x + c * lx, y0 + 0.13 + row * 0.25, z - s * lx, col, yaw + (Math.random() - 0.5) * 0.12, 0, 0, 0.1);
+        this.bag(x + c * lx, y0 + 0.14 + row * 0.24, z - s * lx, bw * 0.53, yaw + (Math.random() - 0.5) * 0.14, col);
       }
     }
     return this.addBox(x, z, y0, y0 + rows * 0.25 + 0.05, len / 2, 0.24, yaw, 'sand');
@@ -626,7 +677,9 @@ export class World {
             const x = st.x + r.range(-1.6, 1.6), z = st.z + r.range(-1.6, 1.6);
             const stack = i > 2 && r() < 0.6;
             const gy = stack ? this.groundAt(x, z, y + 2) : this.height(x, z) - 0.05;
-            this.solid(s, s, s, x, gy, z, r() * 3, i % 2 ? C.wood : C.woodDark, 'wood', 0.12);
+            const ry = r() * 3;
+            this.solid(s, s, s, x, gy, z, ry, i % 2 ? C.wood : C.woodDark, 'wood', 0.12);
+            for (const k of [-0.42, 0.42]) this.sb.box(s * 1.02, 0.08, s * 1.02, x, gy + s / 2 + k * s, z, C.woodDark, ry, 0, 0, 0.1);
           }
           break;
         }
@@ -849,8 +902,8 @@ export class World {
         if (sg.side && i % 1 === 0 && this.rand() < 0.85) {
           const bx = cx + nx * 2.3, bz = cz + nz * 2.3;
           const by = this.height(bx, bz);
-          this.sb.box(1.0, 0.28, 0.45, bx, by + 0.1, bz, bag, yaw + this.rand.range(-0.1, 0.1), 0, 0, 0.1);
-          if (this.rand() < 0.6) this.sb.box(0.9, 0.26, 0.42, bx + ux * 0.3, by + 0.36, bz + uz * 0.3, bag, yaw, 0, 0, 0.1);
+          this.bag(bx, by + 0.1, bz, 0.5, yaw + this.rand.range(-0.1, 0.1), bag);
+          if (this.rand() < 0.6) this.bag(bx + ux * 0.3, by + 0.34, bz + uz * 0.3, 0.45, yaw, bag);
         }
       }
     }
@@ -951,43 +1004,83 @@ export class World {
         placed++;
       }
     }
-    const trunkCol = this.def.theme === 'winter' ? 0x4d3d30 : 0x4b4036;
-    const bark = this.mat('bark'), leaves = this.mat('leaves');
+    const trunkCol = this.def.theme === 'winter' ? 0x4d3d30 : 0x4b4036, deadCol = 0x3f3a33;
+    const bark = this.mat('bark');
+    const leafMat = this.gfx ? this.gfx.foliage('leaves') : this.mat('leaves');
+    const needleMat = this.gfx ? this.gfx.foliage('needles') : this.mat('leaves');
+    const plane = new THREE.PlaneGeometry(1, 1).toNonIndexed();
+    const rr = rng(4242);
+    // Пучок карточек листвы; нормали смотрят от центра кроны, чтобы листва освещалась объёмно
+    const clump = (b, cx, cy, cz, rad, n, size) => {
+      const start = b.pos.length;
+      for (let i = 0; i < n; i++) {
+        const a = rr() * TAU, el = (rr() - 0.5) * 1.2, d = rad * Math.cbrt(rr()) * 0.8;
+        const px = cx + Math.cos(a) * Math.cos(el) * d, py = cy + Math.sin(el) * d * 0.7, pz = cz + Math.sin(a) * Math.cos(el) * d;
+        b.add(plane, GeoBuilder.mat(px, py, pz, (rr() - 0.5) * 1.6, rr() * TAU, (rr() - 0.5) * 1.2, size, size, 1), 0xffffff, 0.14);
+      }
+      for (let k = start; k < b.pos.length; k += 3) {
+        const nx = b.pos[k] - cx, ny = b.pos[k + 1] - cy + rad * 0.4, nz = b.pos[k + 2] - cz, l = Math.hypot(nx, ny, nz) || 1;
+        b.norm[k] = nx / l; b.norm[k + 1] = ny / l; b.norm[k + 2] = nz / l;
+      }
+    };
     for (const [type, list] of Object.entries(types)) {
       const trunk = new GeoBuilder(), crown = new GeoBuilder();
+      let crownMat = leafMat;
       if (type === 'dead') {
-        trunk.cyl(0.1, 0.32, 6, 6, 0, 3, 0, 0x3f3a33);
-        trunk.cyl(0.04, 0.08, 1.8, 4, 0.5, 4, 0, 0x3f3a33, 0, 0, -0.9);
-        trunk.cyl(0.03, 0.07, 1.4, 4, -0.4, 4.8, 0.2, 0x3f3a33, 0.3, 0, 0.8);
+        limb(trunk, 0, 0, 0, 0.15, 5.8, 0.05, 0.32, 0.08, deadCol, 8);
+        for (let k = 0; k < 5; k++) {
+          const a = (k / 5) * TAU + rr(), h = 2.2 + k * 0.7, L = 1.0 + rr() * 1.2;
+          const ex = Math.cos(a) * L, ez = Math.sin(a) * L, ey = h + 0.6 + rr() * 0.8;
+          limb(trunk, 0.04, h, 0.02, ex, ey, ez, 0.09, 0.03, deadCol, 5);
+          limb(trunk, ex, ey, ez, ex * 1.3 + (rr() - 0.5) * 0.5, ey + 0.5, ez * 1.3, 0.03, 0.012, deadCol, 4);
+        }
       } else if (type === 'poplar') {
-        trunk.cyl(0.14, 0.26, 4, 8, 0, 2, 0, trunkCol);
-        crown.sphere(1.5, 0, 6.6, 0, 0xffffff, 1, 3.0, 1, 2, 0.08);
-        crown.sphere(0.9, 0.5, 5.2, 0.3, 0xe6e6e6, 1, 1.6, 1, 1, 0.08);
-        crown.sphere(0.8, -0.4, 8.4, -0.2, 0xf4f4f4, 1, 1.5, 1, 1, 0.08);
+        limb(trunk, 0, 0, 0, 0, 8.6, 0, 0.26, 0.07, trunkCol, 10);
+        for (let k = 0; k < 4; k++) {
+          const a = rr() * TAU, h = 2.8 + k * 1.3;
+          limb(trunk, 0, h, 0, Math.cos(a) * 0.7, h + 1.2, Math.sin(a) * 0.7, 0.06, 0.02, trunkCol, 5);
+        }
+        for (let k = 0; k < 9; k++) clump(crown, (rr() - 0.5) * 0.4, 3.2 + k * 0.68, (rr() - 0.5) * 0.4, 1.3 * (1 - k / 13), 9, 1.45);
       } else if (type === 'oak') {
-        trunk.cyl(0.25, 0.38, 3.6, 8, 0, 1.8, 0, trunkCol);
-        trunk.cyl(0.08, 0.16, 2.2, 6, 0.7, 3.9, 0.2, trunkCol, 0, 0, -0.7);
-        trunk.cyl(0.07, 0.14, 2.0, 6, -0.6, 4.0, -0.3, trunkCol, 0.3, 0, 0.7);
-        crown.sphere(2.4, 0, 5.6, 0, 0xffffff, 1, 0.8, 1, 2, 0.08);
-        crown.sphere(1.8, 1.5, 5.0, 0.6, 0xf0f0f0, 1, 0.8, 1, 1, 0.08);
-        crown.sphere(1.7, -1.3, 5.2, -0.8, 0xe8e8e8, 1, 0.8, 1, 1, 0.08);
-        crown.sphere(1.5, 0.3, 6.6, -1.2, 0xf6f6f6, 1, 0.8, 1, 1, 0.08);
-        crown.sphere(1.4, -0.4, 6.4, 1.3, 0xececec, 1, 0.8, 1, 1, 0.08);
+        limb(trunk, 0, 0, 0, 0.1, 3.0, 0.05, 0.4, 0.26, trunkCol, 12);
+        const ends = [];
+        for (let k = 0; k < 5; k++) {
+          const a = (k / 5) * TAU + rr() * 0.5, h = 2.4 + rr() * 0.8, L = 1.6 + rr() * 0.8;
+          const ex = Math.cos(a) * L, ez = Math.sin(a) * L, ey = h + 1.6 + rr() * 0.8;
+          limb(trunk, 0.05, h, 0.02, ex, ey, ez, 0.17, 0.07, trunkCol, 7);
+          limb(trunk, ex, ey, ez, ex * 1.35, ey + 0.7, ez * 1.35, 0.07, 0.03, trunkCol, 5);
+          ends.push([ex * 1.2, ey + 0.5, ez * 1.2]);
+        }
+        for (const [x, y, z] of ends) clump(crown, x, y, z, 1.5, 12, 1.7);
+        clump(crown, 0, 5.6, 0, 1.9, 18, 1.9);
+        clump(crown, 0, 6.7, 0, 1.4, 11, 1.6);
       } else if (type === 'pine') {
-        trunk.cyl(0.14, 0.28, 3, 8, 0, 1.5, 0, trunkCol);
-        const snow = this.def.theme === 'winter';
-        for (let i = 0; i < 6; i++) {
-          const rr = 2.4 - i * 0.36, yy = 2.0 + i * 1.15;
-          crown.cyl(0.05, rr, 2.0, 9, 0, yy + 1.0, 0, i % 2 ? 0xf2f2f2 : 0xffffff, 0, i * 0.7);
-          if (snow) crown.cyl(0.05, rr * 0.6, 0.9, 9, 0, yy + 1.55, 0, 0xffffff, 0, i * 0.7 + 0.2);
+        crownMat = needleMat;
+        limb(trunk, 0, 0, 0, 0, 10.6, 0, 0.28, 0.05, trunkCol, 10);
+        for (let i = 0; i < 7; i++) {
+          const y = 1.9 + i * 1.15, R = 2.6 - i * 0.33, n = 9 - Math.floor(i / 2);
+          for (let k = 0; k < n; k++) {
+            const a = (k / n) * TAU + i * 0.4 + rr() * 0.3, ca = Math.cos(a), sa = Math.sin(a);
+            limb(trunk, 0, y + 0.3, 0, ca * R * 0.85, y - 0.3, sa * R * 0.85, 0.05, 0.015, trunkCol, 4);
+            // Свисающая лапа: карточка хвои от ствола наружу и вниз
+            crown.add(plane, GeoBuilder.mat(ca * R * 0.48, y - 0.1, sa * R * 0.48, -(Math.PI / 2 + 0.35 + rr() * 0.15), Math.atan2(-ca, -sa), Math.PI, R * 0.9, R * 1.08, 1), 0xffffff, 0.12);
+          }
+        }
+        for (let k = 0; k < 3; k++) crown.add(plane, GeoBuilder.mat(0, 10.1, 0, 0, (k * Math.PI) / 3, Math.PI, 1.3, 1.9, 1), 0xffffff, 0.08);
+        for (let k = 0; k < crown.pos.length; k += 3) {
+          const nx = crown.pos[k], nz = crown.pos[k + 2], l = Math.hypot(nx, 0.8, nz);
+          crown.norm[k] = nx / l; crown.norm[k + 1] = 0.8 / l; crown.norm[k + 2] = nz / l;
         }
       } else if (type === 'deadpine') {
-        trunk.cyl(0.08, 0.26, 7, 6, 0, 3.5, 0, 0x3d342c);
-        for (let i = 0; i < 5; i++) trunk.cyl(0.02, 0.06, 1.3, 4, 0, 2.5 + i, 0, 0x3d342c, 0, i * 1.3, 1.2);
+        limb(trunk, 0, 0, 0, 0, 7.5, 0, 0.26, 0.05, 0x3d342c, 8);
+        for (let i = 0; i < 9; i++) {
+          const a = rr() * TAU, y = 2.2 + i * 0.55, L = 0.6 + rr() * 0.6;
+          limb(trunk, 0, y, 0, Math.cos(a) * L, y - 0.15, Math.sin(a) * L, 0.035, 0.01, 0x3d342c, 4);
+        }
       }
       const leafCols = T.leaves.map((h) => new THREE.Color(h));
       const tm = new THREE.InstancedMesh(trunk.build(), bark, list.length);
-      const cm = crown.vertexCount ? new THREE.InstancedMesh(crown.build(), leaves, list.length) : null;
+      const cm = crown.vertexCount ? new THREE.InstancedMesh(crown.build(), crownMat, list.length) : null;
       const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), sc = new THREE.Vector3();
       list.forEach((t, i) => {
         e.set(r.range(-0.05, 0.05), r() * TAU, r.range(-0.05, 0.05));

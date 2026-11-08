@@ -43,7 +43,7 @@ export class Hud {
     this.resize();
   }
   resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
     this.dpr = dpr;
     this.ov.width = Math.round(innerWidth * dpr);
     this.ov.height = Math.round(innerHeight * dpr);
