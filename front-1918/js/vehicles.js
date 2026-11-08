@@ -185,6 +185,7 @@ export class Tank {
     this.driver = null;
     this.reload = 0; this.mgCd = 0; this.recoil = 0;
     this.respawnT = 0;
+    this.spottedUntil = 0;
     this.lastDriverExit = -99;
     this.mat.color.setHex(0xffffff);
     this.root.visible = true;
@@ -204,6 +205,18 @@ export class Tank {
   gunDir(out) {
     this.gun.updateWorldMatrix(true, false);
     return out.set(0, 0, -1).transformDirection(this.gun.matrixWorld);
+  }
+  // Игрок садится даже в танк, занятый ботом: бот вылезает и воюет пешком
+  takeOver(s) {
+    if (!this.alive) return false;
+    const d = this.driver;
+    if (d === s) return true;
+    if (d) {
+      if (!d.bot || d.isPlayer) return false;
+      this.exit();
+      d.bot.wantTank = false; d.bot.path = null; d.bot.goal = null;
+    }
+    return this.enter(s);
   }
   enter(s) {
     if (!this.alive || this.driver) return false;

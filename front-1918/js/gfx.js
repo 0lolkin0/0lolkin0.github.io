@@ -6,15 +6,15 @@ import { RenderPass } from './addons/postprocessing/RenderPass.js';
 import { ShaderPass } from './addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from './addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from './addons/postprocessing/OutputPass.js';
-import { FXAAShader } from './addons/shaders/FXAAShader.js';
 import { rng, clamp, smoothstep, lerp } from './util.js';
 
-// Пресеты качества: разрешение, тени (размер карты, радиус, как часто обновлять), трава, пост-обработка
+// Пресеты качества: предел плотности пикселей (pr — во сколько раз больше CSS-пикселя), тени (размер карты, радиус,
+// как часто обновлять), трава, пост-обработка и сглаживание (msaa). На ПК картинка всегда в родном разрешении экрана.
 export const QUALITY = [
-  { name: 'low', pr: 0.75, shadow: 0, grass: null, post: false, hq: false, clouds: 3 },
-  { name: 'medium', pr: 1.0, shadow: 1024, soft: false, shadowR: 45, shadowEvery: 3, grass: { r: 20, d: 0.45, cap: 5000 }, post: false, hq: false, clouds: 4 },
-  { name: 'high', pr: 1.0, shadow: 2048, soft: true, shadowR: 60, shadowEvery: 2, grass: { r: 30, d: 0.8, cap: 14000 }, post: true, bloom: 0.5, hq: true, clouds: 5 },
-  { name: 'ultra', pr: 1.5, shadow: 2048, soft: true, shadowR: 75, shadowEvery: 1, grass: { r: 42, d: 1.1, cap: 30000 }, post: true, bloom: 0.75, hq: true, clouds: 6 },
+  { name: 'low', pr: 1.0, shadow: 0, grass: null, post: false, hq: false, clouds: 3 },
+  { name: 'medium', pr: 1.25, shadow: 1024, soft: false, shadowR: 45, shadowEvery: 3, grass: { r: 20, d: 0.45, cap: 5000 }, post: false, hq: false, clouds: 4 },
+  { name: 'high', pr: 2, shadow: 2048, soft: true, shadowR: 60, shadowEvery: 2, grass: { r: 30, d: 0.8, cap: 14000 }, post: true, msaa: 4, bloom: 0.5, hq: true, clouds: 5 },
+  { name: 'ultra', pr: 2, shadow: 4096, soft: true, shadowR: 75, shadowEvery: 1, grass: { r: 42, d: 1.1, cap: 30000 }, post: true, msaa: 4, bloom: 0.75, hq: true, clouds: 6 },
 ];
 
 // ---------- Бесшовный шум ----------
@@ -375,7 +375,7 @@ export class Gfx {
   constructor(renderer, quality) {
     this.renderer = renderer;
     this.q = quality;
-    this.aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    this.aniso = Math.min(16, renderer.capabilities.getMaxAnisotropy());
     this.cache = {};
     this.time = { value: 0 };
     this.mats = {};
@@ -678,13 +678,17 @@ export class Grass {
 
 // ---------- Пост-обработка ----------
 const GradeShader = {
-  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uVignette: { value: 0.9 }, uGrain: { value: 0.035 }, uSepia: { value: 0.12 }, uDamage: { value: 0 } },
+  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uVignette: { value: 0.9 }, uGrain: { value: 0.012 }, uSepia: { value: 0.12 }, uDamage: { value: 0 }, uSharp: { value: 0.3 }, uTexel: { value: new THREE.Vector2(1 / 1280, 1 / 720) } },
   vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: `
-    uniform sampler2D tDiffuse; uniform float uTime, uVignette, uGrain, uSepia, uDamage;
+    uniform sampler2D tDiffuse; uniform float uTime, uVignette, uGrain, uSepia, uDamage, uSharp; uniform vec2 uTexel;
     varying vec2 vUv;
     void main() {
       vec4 c = texture2D(tDiffuse, vUv);
+      // Лёгкая резкость (нерезкое маскирование по четырём соседям) — убирает «мыло» от сглаживания и тумана
+      vec3 nb = texture2D(tDiffuse, vUv + vec2(uTexel.x, 0.0)).rgb + texture2D(tDiffuse, vUv - vec2(uTexel.x, 0.0)).rgb
+              + texture2D(tDiffuse, vUv + vec2(0.0, uTexel.y)).rgb + texture2D(tDiffuse, vUv - vec2(0.0, uTexel.y)).rgb;
+      c.rgb = max(c.rgb + (c.rgb - nb * 0.25) * uSharp, 0.0);
       float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
       c.rgb = mix(c.rgb, vec3(l * 1.08, l * 0.99, l * 0.86), uSepia);
       c.rgb = (c.rgb - 0.5) * 1.05 + 0.5;
@@ -699,7 +703,8 @@ const GradeShader = {
 export class Post {
   constructor(renderer, scene, camera, vmScene, vmCam, quality) {
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType });
+    // Настоящее сглаживание (MSAA) вместо FXAA: FXAA размывал всю картинку, а не только края
+    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: QUALITY[quality].msaa || 0 });
     this.composer = new EffectComposer(renderer, rt);
     this.main = new RenderPass(scene, camera);
     this.vm = new RenderPass(vmScene, vmCam);
@@ -715,8 +720,6 @@ export class Post {
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
     this.composer.addPass(this.grade);
-    this.fxaa = new ShaderPass(FXAAShader);
-    this.composer.addPass(this.fxaa);
     this.setSize(renderer);
   }
   setScene(scene) { this.main.scene = scene; }
@@ -724,7 +727,10 @@ export class Post {
     const pr = renderer.getPixelRatio();
     this.composer.setPixelRatio(pr);
     this.composer.setSize(innerWidth, innerHeight);
-    if (this.fxaa) this.fxaa.material.uniforms.resolution.value.set(1 / (innerWidth * pr), 1 / (innerHeight * pr));
+    this.grade.uniforms.uTexel.value.set(1 / (innerWidth * pr), 1 / (innerHeight * pr));
+    // При пониженном разрешении рендера резкость чуть сильнее
+    const dpr = window.devicePixelRatio || 1;
+    this.grade.uniforms.uSharp.value = 0.28 + clamp(1 - pr / dpr, 0, 0.5) * 0.7;
   }
   render(showVm, time, damage) {
     this.vm.enabled = showVm;

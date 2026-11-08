@@ -230,39 +230,21 @@ export class GameAudio {
     this.tone(this.master, this.t, 0.12, 70, 45, 0.3);
     this.tone(this.master, this.t + 0.22, 0.12, 62, 40, 0.22);
   }
+  // Пометка врага: короткий двойной сигнал
+  spot() {
+    if (!this.ctx) return;
+    this.tone(this.master, this.t, 0.06, 1180, 1180, 0.07, 'triangle');
+    this.tone(this.master, this.t + 0.08, 0.08, 1560, 1560, 0.07, 'triangle');
+  }
   ui() { if (this.ctx) this.tone(this.master, this.t, 0.05, 660, 620, 0.08, 'triangle'); }
   announce(good) {
     if (!this.ctx) return;
     const t0 = this.t;
     (good ? [523, 659] : [330, 262]).forEach((f, i) => this.tone(this.master, t0 + i * 0.16, 0.3, f, f, 0.1, 'triangle'));
   }
-  startAmbient() {
-    const ctx = this.ctx;
-    const src = ctx.createBufferSource();
-    src.buffer = this.brown; src.loop = true;
-    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 420;
-    const g = ctx.createGain(); g.gain.value = 0.045;
-    const lfo = ctx.createOscillator(), lg = ctx.createGain();
-    lfo.frequency.value = 0.09; lg.gain.value = 0.025;
-    lfo.connect(lg); lg.connect(g.gain);
-    src.connect(f); f.connect(g); g.connect(this.master);
-    src.start(); lfo.start();
-    this.amb = g;
-  }
-  setRain(on) {
-    if (!this.ctx || this.rain === on) return;
-    this.rain = on;
-    if (on) {
-      const ctx = this.ctx;
-      const src = ctx.createBufferSource();
-      src.buffer = this.noise; src.loop = true;
-      const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 2500;
-      const g = ctx.createGain(); g.gain.value = 0.02;
-      src.connect(f); f.connect(g); g.connect(this.master);
-      src.start();
-      this.rainSrc = src;
-    } else if (this.rainSrc) { this.rainSrc.stop(); this.rainSrc = null; }
-  }
+  // Постоянного фонового шума (гул ветра, шипение дождя) больше нет: он раздражал и забивал выстрелы
+  startAmbient() {}
+  setRain(on) { this.rain = on; }
   // Мотор танка игрока
   engine(level) {
     if (!this.ctx) return;

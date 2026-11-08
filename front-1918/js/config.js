@@ -119,7 +119,7 @@ export function rankFor(xp) {
 
 export const SCORE = {
   kill: 100, head: 25, assist: 40, revive: 100, capture: 200, neutralize: 80, defend: 50,
-  tank: 500, heal: 10, resupply: 10, spot: 15, airship: 800, vehicleDamage: 20,
+  tank: 500, heal: 10, resupply: 10, spot: 15, spotAssist: 20, airship: 800, vehicleDamage: 20,
 };
 
 export const NAMES = [
@@ -132,7 +132,7 @@ export const SQUAD_NAMES = ['Альфа', 'Браво', 'Чарли', 'Дель�
 
 export const DEFAULT_SETTINGS = {
   map: 'field', mode: 'conquest', team: 0, bots: 12, difficulty: 1, length: 1,
-  sens: 1.0, mouseSens: 1.0, aimAssist: 0.6, quality: 'auto', volume: 0.8, vibration: true, fov: 75, leftFire: true, invertY: false, showFps: false,
+  sens: 1.0, mouseSens: 1.0, aimAssist: 0.6, quality: 'auto', volume: 0.8, vibration: true, fov: 75, leftFire: true, invertY: false, showFps: false, res: '100',
 };
 // Названия оружия для ленты убийств
 export const WNAME = {

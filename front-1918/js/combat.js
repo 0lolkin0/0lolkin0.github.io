@@ -207,6 +207,9 @@ export class Combat {
       for (const [a, d] of t.damageLog) {
         if (a !== attacker && a.team !== t.team && d >= 25) { a.stats.assists++; g.addScore(a, SCORE.assist, 'Помощь'); }
       }
+      // Помощь пометкой: врага убили, пока он был помечен
+      const sb = t.spottedBy;
+      if (sb && sb !== attacker && sb.team === attacker.team && t.spottedUntil > g.time - 0.5) g.addScore(sb, SCORE.spotAssist, 'Помощь: пометка');
       const f = g.flagAt(t.pos.x, t.pos.z);
       if (f && f.owner === attacker.team) g.addScore(attacker, SCORE.defend, 'Защита флага');
       if (attacker.bot) attacker.bot.onKill(t);
@@ -478,6 +481,7 @@ export class Combat {
       if ((s.pos.x - p.pos.x) ** 2 + (s.pos.z - p.pos.z) ** 2 > R * R) continue;
       if (s.spottedUntil < g.time && p.owner) g.addScore(p.owner, 5, null);
       s.spottedUntil = Math.max(s.spottedUntil, g.time + 1.2);
+      if (p.owner) s.spottedBy = p.owner;
     }
   }
   clear() {

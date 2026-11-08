@@ -87,7 +87,14 @@ class Game {
     if (q in map) return map[q];
     return this.touch ? 1 : 2;
   }
-  // Пресеты из QUALITY. Поверх них — динамическое разрешение: если кадров мало, картинка чуть мягче, но игра плавная
+  // Масштаб разрешения из настроек: 100% — родное разрешение экрана; «Авто» — подстраивается под FPS
+  resScale() {
+    const r = this.settings.res;
+    if (r === 'auto') return this.drs || 1;
+    const v = parseFloat(r) / 100;
+    return v > 0.4 && v <= 1 ? v : 1;
+  }
+  // Пресеты из QUALITY
   applyQuality() {
     const Q = QUALITY[this.quality];
     this.gfx.q = this.quality;
@@ -118,13 +125,13 @@ class Game {
   }
   applyPixelRatio() {
     const dpr = window.devicePixelRatio || 1;
-    const pr = Math.min(dpr, QUALITY[this.quality].pr) * this.drs;
+    const pr = Math.min(dpr, QUALITY[this.quality].pr) * this.resScale();
     if (Math.abs(this.renderer.getPixelRatio() - pr) < 0.01) return;
     this.renderer.setPixelRatio(pr);
     if (this.post) this.post.setSize(this.renderer);
     if (this.effects) this.effects.setScale(innerHeight * pr, this.camera.fov);
   }
-  // Раз в секунду: средний кадр → подстраиваем разрешение; если не помогает при «Авто» — снижаем пресет
+  // Раз в секунду: средний кадр → FPS на экран; при разрешении «Авто» — подстраиваем его (но не ниже 70%)
   perfTick(dt) {
     this.fpsAcc += dt; this.fpsN++;
     if (this.fpsAcc < 1) return;
@@ -132,15 +139,11 @@ class Game {
     this.fpsAcc = 0; this.fpsN = 0;
     this.fps = fps;
     if (this.settings.showFps) $('fps').textContent = Math.round(fps) + ' FPS · ' + Math.round(this.renderer.getPixelRatio() * 100) + '%';
-    if (this.state !== 'play') return;
+    if (this.state !== 'play' || this.settings.res !== 'auto') return;
     const old = this.drs;
-    if (fps < 48) this.drs = Math.max(0.55, this.drs - (fps < 30 ? 0.15 : 0.08));
-    else if (fps > 58 && this.drs < 1) this.drs = Math.min(1, this.drs + 0.05);
+    if (fps < 45) this.drs = Math.max(0.7, this.drs - 0.05);
+    else if (fps > 57 && this.drs < 1) this.drs = Math.min(1, this.drs + 0.05);
     if (this.drs !== old) this.applyPixelRatio();
-    this.slowSec = fps < 34 && this.drs <= 0.56 ? (this.slowSec || 0) + 1 : 0;
-    if (this.settings.quality === 'auto' && this.slowSec >= 4 && this.quality > 0) {
-      this.quality--; this.drs = 0.85; this.slowSec = 0; this.applyQuality();
-    }
   }
   resize() {
     const w = innerWidth, h = innerHeight;
@@ -318,7 +321,8 @@ class Game {
   get airshipList() { return this.vehicles.filter((v) => v.kind === 'airship'); }
 
   // ---------- Появление ----------
-  spawnOptions(team) {
+  // forPlayer — для экрана высадки игрока: танк доступен, даже если в нём бот (бот уступит место)
+  spawnOptions(team, forPlayer = false) {
     const hq = this.world.def.hq[team];
     const opts = [{ kind: 'hq', label: 'Штаб', x: hq.x, z: hq.z }];
     for (const f of this.flags) {
@@ -331,7 +335,7 @@ class Game {
       opts.push({ kind: 'squad', label: s.name, x: s.pos.x, z: s.pos.z, mate: s });
     }
     const tk = this.tanks[team];
-    if (tk && tk.alive && !tk.driver) opts.push({ kind: 'tank', label: 'Танк', x: tk.pos.x, z: tk.pos.z, tank: tk });
+    if (tk && tk.alive && (!tk.driver || (forPlayer && tk.driver.bot && !tk.driver.isPlayer))) opts.push({ kind: 'tank', label: 'Танк', x: tk.pos.x, z: tk.pos.z, tank: tk });
     return opts;
   }
   botSpawnChoice(s, initial = false) {
@@ -357,10 +361,9 @@ class Game {
     const w = this.world;
     const hq = w.def.hq[s.team];
     let x, z;
-    if (opt.kind === 'tank' && opt.tank.alive && !opt.tank.driver) {
+    if (opt.kind === 'tank' && opt.tank.alive && (!opt.tank.driver || s.isPlayer)) {
       s.spawn(opt.tank.pos.x, opt.tank.pos.z, opt.tank.yaw);
-      opt.tank.enter(s);
-      return;
+      if (s.isPlayer ? opt.tank.takeOver(s) : opt.tank.enter(s)) return;
     }
     if (opt.kind === 'hq') [x, z] = w.randomFreePoint(hq.x + rand(-16, 16), hq.z + rand(-6, 6), 5);
     else if (opt.kind === 'flag') [x, z] = w.randomFreePoint(opt.flag.x, opt.flag.z, opt.flag.r * 0.85);
@@ -384,7 +387,7 @@ class Game {
     $('pause').hidden = true;
     $('rotate').hidden = !(this.touch && innerHeight > innerWidth);
     this.audio.engine(0);
-    this.deploySel = this.deploySel && this.spawnOptions(this.player.team).find((o) => o.kind === this.deploySel.kind && o.label === this.deploySel.label) || null;
+    this.deploySel = this.deploySel && this.spawnOptions(this.player.team, true).find((o) => o.kind === this.deploySel.kind && o.label === this.deploySel.label) || null;
     this.renderClassList();
     this.updateDeploy();
     this.drawDeployMap();
@@ -420,7 +423,7 @@ class Game {
     const p = this.player;
     const wait = Math.max(0, (p.deadAt || -99) + 5 - this.time);
     const btn = $('btnDeploy');
-    const opts = this.spawnOptions(p.team);
+    const opts = this.spawnOptions(p.team, true);
     if (!this.deploySel || !opts.some((o) => o.kind === this.deploySel.kind && o.label === this.deploySel.label)) {
       // По умолчанию — флаг ближе к фронту, иначе штаб
       const fl = opts.filter((o) => o.kind === 'flag');
@@ -431,6 +434,7 @@ class Game {
     this.deployOpts = opts;
     btn.disabled = wait > 0 && !this.firstDeploy;
     btn.textContent = btn.disabled ? `Подкрепление через ${Math.ceil(wait)}…` : `В бой: ${this.deploySel.label}`;
+    this.renderSpawnList(opts);
     const my = p.team;
     $('dTk0').textContent = Math.max(0, Math.ceil(this.teams[my].tickets));
     $('dTk1').textContent = Math.max(0, Math.ceil(this.teams[1 - my].tickets));
@@ -518,7 +522,7 @@ class Game {
     const p = this.player;
     if ($('btnDeploy').disabled) return;
     this.audio.init();
-    const opts = this.spawnOptions(p.team);
+    const opts = this.spawnOptions(p.team, true);
     const sel = opts.find((o) => o.kind === this.deploySel.kind && o.label === this.deploySel.label) || opts[0];
     this.spawnSoldier(p, sel);
     if (this.firstDeploy) { this.audio.whistle(); this.hud.announce(this.mode === 'tdm' ? 'Уничтожьте врага!' : 'Захватите флаги!', true); }
@@ -537,10 +541,36 @@ class Game {
     this.input.setProne(false);
     this.tankZoom = false;
     this.viewmodel.set(p.team, p.weapon.id, p.sight.optic);
-    this.camYaw = p.yaw;
-    this.camPitch = 0;
+    this.camYaw = p.vehicle ? p.vehicle.turretYaw : p.yaw;
+    this.camPitch = p.vehicle ? 0.1 : 0;
     this.updateControls();
     $('rotate').hidden = !(this.touch && innerHeight > innerWidth);
+    if (p.vehicle) this.hud.announce('Вы в танке', true);
+  }
+  // Кнопки точек высадки под картой: то же, что выбор на карте, но нагляднее
+  renderSpawnList(opts) {
+    const box = $('spawnList');
+    if (!box) return;
+    const tk = this.tanks[this.player.team];
+    const tankWait = tk && !tk.alive ? Math.max(0, Math.ceil(tk.respawnT)) : -1;
+    const sig = opts.map((o) => o.kind + o.label + (o.tank && o.tank.driver ? '*' : '')).join('|') + '#' + (this.deploySel ? this.deploySel.kind + this.deploySel.label : '') + '#' + tankWait;
+    if (box.dataset.sig === sig) return;
+    box.dataset.sig = sig;
+    box.innerHTML = '';
+    const add = (label, o, cls) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.className = cls || '';
+      if (o) b.onclick = () => { this.deploySel = o; this.audio.ui(); this.updateDeploy(); this.drawDeployMap(); };
+      else b.disabled = true;
+      box.appendChild(b);
+    };
+    for (const o of opts) {
+      const sel = this.deploySel && o.kind === this.deploySel.kind && o.label === this.deploySel.label;
+      const label = o.kind === 'hq' ? 'Штаб' : o.kind === 'tank' ? (o.tank.driver ? 'Танк · бот уступит' : 'Танк') : o.label;
+      add(label, o, (sel ? 'on ' : '') + (o.kind === 'tank' ? 'tank' : ''));
+    }
+    if (tankWait >= 0) add(`Танк — через ${tankWait} с`, null, 'tank');
   }
   updateControls() {
     const p = this.player;
@@ -738,6 +768,7 @@ class Game {
     }
     if (p.state !== 'alive') return;
     if (inp.ev.has('pause')) { this.pause(true); return; }
+    if (inp.ev.has('spot')) this.spot(p);
     if (p.vehicle) { this.tankControl(dt, inp, k); return; }
     // Чем сильнее приближение, тем медленнее обзор
     k *= lerp(1, 1 / p.zoom, p.adsT);
@@ -794,7 +825,7 @@ class Game {
     const ctx = this.interactTarget();
     this.ctxAction = ctx;
     if (ev.has('interact') && ctx) {
-      if (ctx.kind === 'tank') { ctx.tank.enter(p); this.updateControls(); this.camYaw = ctx.tank.turretYaw; this.camPitch = 0.1; this.input.setAds(false); }
+      if (ctx.kind === 'tank' && ctx.tank.takeOver(p)) { this.updateControls(); this.camYaw = ctx.tank.turretYaw; this.camPitch = 0.1; this.input.setAds(false); this.hud.announce('Вы в танке', true); }
       else if (ctx.kind === 'revive') { this.reviveT = 0; this.reviving = ctx.target; }
     }
     if (this.reviving) {
@@ -850,10 +881,46 @@ class Game {
       if (best) return { kind: 'revive', target: best, label: 'Поднять' };
     }
     for (const t of this.tanks) {
-      if (!t || t.team !== p.team || !t.alive || t.driver) continue;
-      if (Math.hypot(t.pos.x - p.pos.x, t.pos.z - p.pos.z) < 4.2) return { kind: 'tank', tank: t, label: 'В танк' };
+      if (!t || t.team !== p.team || !t.alive) continue;
+      if (t.driver && (!t.driver.bot || t.driver.isPlayer)) continue;
+      if (Math.hypot(t.pos.x - p.pos.x, t.pos.z - p.pos.z) < 5) return { kind: 'tank', tank: t, label: 'Сесть в танк' };
     }
     return null;
+  }
+  // Пометка (Q): враг или танк в перекрестии на 7 с виден всей вашей стороне — маркер над ним и точка на карте
+  spot(p) {
+    if (this.time < (this.spotCd || 0)) return;
+    this.spotCd = this.time + 0.3;
+    const cam = this.camera.position;
+    this.camera.getWorldDirection(_d);
+    let best = null, bestK = 1;
+    const consider = (obj, kind, x, y, z, rad) => {
+      const dx = x - cam.x, dy = y - cam.y, dz = z - cam.z, d = Math.hypot(dx, dy, dz);
+      if (d < 1.5 || d > 320) return;
+      const ang = Math.acos(clamp((dx * _d.x + dy * _d.y + dz * _d.z) / d, -1, 1));
+      const lim = clamp(Math.atan2(rad * 2.2, d), 3.5 * DEG, 14 * DEG);
+      const k = ang / lim;
+      if (k >= bestK) return;
+      if (!this.world.los(cam.x, cam.y, cam.z, x, y, z)) return;
+      bestK = k; best = { obj, kind };
+    };
+    for (const s of this.soldiers) {
+      if (s.team === p.team || s.state !== 'alive' || s.vehicle) continue;
+      consider(s, 'soldier', s.pos.x, s.aimY, s.pos.z, 0.6);
+    }
+    for (const t of this.tanks) {
+      if (!t || t.team === p.team || !t.alive) continue;
+      consider(t, 'tank', t.pos.x, t.pos.y + 1.4, t.pos.z, 2.6);
+    }
+    if (!best) return;
+    const o = best.obj, until = this.time + 7;
+    const fresh = (o.spottedUntil || 0) < this.time;
+    o.spottedUntil = Math.max(o.spottedUntil || 0, until);
+    o.spottedBy = p;
+    o.spotAt = this.time;
+    if (best.kind === 'tank' && o.driver) { o.driver.spottedUntil = Math.max(o.driver.spottedUntil, until); o.driver.spottedBy = p; }
+    this.audio.spot();
+    if (fresh) this.addScore(p, SCORE.spot, best.kind === 'tank' ? 'Танк помечен' : 'Враг помечен');
   }
   tankControl(dt, inp, k) {
     const p = this.player, t = p.vehicle, st = this.settings;
@@ -1364,6 +1431,7 @@ class Game {
       row('Помощь в прицеливании', range('aimAssist', 0, 1, 0.05)),
       row('Поле зрения', range('fov', 60, 95, 1)),
       row('Графика', sel('quality', [['auto', 'Авто'], ['low', 'Низкая'], ['medium', 'Средняя'], ['high', 'Высокая'], ['ultra', 'Ультра']])),
+      row('Разрешение', sel('res', [['100', '100% — чётко'], ['85', '85%'], ['70', '70% — быстрее'], ['auto', 'Авто (по FPS)']])),
       row('Показывать FPS', check('showFps')),
       row('Громкость', range('volume', 0, 1, 0.05)),
       row('Вибрация', check('vibration')),
@@ -1378,6 +1446,7 @@ class Game {
         if (el.nextElementSibling && el.nextElementSibling.tagName === 'OUTPUT') el.nextElementSibling.textContent = v;
         if (k === 'volume') this.audio.setVolume(v);
         if (k === 'quality') { this.quality = this.pickQuality(); this.drs = 1; this.applyQuality(); }
+        if (k === 'res') { this.drs = 1; this.applyPixelRatio(); }
         if (k === 'showFps') $('fps').hidden = !v;
         if (k === 'leftFire') this.updateControls();
         this.persist();
