@@ -1,20 +1,15 @@
 // Графика: процедурные текстуры, материалы (рельеф со смешиванием слоёв, трипланарные детали), небо с облаками,
-// трава вокруг камеры и пост-обработка (свечение, цветокоррекция, сглаживание)
+// трава вокруг камеры. Пост-обработка — в post.js
 import * as THREE from './three.module.min.js';
-import { EffectComposer } from './addons/postprocessing/EffectComposer.js';
-import { RenderPass } from './addons/postprocessing/RenderPass.js';
-import { ShaderPass } from './addons/postprocessing/ShaderPass.js';
-import { UnrealBloomPass } from './addons/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from './addons/postprocessing/OutputPass.js';
-import { FXAAShader } from './addons/shaders/FXAAShader.js';
 import { rng, clamp, smoothstep, lerp } from './util.js';
 
-// Пресеты качества: разрешение, тени (размер карты, радиус, как часто обновлять), трава, пост-обработка
+// Пресеты качества: предел плотности пикселей (pr — во сколько раз больше CSS-пикселя), тени (размер карты, радиус,
+// как часто обновлять), трава, пост-обработка и сглаживание (msaa). На ПК картинка всегда в родном разрешении экрана.
 export const QUALITY = [
-  { name: 'low', pr: 0.75, shadow: 0, grass: null, post: false, hq: false, clouds: 3 },
-  { name: 'medium', pr: 1.0, shadow: 1024, soft: false, shadowR: 45, shadowEvery: 3, grass: { r: 20, d: 0.45, cap: 5000 }, post: false, hq: false, clouds: 4 },
-  { name: 'high', pr: 1.0, shadow: 2048, soft: true, shadowR: 60, shadowEvery: 2, grass: { r: 30, d: 0.8, cap: 14000 }, post: true, bloom: 0.5, hq: true, clouds: 5 },
-  { name: 'ultra', pr: 1.5, shadow: 2048, soft: true, shadowR: 75, shadowEvery: 1, grass: { r: 42, d: 1.1, cap: 30000 }, post: true, bloom: 0.75, hq: true, clouds: 6 },
+  { name: 'low', pr: 1.0, shadow: 0, grass: null, post: false, hq: false, clouds: 3 },
+  { name: 'medium', pr: 1.25, shadow: 1024, soft: false, shadowR: 45, shadowEvery: 3, grass: { r: 20, d: 0.45, cap: 5000 }, post: false, hq: false, clouds: 4 },
+  { name: 'high', pr: 2, shadow: 2048, soft: true, shadowR: 60, shadowEvery: 2, grass: { r: 30, d: 0.8, cap: 14000 }, post: true, msaa: 4, bloom: 0.5, hq: true, clouds: 5 },
+  { name: 'ultra', pr: 2, shadow: 4096, soft: true, shadowR: 75, shadowEvery: 1, grass: { r: 42, d: 1.1, cap: 30000 }, post: true, msaa: 4, bloom: 0.75, hq: true, clouds: 6 },
 ];
 
 // ---------- Бесшовный шум ----------
@@ -372,22 +367,24 @@ function foliageTexture(kind) {
 
 // ---------- Менеджер ----------
 export class Gfx {
-  constructor(renderer, quality) {
+  // tex — детализация текстур: 0 — низкая, 1 — высокая, 2 — ультра (вдвое больше)
+  constructor(renderer, quality, tex = 1) {
     this.renderer = renderer;
     this.q = quality;
-    this.aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    this.texK = tex >= 2 ? 2 : tex <= 0 ? 0.5 : 1;
+    this.aniso = Math.min(16, renderer.capabilities.getMaxAnisotropy());
     this.cache = {};
     this.time = { value: 0 };
     this.mats = {};
   }
   terrainTex(kind) {
     const key = 't_' + kind;
-    if (!this.cache[key]) this.cache[key] = finishTex(TERRAIN_RECIPES[kind](512, 1000 + kind.length * 37), true, this.aniso);
+    if (!this.cache[key]) this.cache[key] = finishTex(TERRAIN_RECIPES[kind](Math.round(512 * this.texK), 1000 + kind.length * 37), true, this.aniso);
     return this.cache[key];
   }
   detail(kind) {
     const key = 'd_' + kind;
-    if (!this.cache[key]) this.cache[key] = finishTex(DETAIL_RECIPES[kind](kind === 'fabric' ? 128 : 256, 500 + kind.charCodeAt(0) * 7), false, this.aniso);
+    if (!this.cache[key]) this.cache[key] = finishTex(DETAIL_RECIPES[kind](Math.round((kind === 'fabric' ? 128 : 256) * this.texK), 500 + kind.charCodeAt(0) * 7), false, this.aniso);
     return this.cache[key];
   }
   foliage(kind) {
@@ -572,10 +569,10 @@ function grassTuftTexture(dry) {
   return t;
 }
 export class Grass {
-  constructor(scene, world, quality, gfx) {
+  // cfg — уровень травы из GRASS_LEVELS (post.js): радиус, плотность, предел
+  constructor(scene, world, cfg, gfx, receiveShadow = true) {
     this.world = world;
     this.dry = world.def.theme === 'winter';
-    const cfg = QUALITY[quality].grass;
     this.enabled = !!cfg;
     if (!cfg) return;
     this.R = cfg.r; this.density = cfg.d * (this.dry ? 0.35 : 1); this.cap = cfg.cap;
@@ -617,7 +614,7 @@ export class Grass {
     this.mesh = new THREE.InstancedMesh(g, mat, this.cap);
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;
-    this.mesh.receiveShadow = quality >= 2;
+    this.mesh.receiveShadow = receiveShadow;
     this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(this.cap * 3), 3);
     scene.add(this.mesh);
     this.chunks = new Map();
@@ -674,63 +671,4 @@ export class Grass {
     this.mesh.instanceMatrix.needsUpdate = true;
     this.mesh.instanceColor.needsUpdate = true;
   }
-}
-
-// ---------- Пост-обработка ----------
-const GradeShader = {
-  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uVignette: { value: 0.9 }, uGrain: { value: 0.035 }, uSepia: { value: 0.12 }, uDamage: { value: 0 } },
-  vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-  fragmentShader: `
-    uniform sampler2D tDiffuse; uniform float uTime, uVignette, uGrain, uSepia, uDamage;
-    varying vec2 vUv;
-    void main() {
-      vec4 c = texture2D(tDiffuse, vUv);
-      float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
-      c.rgb = mix(c.rgb, vec3(l * 1.08, l * 0.99, l * 0.86), uSepia);
-      c.rgb = (c.rgb - 0.5) * 1.05 + 0.5;
-      vec2 d = vUv - 0.5;
-      c.rgb *= 1.0 - dot(d, d) * uVignette;
-      c.rgb = mix(c.rgb, vec3(l * 0.9, l * 0.15, l * 0.1), uDamage * smoothstep(0.1, 0.7, length(d)));
-      float n = fract(sin(dot(vUv * vec2(12.9898, 78.233) + fract(uTime) * 17.0, vec2(1.0, 1.7))) * 43758.5453);
-      c.rgb += (n - 0.5) * uGrain;
-      gl_FragColor = c;
-    }`,
-};
-export class Post {
-  constructor(renderer, scene, camera, vmScene, vmCam, quality) {
-    const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType });
-    this.composer = new EffectComposer(renderer, rt);
-    this.main = new RenderPass(scene, camera);
-    this.vm = new RenderPass(vmScene, vmCam);
-    this.vm.clear = false;
-    this.vm.clearDepth = true;
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.32, 0.55, 0.92);
-    // Свечение считаем в пониженном разрешении — его всё равно размывают
-    const k = QUALITY[quality].bloom || 0.5, bs = this.bloom.setSize.bind(this.bloom);
-    this.bloom.setSize = (w, h) => bs(Math.max(64, Math.round(w * k)), Math.max(64, Math.round(h * k)));
-    this.grade = new ShaderPass(GradeShader);
-    this.composer.addPass(this.main);
-    this.composer.addPass(this.vm);
-    this.composer.addPass(this.bloom);
-    this.composer.addPass(new OutputPass());
-    this.composer.addPass(this.grade);
-    this.fxaa = new ShaderPass(FXAAShader);
-    this.composer.addPass(this.fxaa);
-    this.setSize(renderer);
-  }
-  setScene(scene) { this.main.scene = scene; }
-  setSize(renderer) {
-    const pr = renderer.getPixelRatio();
-    this.composer.setPixelRatio(pr);
-    this.composer.setSize(innerWidth, innerHeight);
-    if (this.fxaa) this.fxaa.material.uniforms.resolution.value.set(1 / (innerWidth * pr), 1 / (innerHeight * pr));
-  }
-  render(showVm, time, damage) {
-    this.vm.enabled = showVm;
-    this.grade.uniforms.uTime.value = time;
-    this.grade.uniforms.uDamage.value = damage;
-    this.composer.render();
-  }
-  dispose() { this.composer.dispose(); }
 }

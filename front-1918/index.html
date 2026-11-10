@@ -13,9 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=PT+Sans:wght@400;700&display=swap">
+<link rel="stylesheet" href="fonts/fonts.css">
 <style>
 /* Слои: canvas с миром → canvas с маркерами → HUD и кнопки → экраны (меню, развёртывание, пауза, итоги) */
 :root {
@@ -109,7 +107,8 @@ canvas#scopeCv { position: fixed; inset: 0; width: 100%; height: 100%; pointer-e
 #ammoBox.tank .eq, #ammoBox.tank .ow { display: none; }
 #btnPause { position: absolute; top: max(8px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); width: 38px; height: 34px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--paper); font: 700 15px var(--display); }
 #btnInteract { position: absolute; right: 250px; bottom: 170px; padding: 10px 16px; border-radius: 22px; border: 2px solid var(--brass); background: rgba(40,34,20,.9); color: var(--brass); font: 600 15px var(--display); text-transform: uppercase; }
-body:not(.touch) #btnInteract::after { content: " [E]"; color: var(--muted); }
+body:not(.touch) #btnInteract { right: auto; left: 50%; bottom: 30%; transform: translateX(-50%); font-size: 17px; }
+body:not(.touch) #btnInteract::before { content: "E "; display: inline-block; margin-right: 8px; padding: 0 6px; border-radius: 4px; background: var(--brass); color: #1b160d; }
 #reviveBar { position: absolute; left: 50%; top: 62%; width: 160px; height: 8px; transform: translateX(-50%); background: rgba(0,0,0,.5); border-radius: 4px; overflow: hidden; }
 #reviveBar i { display: block; height: 100%; background: var(--green); }
 #downed { position: absolute; left: 50%; bottom: 24%; transform: translateX(-50%); text-align: center; background: var(--panel); border: 1px solid var(--line); padding: 10px 18px 12px; border-radius: 12px; min-width: 250px; }
@@ -145,6 +144,8 @@ body.left-fire .cbtn.fire2 { display: grid; }
 .cbtn.melee { width: 48px; height: 48px; right: calc(var(--R) + 200px); bottom: 24px; }
 .cbtn.grenade { width: 50px; height: 50px; right: calc(var(--R) + 4px); bottom: 212px; }
 .cbtn.gadget { width: 50px; height: 50px; right: calc(var(--R) + 66px); bottom: 236px; }
+.cbtn.spot { width: 46px; height: 46px; right: calc(var(--R) + 200px); bottom: 174px; }
+body.in-tank .cbtn.spot { right: calc(var(--R) + 210px); bottom: 190px; }
 .cbtn.mg, .cbtn.exit { display: none; }
 body.in-tank .cbtn.mg { display: grid; width: 66px; height: 66px; right: calc(var(--R) + 120px); bottom: 104px; }
 body.in-tank .cbtn.ads { right: calc(var(--R) + 132px); bottom: 190px; }
@@ -204,6 +205,10 @@ body.touch #moveHint { display: block; }
 #deployMap { position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; touch-action: none; }
 #deploy footer { grid-column: 1 / 3; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 #deploy footer .hint { margin: 0; }
+#spawnList { flex: 1; min-width: 0; overflow-x: auto; flex-wrap: nowrap; justify-content: center; }
+#spawnList button { white-space: nowrap; }
+#spawnList button.tank { border-color: var(--brass); }
+#spawnList button:disabled { opacity: .55; }
 
 #pause, #settings, #help, #end { background: rgba(14,12,9,.88); display: flex; align-items: center; justify-content: center; }
 .card { background: var(--panel2); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; max-width: 640px; width: 100%; max-height: 100%; overflow: auto; }
@@ -214,6 +219,12 @@ body.touch #moveHint { display: block; }
 .srow output { width: 36px; text-align: right; color: var(--brass); font-family: var(--display); }
 .srow select { background: #2b261c; color: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; font: inherit; }
 .srow input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--brass); }
+.srow span small { display: block; font-size: 11px; color: var(--muted); margin-top: 1px; }
+.srow .gpu { font: 500 12px var(--display); color: #ffb08a; text-align: right; max-width: 60%; }
+.srow .gpu.ok { color: #9be38a; }
+#settingsBody h3 { margin: 14px 0 4px; font: 600 15px var(--display); color: var(--brass); text-transform: uppercase; letter-spacing: .05em; }
+#settingsBody h3:first-child { margin-top: 0; }
+#settings .card { max-height: calc(100vh - 24px); overflow-y: auto; }
 #help .card { font-size: 14px; line-height: 1.45; }
 #help h3 { font: 600 15px var(--display); text-transform: uppercase; color: var(--brass); margin: 10px 0 4px; }
 #help ul { margin: 0; padding-left: 18px; }
@@ -306,8 +317,8 @@ body.ready #loading { display: none; }
   <div id="scorepops"></div>
   <canvas id="minimap" class="noinput"></canvas>
   <div id="mapHint">карта</div>
-  <div id="pcKeys" class="pckeys" hidden><kbd>WASD</kbd> ход · <kbd>Shift</kbd> бег · <kbd>ПКМ</kbd> прицел · <kbd>C</kbd> присесть · <kbd>Alt</kbd> лечь · <kbd>1</kbd>/<kbd>2</kbd> оружие · <kbd>M</kbd> карта · <kbd>H</kbd> ещё<span class="more"><br><kbd>R</kbd> перезарядка · <kbd>Пробел</kbd> прыжок · <kbd>G</kbd> граната · <kbd>F</kbd> снаряжение · <kbd>V</kbd> штык · <kbd>E</kbd> действие · <kbd>Tab</kbd> счёт · <kbd>Shift</kbd> в оптике — задержать дыхание</span></div>
-  <div id="pcKeysTank" class="pckeys" hidden><kbd>WASD</kbd> ехать · <kbd>ЛКМ</kbd> орудие · <kbd>ПКМ</kbd> прицел наводчика · <kbd>Пробел</kbd>/<kbd>F</kbd> пулемёт · <kbd>E</kbd> выйти</div>
+  <div id="pcKeys" class="pckeys" hidden><kbd>WASD</kbd> ход · <kbd>Shift</kbd> бег · <kbd>ПКМ</kbd> прицел · <kbd>C</kbd> присесть · <kbd>Alt</kbd> лечь · <kbd>Q</kbd> пометить врага · <kbd>E</kbd> сесть в танк · <kbd>1</kbd>/<kbd>2</kbd> оружие · <kbd>M</kbd> карта · <kbd>H</kbd> ещё<span class="more"><br><kbd>R</kbd> перезарядка · <kbd>Пробел</kbd> прыжок · <kbd>G</kbd> граната · <kbd>F</kbd> снаряжение · <kbd>V</kbd> штык · <kbd>E</kbd> действие · <kbd>Tab</kbd> счёт · <kbd>Shift</kbd> в оптике — задержать дыхание</span></div>
+  <div id="pcKeysTank" class="pckeys" hidden><b>Вы в танке.</b> <kbd>W</kbd>/<kbd>S</kbd> газ и задний ход · <kbd>A</kbd>/<kbd>D</kbd> поворот · мышь — башня · <kbd>ЛКМ</kbd> орудие · <kbd>Пробел</kbd>/<kbd>F</kbd> пулемёт · <kbd>ПКМ</kbd> прицел наводчика · <kbd>Q</kbd> пометить · <kbd>E</kbd> или <kbd>X</kbd> — выйти</div>
   <div id="killfeed"></div>
   <div id="status">
     <div id="hpBox"><div class="lab"><span>Здоровье</span><span id="hpNum">100</span></div><div class="bar"><div id="hpFill"></div></div></div>
@@ -339,6 +350,7 @@ body.ready #loading { display: none; }
     <div class="cbtn gadget" data-btn="gadget"><span></span><em>снаряжение</em></div>
     <div class="cbtn mg" data-btn="mg"><span></span><em>пулемёт</em></div>
     <div class="cbtn exit" data-btn="exit"><span></span><em>выйти</em></div>
+    <div class="cbtn spot" data-btn="spot"><span></span><em>пометить</em></div>
   </div>
   <button id="btnPause" class="noinput">II</button>
 </div>
@@ -348,13 +360,14 @@ body.ready #loading { display: none; }
 <section id="menu" class="screen">
   <div class="left">
     <h1>Фронт <em>1918</em></h1>
-    <p class="sub">Великая война. Окопы, штыковые атаки, танки и цеппелины — бой с ботами прямо на телефоне.</p>
+    <p class="sub">Великая война. Окопы, штыковые атаки, танки и цеппелины — бой с ботами на телефоне и компьютере.</p>
     <div class="rank"><b id="rankName">Рядовой</b><div class="xpbar"><i id="rankXp"></i></div><small id="rankInfo"></small></div>
     <button class="btn big" id="btnPlay">В бой</button>
     <div class="menuBtns">
       <button class="btn" id="btnSettings">Настройки</button>
       <button class="btn" id="btnHelp">Как играть</button>
       <button class="btn" id="btnInstall" hidden>Установить как приложение</button>
+      <button class="btn" id="btnQuit" hidden>Выход из игры</button>
     </div>
     <p class="hint" id="iosHint" hidden>Чтобы игра была на экране телефона как приложение: в Safari нажмите <b>«Поделиться»</b> → <b>«На экран „Домой“»</b>.</p>
     <p class="hint" id="pcHint" hidden>На компьютере игра работает прямо в браузере: управление мышью и клавиатурой. Чтобы поставить её как отдельное приложение с ярлыком, в Chrome или Edge нажмите значок установки в адресной строке (или «Установить как приложение» здесь).</p>
@@ -380,7 +393,7 @@ body.ready #loading { display: none; }
   <div id="mapWrap"><canvas id="deployMap"></canvas></div>
   <footer>
     <button class="btn" id="btnDeployMenu">Меню</button>
-    <p class="hint">Выберите класс и точку высадки на карте: штаб, наш флаг, отряд или танк.</p>
+    <div id="spawnList" class="seg"></div>
     <button class="btn big" id="btnDeploy">В бой</button>
   </footer>
 </section>
@@ -419,15 +432,17 @@ body.ready #loading { display: none; }
       <li>«Присесть» и «лечь» — отдельные кнопки; «прыжок» поднимает обратно. Лёжа разброс в два раза меньше.</li>
       <li>«Пистолет» — переключение на личное оружие и обратно. Если в основном стволе кончились патроны, переключение произойдёт само.</li>
       <li>Нажмите на миникарту, чтобы открыть большую карту.</li>
-      <li>В танке: «огонь» — орудие, «пулемёт», «оптика» — прицел наводчика с приближением ×3.5.</li>
+      <li>Кнопка «пометить» отмечает врага в перекрестии для всей вашей стороны.</li>
+      <li>Танк: подойдите к своему танку и нажмите «Сесть в танк» или выберите «Танк» на экране высадки. В танке: «огонь» — орудие, «пулемёт», «оптика» — прицел наводчика с приближением ×3.5.</li>
     </ul>
     <h3>Компьютер</h3>
     <ul>
       <li>Щёлкните по экрану — мышь захватится для обзора. <kbd>Esc</kbd> — пауза.</li>
       <li><kbd>W A S D</kbd> — ходьба, <kbd>Shift</kbd> — бег, ЛКМ — огонь, ПКМ — прицел, <kbd>Shift</kbd> в оптике — задержать дыхание.</li>
       <li><kbd>C</kbd> присесть, <kbd>Alt</kbd> лечь, <kbd>Пробел</kbd> прыжок / встать, <kbd>1</kbd> <kbd>2</kbd> или колесо мыши — смена оружия.</li>
-      <li><kbd>R</kbd> перезарядка, <kbd>G</kbd> граната, <kbd>F</kbd> снаряжение, <kbd>V</kbd> штык, <kbd>E</kbd> действие, <kbd>M</kbd> карта, <kbd>Tab</kbd> счёт.</li>
-      <li>В танке: ЛКМ — орудие, ПКМ — прицел наводчика, <kbd>Пробел</kbd> или <kbd>F</kbd> — пулемёт, <kbd>E</kbd> — выйти.</li>
+      <li><kbd>R</kbd> перезарядка, <kbd>G</kbd> граната, <kbd>F</kbd> снаряжение, <kbd>V</kbd> штык, <kbd>E</kbd> действие (сесть в танк, поднять раненого), <kbd>M</kbd> карта, <kbd>Tab</kbd> счёт.</li>
+      <li><kbd>Q</kbd> — пометить врага в перекрестии: на 7 секунд над ним загорится красный маркер, и он появится на карте у всей вашей стороны.</li>
+      <li>Танк: подойдите к своему танку и нажмите <kbd>E</kbd> или выберите «Танк» на экране высадки. Если в танке бот, он уступит вам место. Внутри: ЛКМ — орудие, ПКМ — прицел наводчика, <kbd>Пробел</kbd> или <kbd>F</kbd> — пулемёт, <kbd>E</kbd> или <kbd>X</kbd> — выйти.</li>
     </ul>
     <h3>Прицелы</h3>
     <p>На экране высадки под классами выбирается прицел основного оружия: открытый (целик и мушка) или оптика ×2–×10. У разведчика — снайперская оптика ×6 или ×10.</p>

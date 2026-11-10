@@ -1,7 +1,7 @@
 // Солдат (общий для игрока и ботов): движение, стойки (стоя/присев/лёжа), основное и личное оружие, урон.
 // Плюс отрисовка всех солдат инстансами
 import * as THREE from './three.module.min.js';
-import { clamp, lerp, DEG, TAU, dirFromYawPitch } from './util.js';
+import { clamp, lerp, DEG, TAU, dirFromYawPitch, angleDiff } from './util.js';
 import { TEAMS, WEAPONS, CLASS_BY_ID, SIGHTS, sightZoom } from './config.js';
 import { PLAY } from './world.js';
 import { torsoGeo, thighGeo, shinGeo, armsGeo, WEAPON_IDS } from './models.js';
@@ -70,6 +70,7 @@ export class Soldier {
     this.pos.set(x, w.groundAt(x, z, w.height(x, z) + 1), z);
     this.vel.set(0, 0, 0);
     this.yaw = yaw; this.pitch = 0;
+    this.fallYaw = undefined; this.knock = false;
     this.state = 'alive';
     this.hp = 100;
     this.lieT = 0; this.crouchT = 0; this.proneT = 0; this.adsT = 0;
@@ -124,14 +125,13 @@ export class Soldier {
 
   update(dt) {
     const g = this.game;
-    if (this.state === 'dead') { this.lieT = Math.min(1, this.lieT + dt * 2.2); return; }
+    if (this.state === 'dead') { this.lieT = Math.min(1, this.lieT + dt * 2.2); this.bodyPhysics(dt); return; }
     if (this.vehicle) return;
     if (this.state === 'downed') {
       this.lieT = Math.min(1, this.lieT + dt * 2.2);
       this.proneT = Math.max(0, this.proneT - dt * 3);
       this.downT -= dt;
-      this.vel.x *= 0.9; this.vel.z *= 0.9;
-      this.applyGravity(dt);
+      this.bodyPhysics(dt);
       if (this.downT <= 0) g.combat.finishOff(this, null);
       return;
     }
@@ -277,6 +277,19 @@ export class Soldier {
     if (this.isPlayer) this.game.audio.reload(0.3);
     return true;
   }
+  // Тело без сознания: летит и скользит по инерции, падает, упирается в стены и тормозит о землю
+  bodyPhysics(dt) {
+    const w = this.game.world, p = this.pos, v = this.vel;
+    const moving = Math.abs(v.x) + Math.abs(v.z) > 0.03;
+    if (moving) {
+      p.x += v.x * dt; p.z += v.z * dt;
+      w.pushCircle(p, 0.3, p.y, p.y + 0.7, _push);
+      p.x = clamp(p.x, -PLAY, PLAY); p.z = clamp(p.z, -PLAY, PLAY);
+      const fr = Math.exp(-dt * (this.onGround ? 5.5 : 0.25));
+      v.x *= fr; v.z *= fr;
+    } else { v.x = 0; v.z = 0; }
+    if (moving || v.y !== 0 || !this.onGround) this.applyGravity(dt);
+  }
   applyGravity(dt) {
     const w = this.game.world, p = this.pos;
     this.vel.y -= GRAV * dt;
@@ -409,6 +422,8 @@ export class SoldierRenderer {
     }
     if (s.state !== 'alive') {
       const t = s.lieT, e = t * t * (3 - 2 * t);
+      // Падает туда, куда толкнул удар (пуля, взрыв), с небольшим разворотом на бок
+      if (s.fallYaw !== undefined) { r.rotation.y = s.yaw + angleDiff(s.yaw, s.fallYaw) * e; r.rotation.z = (s.fallRoll || 0) * e; }
       r.rotation.x = e * 1.5;
       r.position.y += e * 0.12;
       this.hip.position.y = lerp(this.hip.position.y, 0.92, e);

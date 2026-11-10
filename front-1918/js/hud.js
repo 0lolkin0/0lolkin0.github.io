@@ -43,7 +43,7 @@ export class Hud {
     this.resize();
   }
   resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.dpr = dpr;
     this.ov.width = Math.round(innerWidth * dpr);
     this.ov.height = Math.round(innerHeight * dpr);
@@ -214,6 +214,27 @@ export class Hud {
     if (_v.z > 1 || _v.z < -1) return null;
     return [(_v.x + 1) * 0.5 * this.ov.width, (1 - _v.y) * 0.5 * this.ov.height];
   }
+  // Маркер пометки как в больших шутерах: красный треугольник остриём вниз с обводкой, расстояние под ним;
+  // при пометке «вспыхивает», за секунду до конца мигает. Виден сквозь стены
+  spotMarker(c, pt, o, d, D, time) {
+    const left = o.spottedUntil - time;
+    if (left < 1 && Math.sin(time * 18) < 0) return;
+    const pop = o.spotAt ? Math.max(0, 1 - (time - o.spotAt) / 0.3) : 0;
+    const a = (d < 40 ? 8 : 6.5) * D * (1 + pop * 0.9);
+    c.save();
+    c.lineJoin = 'round';
+    c.beginPath(); c.moveTo(pt[0] - a, pt[1] - a * 1.1); c.lineTo(pt[0] + a, pt[1] - a * 1.1); c.lineTo(pt[0], pt[1] + a * 0.55); c.closePath();
+    c.fillStyle = '#ff3b2b'; c.fill();
+    c.lineWidth = 2 * D; c.strokeStyle = 'rgba(25,8,5,0.85)'; c.stroke();
+    if (d > 12) {
+      c.font = `600 ${10 * D}px Oswald, sans-serif`;
+      c.lineWidth = 3 * D; c.strokeStyle = 'rgba(0,0,0,0.7)';
+      const t = Math.round(d) + ' м';
+      c.strokeText(t, pt[0], pt[1] + a * 0.55 + 9 * D);
+      c.fillStyle = '#ffb3a8'; c.fillText(t, pt[0], pt[1] + a * 0.55 + 9 * D);
+    }
+    c.restore();
+  }
   drawOverlay(dt) {
     const g = this.g, p = g.player, c = this.ctx, W = this.ov.width, H = this.ov.height, D = this.dpr;
     c.clearRect(0, 0, W, H);
@@ -268,12 +289,10 @@ export class Hud {
         const a = (d < 30 ? 6 : 4.5) * D;
         c.beginPath(); c.moveTo(pt[0] - a, pt[1] - a); c.lineTo(pt[0] + a, pt[1] - a); c.lineTo(pt[0], pt[1] + a * 0.4); c.closePath(); c.fill();
         if (s.squad && d < 45) { c.font = `600 ${10 * D}px Oswald, sans-serif`; c.fillText(s.name, pt[0], pt[1] - 11 * D); }
-      } else if (s.state === 'alive' && s.spottedUntil > g.time && d < 160) {
-        const pt = this.project(s.pos.x, s.pos.y + 2.1, s.pos.z);
+      } else if (s.state === 'alive' && s.spottedUntil > g.time && d < 320) {
+        const pt = this.project(s.pos.x, s.pos.y + (s.proneT > 0.5 ? 1.0 : 2.15), s.pos.z);
         if (!pt) continue;
-        c.fillStyle = COL.enemy;
-        const a = 5.5 * D;
-        c.beginPath(); c.moveTo(pt[0] - a, pt[1] - a); c.lineTo(pt[0] + a, pt[1] - a); c.lineTo(pt[0], pt[1] + a * 0.5); c.closePath(); c.fill();
+        this.spotMarker(c, pt, s, d, D, g.time);
       }
     }
     // Танки
@@ -282,12 +301,16 @@ export class Hud {
       const d = v.pos.distanceTo(cam);
       if (d > 200 || (v === p.vehicle)) continue;
       const friend = v.team === p.team;
-      if (!friend && !(v.driver && v.driver.spottedUntil > g.time) && d > 60) continue;
+      const spotted = v.spottedUntil > g.time || (v.driver && v.driver.spottedUntil > g.time);
+      if (!friend && !spotted && d > 60) continue;
       const pt = this.project(v.pos.x, v.pos.y + 3.6, v.pos.z);
       if (!pt) continue;
+      if (!friend && spotted) { this.spotMarker(c, [pt[0], pt[1] - 16 * D], v, d, D, g.time); }
       c.fillStyle = friend ? COL.friend : COL.enemy;
       c.font = `700 ${12 * D}px Oswald, sans-serif`;
-      c.fillText(friend && !v.driver ? '▣ свободен' : '▣', pt[0], pt[1]);
+      // Свой танк: подсказка, можно ли в него сесть
+      const free = friend && (!v.driver || (v.driver.bot && !v.driver.isPlayer));
+      c.fillText(free ? `ТАНК · ${Math.round(d)} м${v.driver ? '' : ' · свободен'}` : '▣', pt[0], pt[1]);
       c.fillStyle = 'rgba(0,0,0,0.5)'; c.fillRect(pt[0] - 18 * D, pt[1] + 8 * D, 36 * D, 4 * D);
       c.fillStyle = friend ? COL.friend : COL.enemy; c.fillRect(pt[0] - 18 * D, pt[1] + 8 * D, 36 * D * (v.hp / v.maxHp), 4 * D);
     }
@@ -433,7 +456,7 @@ export class Hud {
     for (const v of g.vehicles) {
       if (!v.alive) continue;
       const friend = v.team === p.team;
-      if (!friend && v.kind === 'tank' && !(v.driver && v.driver.spottedUntil > g.time)) continue;
+      if (!friend && v.kind === 'tank' && !(v.spottedUntil > g.time || (v.driver && v.driver.spottedUntil > g.time))) continue;
       const pt = toS(v.pos.x, v.pos.z);
       if (!inside(pt) && v.kind !== 'airship') continue;
       c.fillStyle = friend ? COL.friend : COL.enemy;
@@ -548,10 +571,12 @@ export class Hud {
     for (const v of g.vehicles) {
       if (!v.alive) continue;
       const friend = v.team === p.team;
+      if (!friend && v.kind === 'tank' && !(v.spottedUntil > g.time || (v.driver && v.driver.spottedUntil > g.time))) continue;
       const [x, y] = toS(v.pos.x, v.pos.z);
       c.fillStyle = friend ? COL.friend : COL.enemy;
       const rr = v.kind === 'airship' ? 10 : 6;
       c.fillRect(x - rr, y - rr * 0.6, rr * 2, rr * 1.2);
+      if (friend && v.kind === 'tank') { c.font = '600 10px Oswald, sans-serif'; c.fillText('ТАНК', x, y - 12); }
     }
     const pp = p.vehicle ? p.vehicle.pos : p.pos;
     const [px, py] = toS(pp.x, pp.z);

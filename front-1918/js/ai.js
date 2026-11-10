@@ -236,6 +236,8 @@ export class BotBrain {
     }
     if (best !== this.target) this.holdT = undefined;
     this.target = best;
+    // Боты тоже помечают замеченных врагов для своей стороны
+    if (best && best.spottedUntil < g.time && Math.random() < 0.04) { best.spottedUntil = g.time + 5; best.spottedBy = s; }
 
     // Медик: ищет раненых
     if (s.cls.revive) {
@@ -437,6 +439,9 @@ export class BotBrain {
     if (thr > 0.3 && moved < 0.4 * dt) this.stuckT += dt; else this.stuckT = Math.max(0, this.stuckT - dt);
     if (this.stuckT > 1.5) { this.reverseT = 1.6; this.stuckT = 0; }
     if (this.reverseT > 0) { this.reverseT -= dt; thr = -1; steer = 0.8; if (this.reverseT <= 0) this.objT = 0; }
+    // Игрок своей стороны подошёл пешком — танк ждёт, чтобы он мог сесть (E)
+    const pl = g.player;
+    if (pl && pl.team === s.team && pl.state === 'alive' && !pl.vehicle && Math.hypot(pl.pos.x - tank.pos.x, pl.pos.z - tank.pos.z) < 10) { thr = 0; steer = 0; }
     ti.throttle = thr; ti.steer = steer;
     // Наводка и огонь
     ti.fire = false; ti.mg = false;

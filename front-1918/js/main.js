@@ -11,7 +11,8 @@ import { Combat } from './combat.js';
 import { ViewModel } from './viewmodel.js';
 import { Input } from './input.js';
 import { Hud } from './hud.js';
-import { Gfx, makeSky, Grass, Post, QUALITY } from './gfx.js';
+import { Gfx, makeSky, Grass } from './gfx.js';
+import { Post, GFX_PRESETS, GFX_KEYS, SHADOW_LEVELS, GRASS_LEVELS, TONE, needsPost, LAYER_NO_GBUFFER } from './post.js';
 import { ICONS } from './icons.js';
 import { TEAMS, CLASSES, CLASS_BY_ID, DIFFICULTY, NAMES, SQUAD_NAMES, SCORE, DEFAULT_SETTINGS, MATCH_LENGTH, rankFor, WEAPONS, GADGETS, SIGHTS } from './config.js';
 import { clamp, lerp, angleDiff, yawTo, DEG, TAU, rand, pick, dirFromYawPitch, fmtTime, smoothstep } from './util.js';
@@ -20,6 +21,8 @@ const $ = (id) => document.getElementById(id);
 const SAVE_KEY = 'front1918-save';
 const params = new URLSearchParams(location.search);
 const AUTOPLAY = params.has('autoplay');
+// Запуск как приложение для ПК (Electron): своё окно, без установки PWA и сервис-воркера
+const DESKTOP = params.has('desktop') || /Electron/.test(navigator.userAgent);
 const SPEED = clamp(parseFloat(params.get('speed')) || 1, 0.1, 20);
 
 // Поле зрения при заданной кратности
@@ -36,17 +39,20 @@ class Game {
     this.save.xp ||= 0;
     this.save.totals ||= { matches: 0, wins: 0, kills: 0, deaths: 0, revives: 0, caps: 0 };
     this.settings = { ...DEFAULT_SETTINGS, ...(this.save.settings || {}) };
-    for (const k of ['map', 'quality']) if (params.get(k)) this.settings[k] = params.get(k);
+    if (params.get('map')) this.settings.map = params.get('map');
     if (!MAPS[this.settings.map]) this.settings.map = 'field';
     this.save.sights ||= {};
     this.touch = matchMedia('(pointer: coarse)').matches;
-    this.quality = this.pickQuality();
     const canvas = $('game');
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: this.quality >= 1, powerPreference: 'high-performance' });
+    // Просим у системы мощную (дискретную) видеокарту; в приложении для ПК это ещё и закреплено флагами запуска
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', stencil: false });
+    this.gpuName = this.detectGpu();
+    this.initGfxSettings();
+    this.quality = this.g().base;
     this.renderer.autoClear = false;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
-    this.gfx = new Gfx(this.renderer, this.quality);
+    this.gfx = new Gfx(this.renderer, this.quality, this.g().tex);
     this.camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 700);
     this.camera.rotation.order = 'YXZ';
     this.audio = new GameAudio();
@@ -81,50 +87,102 @@ class Game {
   }
 
   // ---------- Качество графики ----------
-  pickQuality() {
-    const q = this.settings.quality;
-    const map = { low: 0, medium: 1, high: 2, ultra: 3 };
-    if (q in map) return map[q];
-    return this.touch ? 1 : 2;
+  // Название видеокарты, на которой реально идёт отрисовка (видно в настройках)
+  detectGpu() {
+    try {
+      const gl = this.renderer.getContext();
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      const s = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+      return String(s || '').replace(/^ANGLE \(/, '').replace(/\)$/, '').replace(/ Direct3D.*$/, '').replace(/, D3D1\d.*$/, '');
+    } catch (_) { return ''; }
   }
-  // Пресеты из QUALITY. Поверх них — динамическое разрешение: если кадров мало, картинка чуть мягче, но игра плавная
+  get discreteGpu() { return /nvidia|geforce|rtx|gtx|quadro|radeon rx|radeon pro|arc a\d/i.test(this.gpuName); }
+  g() { return this.settings.gfx; }
+  // Настройки графики: пресет (низкий … эпик) и отдельные параметры; старые сохранения переводим на новую схему
+  initGfxSettings() {
+    const st = this.settings;
+    let g = st.gfx && typeof st.gfx === 'object' ? { ...st.gfx } : null;
+    const q = params.get('quality') || (!g && st.quality && st.quality !== 'auto' ? st.quality : null);
+    if (q && GFX_PRESETS[q]) g = { preset: q, ...GFX_PRESETS[q] };
+    if (!g || (!GFX_PRESETS[g.preset] && g.preset !== 'custom')) {
+      const p = this.touch ? 'medium' : this.discreteGpu ? 'ultra' : 'high';
+      g = { preset: p, ...GFX_PRESETS[p] };
+    }
+    for (const k of GFX_KEYS) if (g[k] === undefined) g[k] = GFX_PRESETS.high[k];
+    st.gfx = g;
+  }
+  // Масштаб разрешения: 100% — родное разрешение экрана, больше — суперсэмплинг, «Авто» — подстраивается под FPS
+  resScale() {
+    const r = this.g().res;
+    if (r === 'auto') return this.drs || 1;
+    const v = parseFloat(r) / 100;
+    return v >= 0.4 && v <= 2 ? v : 1;
+  }
+  // Свет и погода карты для пост-обработки
+  postEnv() {
+    const T = this.world.theme;
+    return {
+      sunDir: this.sunDir.clone(), sunCol: new THREE.Color(T.sun), fogCol: new THREE.Color(T.fog),
+      skyTop: new THREE.Color(T.skyTop), skyHor: new THREE.Color(T.skyHorizon),
+      wet: T.weather === 'rain' ? 1 : 0, rain: T.weather === 'rain', fogDensity: T.weather === 'snow' ? 0.006 : 0.0045,
+    };
+  }
+  // Объекты без нормалей в G-буфере (небо, частицы, трава, листва с прозрачными краями) — на отдельный слой
+  markLayers() {
+    if (!this.scene) return;
+    this.scene.traverse((o) => {
+      if (o.isLight) return;
+      const m = o.material;
+      if (o.isPoints || o.isLine || o === this.sky || (m && !Array.isArray(m) && (m.alphaTest > 0 || m.transparent || m.isShaderMaterial))) o.layers.set(LAYER_NO_GBUFFER);
+    });
+    this.camera.layers.enable(LAYER_NO_GBUFFER);
+    if (this.sun) this.sun.shadow.camera.layers.enable(LAYER_NO_GBUFFER);
+  }
   applyQuality() {
-    const Q = QUALITY[this.quality];
-    this.gfx.q = this.quality;
+    const o = this.g();
+    this.quality = o.base;
+    this.gfx.q = o.base;
     this.drs = this.drs || 1;
+    const S = SHADOW_LEVELS[o.shadows] || null;
+    this.shadowCfg = S;
+    const tone = TONE[o.tone] || TONE.aces;
+    this.renderer.toneMapping = tone.map;
+    this.renderer.toneMappingExposure = tone.exp;
     this.applyPixelRatio();
-    this.renderer.shadowMap.enabled = Q.shadow > 0;
-    this.renderer.shadowMap.type = Q.soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    this.renderer.shadowMap.enabled = !!S;
+    this.renderer.shadowMap.type = S && S.soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
     this.renderer.shadowMap.autoUpdate = false;
     this.renderer.shadowMap.needsUpdate = true;
     if (this.sun) {
-      this.sun.castShadow = Q.shadow > 0;
-      if (Q.shadow && this.sun.shadow.mapSize.x !== Q.shadow) {
-        this.sun.shadow.mapSize.set(Q.shadow, Q.shadow);
+      this.sun.castShadow = !!S;
+      if (S && this.sun.shadow.mapSize.x !== S.size) {
+        this.sun.shadow.mapSize.set(S.size, S.size);
         if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; }
       }
-      const R = Q.shadowR || 40, sc = this.sun.shadow.camera;
+      const R = S ? S.r : 40, sc = this.sun.shadow.camera;
       sc.left = -R; sc.right = R; sc.top = R; sc.bottom = -R; sc.updateProjectionMatrix();
-      this.scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => (m.needsUpdate = true)); });
+      this.scene.traverse((ob) => { if (ob.material) [].concat(ob.material).forEach((m) => (m.needsUpdate = true)); });
     }
     if (this.post) { this.post.dispose(); this.post = null; }
-    if (Q.post && this.scene) this.post = new Post(this.renderer, this.scene, this.camera, this.viewmodel.scene, this.viewmodel.camera, this.quality);
+    if (this.scene && this.world && needsPost(o)) this.post = new Post(this.renderer, this.scene, this.camera, this.viewmodel.scene, this.viewmodel.camera, o, this.postEnv());
     if (this.scene && this.world) {
       if (this.grass && this.grass.mesh) this.scene.remove(this.grass.mesh);
-      this.grass = new Grass(this.scene, this.world, this.quality, this.gfx);
+      this.grass = new Grass(this.scene, this.world, GRASS_LEVELS[o.grass] || null, this.gfx, (o.shadows || 0) >= 2);
+      if (this.effects) this.effects.setLights(o.lights || 3);
+      this.markLayers();
     }
-    $('mood').hidden = !!Q.post;
+    $('mood').hidden = !!this.post;
     this.resize();
   }
   applyPixelRatio() {
     const dpr = window.devicePixelRatio || 1;
-    const pr = Math.min(dpr, QUALITY[this.quality].pr) * this.drs;
+    const pr = Math.min(dpr, [1, 1.25, 2, 2][this.quality] ?? 2) * this.resScale();
     if (Math.abs(this.renderer.getPixelRatio() - pr) < 0.01) return;
     this.renderer.setPixelRatio(pr);
     if (this.post) this.post.setSize(this.renderer);
     if (this.effects) this.effects.setScale(innerHeight * pr, this.camera.fov);
   }
-  // Раз в секунду: средний кадр → подстраиваем разрешение; если не помогает при «Авто» — снижаем пресет
+  // Раз в секунду: средний кадр → FPS на экран; при разрешении «Авто» — подстраиваем его (но не ниже 70%)
   perfTick(dt) {
     this.fpsAcc += dt; this.fpsN++;
     if (this.fpsAcc < 1) return;
@@ -132,15 +190,11 @@ class Game {
     this.fpsAcc = 0; this.fpsN = 0;
     this.fps = fps;
     if (this.settings.showFps) $('fps').textContent = Math.round(fps) + ' FPS · ' + Math.round(this.renderer.getPixelRatio() * 100) + '%';
-    if (this.state !== 'play') return;
+    if (this.state !== 'play' || this.g().res !== 'auto') return;
     const old = this.drs;
-    if (fps < 48) this.drs = Math.max(0.55, this.drs - (fps < 30 ? 0.15 : 0.08));
-    else if (fps > 58 && this.drs < 1) this.drs = Math.min(1, this.drs + 0.05);
+    if (fps < 45) this.drs = Math.max(0.7, this.drs - 0.05);
+    else if (fps > 57 && this.drs < 1) this.drs = Math.min(1, this.drs + 0.05);
     if (this.drs !== old) this.applyPixelRatio();
-    this.slowSec = fps < 34 && this.drs <= 0.56 ? (this.slowSec || 0) + 1 : 0;
-    if (this.settings.quality === 'auto' && this.slowSec >= 4 && this.quality > 0) {
-      this.quality--; this.drs = 0.85; this.slowSec = 0; this.applyQuality();
-    }
   }
   resize() {
     const w = innerWidth, h = innerHeight;
@@ -182,6 +236,8 @@ class Game {
     scene.environment = this.envRT.texture;
     this.viewmodel.setEnv(this.world, this.envRT.texture);
     this.effects = new Effects(scene, this.quality, T.weather, def.theme === 'winter');
+    this.effects.world = this.world;
+    this.effects.brass.onBounce = (x, y, z) => { const c = this.camera.position; if ((c.x - x) ** 2 + (c.z - z) ** 2 < 25) this.audio.casing(); };
     this.effects.setScale(innerHeight * this.renderer.getPixelRatio(), this.camera.fov);
     for (const sm of this.world.smokers) this.effects.emitters.push({ ...sm, size: 1 });
     this.soldierR = new SoldierRenderer(scene, 20, this.gfx);
@@ -318,7 +374,8 @@ class Game {
   get airshipList() { return this.vehicles.filter((v) => v.kind === 'airship'); }
 
   // ---------- Появление ----------
-  spawnOptions(team) {
+  // forPlayer — для экрана высадки игрока: танк доступен, даже если в нём бот (бот уступит место)
+  spawnOptions(team, forPlayer = false) {
     const hq = this.world.def.hq[team];
     const opts = [{ kind: 'hq', label: 'Штаб', x: hq.x, z: hq.z }];
     for (const f of this.flags) {
@@ -331,7 +388,7 @@ class Game {
       opts.push({ kind: 'squad', label: s.name, x: s.pos.x, z: s.pos.z, mate: s });
     }
     const tk = this.tanks[team];
-    if (tk && tk.alive && !tk.driver) opts.push({ kind: 'tank', label: 'Танк', x: tk.pos.x, z: tk.pos.z, tank: tk });
+    if (tk && tk.alive && (!tk.driver || (forPlayer && tk.driver.bot && !tk.driver.isPlayer))) opts.push({ kind: 'tank', label: 'Танк', x: tk.pos.x, z: tk.pos.z, tank: tk });
     return opts;
   }
   botSpawnChoice(s, initial = false) {
@@ -357,10 +414,9 @@ class Game {
     const w = this.world;
     const hq = w.def.hq[s.team];
     let x, z;
-    if (opt.kind === 'tank' && opt.tank.alive && !opt.tank.driver) {
+    if (opt.kind === 'tank' && opt.tank.alive && (!opt.tank.driver || s.isPlayer)) {
       s.spawn(opt.tank.pos.x, opt.tank.pos.z, opt.tank.yaw);
-      opt.tank.enter(s);
-      return;
+      if (s.isPlayer ? opt.tank.takeOver(s) : opt.tank.enter(s)) return;
     }
     if (opt.kind === 'hq') [x, z] = w.randomFreePoint(hq.x + rand(-16, 16), hq.z + rand(-6, 6), 5);
     else if (opt.kind === 'flag') [x, z] = w.randomFreePoint(opt.flag.x, opt.flag.z, opt.flag.r * 0.85);
@@ -384,7 +440,7 @@ class Game {
     $('pause').hidden = true;
     $('rotate').hidden = !(this.touch && innerHeight > innerWidth);
     this.audio.engine(0);
-    this.deploySel = this.deploySel && this.spawnOptions(this.player.team).find((o) => o.kind === this.deploySel.kind && o.label === this.deploySel.label) || null;
+    this.deploySel = this.deploySel && this.spawnOptions(this.player.team, true).find((o) => o.kind === this.deploySel.kind && o.label === this.deploySel.label) || null;
     this.renderClassList();
     this.updateDeploy();
     this.drawDeployMap();
@@ -420,7 +476,7 @@ class Game {
     const p = this.player;
     const wait = Math.max(0, (p.deadAt || -99) + 5 - this.time);
     const btn = $('btnDeploy');
-    const opts = this.spawnOptions(p.team);
+    const opts = this.spawnOptions(p.team, true);
     if (!this.deploySel || !opts.some((o) => o.kind === this.deploySel.kind && o.label === this.deploySel.label)) {
       // По умолчанию — флаг ближе к фронту, иначе штаб
       const fl = opts.filter((o) => o.kind === 'flag');
@@ -431,6 +487,7 @@ class Game {
     this.deployOpts = opts;
     btn.disabled = wait > 0 && !this.firstDeploy;
     btn.textContent = btn.disabled ? `Подкрепление через ${Math.ceil(wait)}…` : `В бой: ${this.deploySel.label}`;
+    this.renderSpawnList(opts);
     const my = p.team;
     $('dTk0').textContent = Math.max(0, Math.ceil(this.teams[my].tickets));
     $('dTk1').textContent = Math.max(0, Math.ceil(this.teams[1 - my].tickets));
@@ -518,7 +575,7 @@ class Game {
     const p = this.player;
     if ($('btnDeploy').disabled) return;
     this.audio.init();
-    const opts = this.spawnOptions(p.team);
+    const opts = this.spawnOptions(p.team, true);
     const sel = opts.find((o) => o.kind === this.deploySel.kind && o.label === this.deploySel.label) || opts[0];
     this.spawnSoldier(p, sel);
     if (this.firstDeploy) { this.audio.whistle(); this.hud.announce(this.mode === 'tdm' ? 'Уничтожьте врага!' : 'Захватите флаги!', true); }
@@ -537,10 +594,36 @@ class Game {
     this.input.setProne(false);
     this.tankZoom = false;
     this.viewmodel.set(p.team, p.weapon.id, p.sight.optic);
-    this.camYaw = p.yaw;
-    this.camPitch = 0;
+    this.camYaw = p.vehicle ? p.vehicle.turretYaw : p.yaw;
+    this.camPitch = p.vehicle ? 0.1 : 0;
     this.updateControls();
     $('rotate').hidden = !(this.touch && innerHeight > innerWidth);
+    if (p.vehicle) this.hud.announce('Вы в танке', true);
+  }
+  // Кнопки точек высадки под картой: то же, что выбор на карте, но нагляднее
+  renderSpawnList(opts) {
+    const box = $('spawnList');
+    if (!box) return;
+    const tk = this.tanks[this.player.team];
+    const tankWait = tk && !tk.alive ? Math.max(0, Math.ceil(tk.respawnT)) : -1;
+    const sig = opts.map((o) => o.kind + o.label + (o.tank && o.tank.driver ? '*' : '')).join('|') + '#' + (this.deploySel ? this.deploySel.kind + this.deploySel.label : '') + '#' + tankWait;
+    if (box.dataset.sig === sig) return;
+    box.dataset.sig = sig;
+    box.innerHTML = '';
+    const add = (label, o, cls) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.className = cls || '';
+      if (o) b.onclick = () => { this.deploySel = o; this.audio.ui(); this.updateDeploy(); this.drawDeployMap(); };
+      else b.disabled = true;
+      box.appendChild(b);
+    };
+    for (const o of opts) {
+      const sel = this.deploySel && o.kind === this.deploySel.kind && o.label === this.deploySel.label;
+      const label = o.kind === 'hq' ? 'Штаб' : o.kind === 'tank' ? (o.tank.driver ? 'Танк · бот уступит' : 'Танк') : o.label;
+      add(label, o, (sel ? 'on ' : '') + (o.kind === 'tank' ? 'tank' : ''));
+    }
+    if (tankWait >= 0) add(`Танк — через ${tankWait} с`, null, 'tank');
   }
   updateControls() {
     const p = this.player;
@@ -738,6 +821,7 @@ class Game {
     }
     if (p.state !== 'alive') return;
     if (inp.ev.has('pause')) { this.pause(true); return; }
+    if (inp.ev.has('spot')) this.spot(p);
     if (p.vehicle) { this.tankControl(dt, inp, k); return; }
     // Чем сильнее приближение, тем медленнее обзор
     k *= lerp(1, 1 / p.zoom, p.adsT);
@@ -794,7 +878,7 @@ class Game {
     const ctx = this.interactTarget();
     this.ctxAction = ctx;
     if (ev.has('interact') && ctx) {
-      if (ctx.kind === 'tank') { ctx.tank.enter(p); this.updateControls(); this.camYaw = ctx.tank.turretYaw; this.camPitch = 0.1; this.input.setAds(false); }
+      if (ctx.kind === 'tank' && ctx.tank.takeOver(p)) { this.updateControls(); this.camYaw = ctx.tank.turretYaw; this.camPitch = 0.1; this.input.setAds(false); this.hud.announce('Вы в танке', true); }
       else if (ctx.kind === 'revive') { this.reviveT = 0; this.reviving = ctx.target; }
     }
     if (this.reviving) {
@@ -850,10 +934,46 @@ class Game {
       if (best) return { kind: 'revive', target: best, label: 'Поднять' };
     }
     for (const t of this.tanks) {
-      if (!t || t.team !== p.team || !t.alive || t.driver) continue;
-      if (Math.hypot(t.pos.x - p.pos.x, t.pos.z - p.pos.z) < 4.2) return { kind: 'tank', tank: t, label: 'В танк' };
+      if (!t || t.team !== p.team || !t.alive) continue;
+      if (t.driver && (!t.driver.bot || t.driver.isPlayer)) continue;
+      if (Math.hypot(t.pos.x - p.pos.x, t.pos.z - p.pos.z) < 5) return { kind: 'tank', tank: t, label: 'Сесть в танк' };
     }
     return null;
+  }
+  // Пометка (Q): враг или танк в перекрестии на 7 с виден всей вашей стороне — маркер над ним и точка на карте
+  spot(p) {
+    if (this.time < (this.spotCd || 0)) return;
+    this.spotCd = this.time + 0.3;
+    const cam = this.camera.position;
+    this.camera.getWorldDirection(_d);
+    let best = null, bestK = 1;
+    const consider = (obj, kind, x, y, z, rad) => {
+      const dx = x - cam.x, dy = y - cam.y, dz = z - cam.z, d = Math.hypot(dx, dy, dz);
+      if (d < 1.5 || d > 320) return;
+      const ang = Math.acos(clamp((dx * _d.x + dy * _d.y + dz * _d.z) / d, -1, 1));
+      const lim = clamp(Math.atan2(rad * 2.2, d), 3.5 * DEG, 14 * DEG);
+      const k = ang / lim;
+      if (k >= bestK) return;
+      if (!this.world.los(cam.x, cam.y, cam.z, x, y, z)) return;
+      bestK = k; best = { obj, kind };
+    };
+    for (const s of this.soldiers) {
+      if (s.team === p.team || s.state !== 'alive' || s.vehicle) continue;
+      consider(s, 'soldier', s.pos.x, s.aimY, s.pos.z, 0.6);
+    }
+    for (const t of this.tanks) {
+      if (!t || t.team === p.team || !t.alive) continue;
+      consider(t, 'tank', t.pos.x, t.pos.y + 1.4, t.pos.z, 2.6);
+    }
+    if (!best) return;
+    const o = best.obj, until = this.time + 7;
+    const fresh = (o.spottedUntil || 0) < this.time;
+    o.spottedUntil = Math.max(o.spottedUntil || 0, until);
+    o.spottedBy = p;
+    o.spotAt = this.time;
+    if (best.kind === 'tank' && o.driver) { o.driver.spottedUntil = Math.max(o.driver.spottedUntil, until); o.driver.spottedBy = p; }
+    this.audio.spot();
+    if (fresh) this.addScore(p, SCORE.spot, best.kind === 'tank' ? 'Танк помечен' : 'Враг помечен');
   }
   tankControl(dt, inp, k) {
     const p = this.player, t = p.vehicle, st = this.settings;
@@ -1281,11 +1401,13 @@ class Game {
     if (this.grass) this.grass.update(this.camera.position);
     // Тени обновляем не каждый кадр (на средних и высоких настройках)
     this.frameN = (this.frameN || 0) + 1;
-    if (this.renderer.shadowMap.enabled) this.renderer.shadowMap.needsUpdate = this.frameN % (QUALITY[this.quality].shadowEvery || 1) === 0;
+    if (this.renderer.shadowMap.enabled) this.renderer.shadowMap.needsUpdate = this.frameN % ((this.shadowCfg && this.shadowCfg.every) || 1) === 0;
     if (this.post) {
       const p = this.player;
-      const dmg = this.state === 'play' && p && p.state === 'alive' ? clamp((45 - p.hp) / 45, 0, 1) * 0.6 : 0;
-      this.post.render(fp, this.time, dmg);
+      const live = this.state === 'play' && p && p.state === 'alive';
+      const dmg = live ? clamp((45 - p.hp) / 45, 0, 1) * 0.6 : 0;
+      const ads = fp && live && !p.scoped ? p.adsT : 0;
+      this.post.render({ showVm: fp, time: this.time, damage: dmg, ads });
       return;
     }
     r.clear();
@@ -1352,23 +1474,46 @@ class Game {
     $('mapDesc').textContent = MAPS[st.map].desc + (st.mode === 'tdm' ? ' Схватка: побеждает сторона, первой выбившая врага.' : ' Захват: держите больше флагов, чтобы враг терял подкрепления.');
   }
   renderSettings() {
-    const st = this.settings;
+    const st = this.settings, g = this.g();
     const box = $('settingsBody');
-    const row = (label, html) => `<label class="srow"><span>${label}</span>${html}</label>`;
+    const row = (label, html, hint) => `<label class="srow"><span>${label}${hint ? `<small>${hint}</small>` : ''}</span>${html}</label>`;
     const range = (key, min, max, step) => `<input type="range" data-k="${key}" min="${min}" max="${max}" step="${step}" value="${st[key]}"><output>${st[key]}</output>`;
     const check = (key) => `<input type="checkbox" data-k="${key}" ${st[key] ? 'checked' : ''}>`;
     const sel = (key, items) => `<select data-k="${key}">${items.map(([v, l]) => `<option value="${v}" ${String(st[key]) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+    const gsel = (key, items) => `<select data-g="${key}">${items.map(([v, l]) => `<option value="${v}" ${String(g[key]) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+    const gchk = (key, on = g[key]) => `<input type="checkbox" data-g="${key}" ${on ? 'checked' : ''}>`;
+    const rtxOn = g.ao && g.ssr && g.godrays;
     box.innerHTML = [
+      '<h3>Управление</h3>',
       row('Чувствительность обзора (экран)', range('sens', 0.3, 2.5, 0.05)),
       row('Чувствительность мыши', range('mouseSens', 0.2, 3, 0.05)),
       row('Помощь в прицеливании', range('aimAssist', 0, 1, 0.05)),
       row('Поле зрения', range('fov', 60, 95, 1)),
-      row('Графика', sel('quality', [['auto', 'Авто'], ['low', 'Низкая'], ['medium', 'Средняя'], ['high', 'Высокая'], ['ultra', 'Ультра']])),
-      row('Показывать FPS', check('showFps')),
       row('Громкость', range('volume', 0, 1, 0.05)),
       row('Вибрация', check('vibration')),
       row('Кнопка огня слева', check('leftFire')),
       row('Инверсия по вертикали', check('invertY')),
+      '<h3>Графика</h3>',
+      row('Видеокарта', `<span class="gpu${this.discreteGpu ? ' ok' : ''}">${this.gpuName || 'неизвестно'}</span>`),
+      row('Пресет', gsel('preset', [['low', 'Низкий'], ['medium', 'Средний'], ['high', 'Высокий'], ['ultra', 'Ультра'], ['epic', 'Эпик — максимум'], ['custom', 'Свой']])),
+      row('Эффекты уровня RTX', gchk('rtx', rtxOn), 'отражения SSR + затенение GTAO + лучи солнца'),
+      row('Разрешение рендера', gsel('res', [['50', '50%'], ['67', '67%'], ['75', '75%'], ['85', '85%'], ['100', '100% — родное'], ['125', '125% — суперсэмплинг'], ['150', '150%'], ['200', '200% — очень тяжело'], ['auto', 'Авто по FPS']])),
+      row('Сглаживание', gsel('aa', [['off', 'Выкл'], ['fxaa', 'FXAA — быстрое'], ['smaa', 'SMAA — чёткое'], ['msaa4', 'MSAA ×4'], ['msaa8', 'MSAA ×8']])),
+      row('Тени', gsel('shadows', [[0, 'Выкл'], [1, 'Низкие'], [2, 'Средние'], [3, 'Высокие (4K)'], [4, 'Эпические (8K)']])),
+      row('Затенение GTAO', gchk('ao'), 'контактные тени в окопах и у стен'),
+      row('Отражения SSR', gchk('ssr'), 'лужи и мокрая земля в дождь'),
+      row('Объёмный туман', gchk('atmo'), 'дымка в низинах и свет от солнца'),
+      row('Лучи солнца', gchk('godrays')),
+      row('Размытие в движении', gchk('mblur')),
+      row('Глубина резкости в прицеле', gchk('dof')),
+      row('Свечение', gchk('bloom')),
+      row('Эффект плёнки', gchk('film'), 'зерно, виньетка, аберрация'),
+      row('Резкость', `<input type="range" data-g="sharpen" min="0" max="1" step="0.05" value="${g.sharpen}"><output>${g.sharpen}</output>`),
+      row('Трава', gsel('grass', [[0, 'Нет'], [1, 'Мало'], [2, 'Средне'], [3, 'Много'], [4, 'Максимум']])),
+      row('Динамический свет', gsel('lights', [[2, '2 источника'], [4, '4 источника'], [6, '6 источников'], [8, '8 источников']]), 'вспышки выстрелов и взрывов'),
+      row('Текстуры', gsel('tex', [[0, 'Низкие'], [1, 'Высокие'], [2, 'Ультра']]), 'применятся после перезапуска игры'),
+      row('Цветопередача', gsel('tone', [['aces', 'Кино (ACES)'], ['agx', 'Мягкая (AgX)'], ['neutral', 'Нейтральная']])),
+      row('Показывать FPS', check('showFps')),
     ].join('');
     box.querySelectorAll('[data-k]').forEach((el) => {
       el.oninput = el.onchange = () => {
@@ -1377,11 +1522,32 @@ class Game {
         st[k] = v;
         if (el.nextElementSibling && el.nextElementSibling.tagName === 'OUTPUT') el.nextElementSibling.textContent = v;
         if (k === 'volume') this.audio.setVolume(v);
-        if (k === 'quality') { this.quality = this.pickQuality(); this.drs = 1; this.applyQuality(); }
         if (k === 'showFps') $('fps').hidden = !v;
         if (k === 'leftFire') this.updateControls();
         this.persist();
       };
+    });
+    box.querySelectorAll('[data-g]').forEach((el) => {
+      const apply = (live) => {
+        const k = el.dataset.g;
+        let v = el.type === 'checkbox' ? el.checked : el.type === 'range' ? parseFloat(el.value) : el.value;
+        if (['shadows', 'grass', 'lights', 'tex'].includes(k)) v = parseInt(v, 10);
+        if (k === 'sharpen') {
+          g.sharpen = v; g.preset = 'custom';
+          if (el.nextElementSibling) el.nextElementSibling.textContent = v;
+          if (this.post) this.post.grade.uniforms.uSharp.value = v;
+          if (!live) { this.persist(); if (!this.post && v > 0) this.applyQuality(); }
+          return;
+        }
+        if (k === 'preset') { if (v !== 'custom') Object.assign(g, GFX_PRESETS[v]); g.preset = v; }
+        else if (k === 'rtx') { g.ao = g.ssr = g.godrays = v; g.preset = 'custom'; }
+        else { g[k] = v; g.preset = 'custom'; }
+        this.persist();
+        this.drs = 1;
+        this.applyQuality();
+        this.renderSettings();
+      };
+      if (el.type === 'range') { el.oninput = () => apply(true); el.onchange = () => apply(false); } else el.onchange = () => apply(false);
     });
   }
   bindUI() {
@@ -1423,11 +1589,16 @@ class Game {
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     if (!standalone && ios) $('iosHint').hidden = false;
     if (!standalone && !ios && this.touch) $('androidHint').hidden = false;
-    if (!standalone && !this.touch) $('pcHint').hidden = false;
+    if (!standalone && !this.touch && !DESKTOP) $('pcHint').hidden = false;
+    if (DESKTOP) {
+      document.body.classList.add('desktop');
+      $('btnQuit').hidden = false;
+      on('btnQuit', () => window.close());
+    }
   }
 }
 
-if ('serviceWorker' in navigator && location.protocol !== 'file:' && !AUTOPLAY) {
+if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !AUTOPLAY && !DESKTOP) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }
 
