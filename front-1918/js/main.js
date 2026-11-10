@@ -239,6 +239,28 @@ class Game {
     this.viewmodel.setEnv(this.world, this.envRT.texture);
     this.effects = new Effects(scene, this.quality, T.weather, def.theme === 'winter');
     this.effects.world = this.world;
+    // Разрушения: обломки, пыль и звук; штабель снарядов детонирует с задержкой
+    this.booms = [];
+    this.world.onDestroy = (pc, fx, fz) => {
+      this.effects.shatter(pc, fx, fz);
+      this.audio.crash(pc.x, pc.y0, pc.z, pc.strength >= 3 || !!pc.roofPiece);
+      if (pc.explosive) this.booms.push({ x: pc.x, y: pc.y0 + 0.4, z: pc.z, t: 0.25 + Math.random() * 0.3 });
+    };
+    this.world.onTreeFall = (t, landed) => {
+      this.audio.treeFall(t.x, t.y, t.z, landed);
+      if (!landed) return;
+      const hx = t.x + t.fall.dx * 4.5 * t.s, hz = t.z + t.fall.dz * 4.5 * t.s, hy = this.world.height(hx, hz) + 0.3;
+      for (let i = 0; i < 7; i++) this.effects.dust(hx + rand(-1.6, 1.6), hy, hz + rand(-1.6, 1.6), 1.5);
+    };
+    this.world.onCrater = (x, z, R, deform) => {
+      if (this.grass) this.grass.invalidate(x, z, R);
+      if (!deform) return;
+      // Тела и ящики не висят над новой воронкой
+      for (const s of this.soldiers) if (s.state !== 'alive' && (s.pos.x - x) ** 2 + (s.pos.z - z) ** 2 < R * R) s.onGround = false;
+      if (this.combat) for (const d of this.combat.deployables) {
+        if ((d.x - x) ** 2 + (d.z - z) ** 2 < R * R) { d.y = this.world.groundAt(d.x, d.z, d.y + 1); d.mesh.position.y = d.y; }
+      }
+    };
     this.effects.brass.onBounce = (x, y, z) => { const c = this.camera.position; if ((c.x - x) ** 2 + (c.z - z) ** 2 < 25) this.audio.casing(); };
     this.effects.setScale(innerHeight * this.renderer.getPixelRatio(), this.camera.fov);
     for (const sm of this.world.smokers) this.effects.emitters.push({ ...sm, size: 1 });
@@ -1091,6 +1113,11 @@ class Game {
     for (const pl of this.planes) pl.update(dt);
     this.combat.updateProjectiles(dt);
     this.combat.updateClouds(dt);
+    for (let i = this.booms.length - 1; i >= 0; i--) {
+      const b = this.booms[i];
+      b.t -= dt;
+      if (b.t <= 0) { this.booms.splice(i, 1); this.combat.explode(b.x, b.y, b.z, 6.5, 120, null, 'blast', 140, 1.4, -1); }
+    }
     this.combat.updateDeployables(dt);
     if (this.state !== 'end') {
       this.updateFlags(dt);

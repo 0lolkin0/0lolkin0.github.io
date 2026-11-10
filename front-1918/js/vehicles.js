@@ -393,6 +393,11 @@ export class Tank {
       this.speed *= Math.pow(0.1, dt);
     }
     p.x = clamp(p.x, -PLAY + 2, PLAY - 2); p.z = clamp(p.z, -PLAY + 2, PLAY - 2);
+    // Заборы под гусеницами и колёсами ломаются
+    if (Math.abs(this.speed) > 0.8) {
+      const sg = Math.sign(this.speed);
+      w.crushAround(p.x + this.forwardX * cfg.len * sg, p.z + this.forwardZ * cfg.len * sg, cfg.radius * 0.7);
+    }
     // Наклон по рельефу
     const fx = this.forwardX, fz = this.forwardZ, rx = -fz, rz = fx, L = cfg.len, Wd = cfg.wid;
     const hf = w.height(p.x + fx * L, p.z + fz * L), hb = w.height(p.x - fx * L, p.z - fz * L);

@@ -185,7 +185,7 @@ export const DEFAULT_SETTINGS = {
 // Названия оружия для ленты убийств
 export const WNAME = {
   smg: 'ПП-18', semi: 'СВ-16', lmg: 'РП-15', bolt: 'СН-98', revolver: 'револьвер', pistol: 'пистолет', frag: 'граната', at: 'ПТ-граната',
-  shotgun: 'ОР-97', auto: 'АВ-16', hmg: 'СП-08', carbine: 'КК-95', atr: 'ПТР-18', gas: 'газ', gun: 'орудие', car: 'броневик',
+  shotgun: 'ОР-97', auto: 'АВ-16', hmg: 'СП-08', carbine: 'КК-95', atr: 'ПТР-18', gas: 'газ', gun: 'орудие', car: 'броневик', blast: 'взрыв боеприпасов',
   melee: 'штык', tank: 'танк', mg: 'пулемёт', airship: 'цеппелин', fall: 'падение', flare: 'ракета',
 };
 export const MATCH_LENGTH = [

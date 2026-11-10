@@ -234,6 +234,30 @@ export class GameAudio {
     this.tone(this.master, this.t, 0.12, 70, 45, 0.3);
     this.tone(this.master, this.t + 0.22, 0.12, 62, 40, 0.22);
   }
+  // Грохот рухнувшей стены или треск досок
+  crash(x, y, z, heavy = false) {
+    if (!this.ctx) return;
+    const { d, pan } = this.spatial(x, y, z);
+    if (d > 160) return;
+    const att = 1 / Math.pow(1 + d / 16, 1.1), dest = this.out(pan), t0 = this.t;
+    this.noiseBurst(dest, t0, heavy ? 0.9 : 0.4, heavy ? 700 : 1500, (heavy ? 0.7 : 0.4) * att, 'lowpass', 0.7, this.brown, heavy ? 180 : 500);
+    if (heavy) this.tone(dest, t0, 0.3, 70, 38, 0.6 * att);
+    for (let i = 0; i < (heavy ? 4 : 2); i++) this.noiseBurst(dest, t0 + 0.08 + Math.random() * 0.4, 0.06, 1800 + Math.random() * 1500, 0.2 * att, 'bandpass', 2);
+  }
+  // Дерево: скрип при падении, удар и шелест веток при ударе о землю
+  treeFall(x, y, z, landed) {
+    if (!this.ctx) return;
+    const { d, pan } = this.spatial(x, y, z);
+    if (d > 140) return;
+    const att = 1 / Math.pow(1 + d / 16, 1.1), dest = this.out(pan), t0 = this.t;
+    if (!landed) {
+      for (let i = 0; i < 5; i++) this.tone(dest, t0 + i * 0.11 + Math.random() * 0.04, 0.07, 240 - i * 22 + Math.random() * 30, 150 - i * 12, 0.16 * att, 'sawtooth');
+      this.noiseBurst(dest, t0, 0.25, 2200, 0.25 * att, 'bandpass', 1.5);
+    } else {
+      this.tone(dest, t0, 0.25, 85, 42, 0.7 * att);
+      this.noiseBurst(dest, t0, 0.7, 1300, 0.4 * att, 'lowpass', 0.6, this.brown, 400);
+    }
+  }
   // Хлопок газовой или дымовой гранаты
   pop(x, y, z) {
     if (!this.ctx) return;

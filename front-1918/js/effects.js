@@ -349,7 +349,7 @@ export class Effects {
     this.setLights(3);
     // Обломки и гильзы
     const chunkGeo = new THREE.DodecahedronGeometry(0.5, 0);
-    this.debris = new Debris(scene, chunkGeo, new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 }), quality >= 2 ? 360 : 160);
+    this.debris = new Debris(scene, chunkGeo, new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 }), quality >= 2 ? 520 : 240);
     const caseGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 7);
     this.brass = new Debris(scene, caseGeo, new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.85 }), 60);
     this.world = null;
@@ -472,6 +472,21 @@ export class Effects {
   // Гильза: вылетает вправо-вверх от затвора, звенит о землю
   casing(x, y, z, vx, vy, vz, color = 0xc9a24a, k = 1) {
     this.brass.spawn(x, y, z, vx, vy, vz, 0.011 * k, 0.032 * k, 0.011 * k, color, 4);
+  }
+  // Обломки разрушенного укрытия, стены или крыши: куски летят от взрыва и остаются лежать; облако пыли
+  shatter(pc, fx, fz) {
+    const n = pc.roofPiece ? 24 : pc.strength >= 3 ? 12 : pc.strength === 2 ? 8 : 6;
+    const dx = pc.x - (fx ?? pc.x), dz = pc.z - (fz ?? pc.z), l = Math.hypot(dx, dz) || 1;
+    const ux = dx / l, uz = dz / l, wood = pc.strength === 1 || pc.roofPiece;
+    for (let i = 0; i < n; i++) {
+      const sz = pc.strength >= 3 || pc.roofPiece ? rand(0.12, 0.34) : rand(0.08, 0.22), sp = rand(1.5, 6);
+      this.debris.spawn(pc.x + rand(-1, 1) * pc.rad * 0.8, rand(pc.y0 + 0.2, Math.max(pc.y0 + 0.4, pc.y1)), pc.z + rand(-1, 1) * pc.rad * 0.8,
+        ux * sp + rand(-2, 2), rand(1.5, 6), uz * sp + rand(-2, 2), wood ? sz * 0.5 : sz, sz * rand(0.6, 1), wood ? sz * rand(1.8, 3) : sz * rand(0.8, 1.2), pc.color, rand(10, 18));
+    }
+    for (let i = 0; i < (pc.roofPiece ? 12 : 5); i++) {
+      this.normal.spawn(pc.x + rand(-1, 1) * pc.rad, rand(pc.y0 + 0.3, pc.y1 + 0.3), pc.z + rand(-1, 1) * pc.rad, rand(-1, 1), rand(0.4, 1.6), rand(-1, 1),
+        rand(1.6, 2.8), 2.2, rand(1.8, 3.4), pc.hay ? C.sand : C.dust, 0.5, -0.08, 0.9);
+    }
   }
   // Пыль из-под гусениц и колёс
   dust(x, y, z, s = 1) {

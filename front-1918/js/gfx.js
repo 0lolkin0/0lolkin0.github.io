@@ -648,6 +648,15 @@ export class Grass {
     this.chunks.set(key, ch);
     return ch;
   }
+  // Трава в области пересчитывается (после взрыва её там меньше или нет вовсе)
+  invalidate(x, z, r) {
+    if (!this.enabled) return;
+    const CS = this.CS;
+    for (let j = Math.floor((z - r) / CS); j <= Math.floor((z + r) / CS); j++) {
+      for (let i = Math.floor((x - r) / CS); i <= Math.floor((x + r) / CS); i++) this.chunks.delete(i * 1000 + j);
+    }
+    this.cx = 1e9;
+  }
   update(cam) {
     if (!this.enabled) return;
     this.uCam.value.copy(cam);

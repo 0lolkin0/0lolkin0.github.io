@@ -126,7 +126,7 @@ export class Combat {
       } else if (res.world) {
         g.effects.impact(hx, hy, hz, res.nx, res.ny, res.nz, res.mat);
         // Тяжёлая пуля противотанкового ружья выбивает куски из стен и заборов
-        if (w.vehicleDmg) g.world.blast && g.world.blast(hx, hy, hz, 0.9, 1);
+        if (w.vehicleDmg) g.world.blast(hx, hy, hz, 0.9, 1, false);
       }
       if (n > 1 ? i % 3 === 0 : s.shotN % w.tracerEvery === 0) g.effects.tracers.add(_m.x, _m.y, _m.z, hx, hy, hz, w.sniper ? 600 : 430);
     }
@@ -460,6 +460,8 @@ export class Combat {
         if (d < radius + 2) v.damage(vehicleDmg * (1 - d / (radius + 2)), owner);
       }
     }
+    // Разрушения: укрытия и стены, деревья, воронка (после урона — укрытие успевает защитить)
+    g.world.blast(x, y, z, radius, wid === 'frag' ? 1 : wid === 'at' || dmg >= 100 ? 3 : 2);
     const p = g.player, cam = g.camera.position;
     const dc = Math.hypot(cam.x - x, cam.y - y, cam.z - z);
     if (dc < 40) g.shake(Math.min(1, (1 - dc / 40) * radius / 5));
