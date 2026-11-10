@@ -198,30 +198,40 @@ class Tracers {
 class Weather {
   constructor(type) {
     this.type = type;
-    const n = type === 'snow' ? 1400 : 1000;
+    // Снег и дождь — густые; листопад — редкие крупные листья
+    const flake = type === 'snow' || type === 'leaves';
+    const n = type === 'snow' ? 1400 : type === 'leaves' ? 260 : 1000;
     this.n = n;
-    this.box = type === 'snow' ? [36, 18] : [32, 16];
+    this.box = flake ? [36, 18] : [32, 16];
     this.p = new Float32Array(n * 3);
     this.v = new Float32Array(n);
     for (let i = 0; i < n; i++) {
       this.p[i * 3] = rand(-this.box[0], this.box[0]);
       this.p[i * 3 + 1] = rand(-this.box[1], this.box[1]);
       this.p[i * 3 + 2] = rand(-this.box[0], this.box[0]);
-      this.v[i] = type === 'snow' ? rand(0.9, 1.7) : rand(13, 17);
+      this.v[i] = type === 'snow' ? rand(0.9, 1.7) : type === 'leaves' ? rand(0.5, 1.2) : rand(13, 17);
     }
     const g = new THREE.BufferGeometry();
-    if (type === 'snow') {
+    if (flake) {
       this.attr = new THREE.BufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage);
       g.setAttribute('position', this.attr);
       const cv = document.createElement('canvas');
       cv.width = cv.height = 32;
       const c = cv.getContext('2d');
-      const gr = c.createRadialGradient(16, 16, 0, 16, 16, 16);
-      gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
-      c.fillStyle = gr; c.fillRect(0, 0, 32, 32);
-      this.obj = new THREE.Points(g, new THREE.PointsMaterial({
-        size: 0.14, map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false, color: 0xffffff, opacity: 0.9,
-      }));
+      if (type === 'leaves') {
+        // Лист: вытянутый овал с жилкой
+        c.translate(16, 16); c.rotate(0.6);
+        c.fillStyle = '#fff';
+        c.beginPath(); c.moveTo(-13, 0); c.quadraticCurveTo(0, -9, 13, 0); c.quadraticCurveTo(0, 9, -13, 0); c.fill();
+        c.strokeStyle = 'rgba(90,60,20,0.6)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(-12, 0); c.lineTo(12, 0); c.stroke();
+      } else {
+        const gr = c.createRadialGradient(16, 16, 0, 16, 16, 16);
+        gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+        c.fillStyle = gr; c.fillRect(0, 0, 32, 32);
+      }
+      this.obj = new THREE.Points(g, new THREE.PointsMaterial(type === 'leaves'
+        ? { size: 0.2, map: new THREE.CanvasTexture(cv), transparent: true, alphaTest: 0.3, depthWrite: false, color: 0xc98a2e, opacity: 0.95 }
+        : { size: 0.14, map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false, color: 0xffffff, opacity: 0.9 }));
     } else {
       this.attr = new THREE.BufferAttribute(new Float32Array(n * 6), 3).setUsage(THREE.DynamicDrawUsage);
       g.setAttribute('position', this.attr);
@@ -233,12 +243,13 @@ class Weather {
   }
   update(dt, cam) {
     this.t += dt;
-    const [bx, by] = this.box, p = this.p, a = this.attr.array, snow = this.type === 'snow';
+    const [bx, by] = this.box, p = this.p, a = this.attr.array, snow = this.type === 'snow' || this.type === 'leaves', leaf = this.type === 'leaves';
     for (let i = 0; i < this.n; i++) {
       let y = p[i * 3 + 1] - this.v[i] * dt;
       if (y < -by) y += by * 2;
       p[i * 3 + 1] = y;
-      if (snow) p[i * 3] += Math.sin(this.t * 0.8 + i) * 0.4 * dt;
+      if (leaf) { p[i * 3] += (0.5 + Math.sin(this.t * 1.3 + i) * 1.1) * dt; p[i * 3 + 2] += Math.cos(this.t * 0.9 + i * 1.7) * 0.7 * dt; }
+      else if (snow) p[i * 3] += Math.sin(this.t * 0.8 + i) * 0.4 * dt;
       else p[i * 3] += 1.5 * dt;
       // Держим частицы вокруг камеры
       let x = p[i * 3], z = p[i * 3 + 2];

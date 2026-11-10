@@ -126,7 +126,7 @@ class Game {
     return {
       sunDir: this.sunDir.clone(), sunCol: new THREE.Color(T.sun), fogCol: new THREE.Color(T.fog),
       skyTop: new THREE.Color(T.skyTop), skyHor: new THREE.Color(T.skyHorizon),
-      wet: T.weather === 'rain' ? 1 : 0, rain: T.weather === 'rain', fogDensity: T.weather === 'snow' ? 0.006 : 0.0045,
+      wet: T.weather === 'rain' ? 1 : 0, rain: T.weather === 'rain', fogDensity: T.fogDensity ?? (T.weather === 'snow' ? 0.006 : 0.0045),
     };
   }
   // Объекты без нормалей в G-буфере (небо, частицы, трава, листва с прозрачными краями) — на отдельный слой
@@ -239,6 +239,7 @@ class Game {
     this.viewmodel.setEnv(this.world, this.envRT.texture);
     this.effects = new Effects(scene, this.quality, T.weather, def.theme === 'winter');
     this.effects.world = this.world;
+    this.gfx.wind.value = T.wind ?? (T.weather === 'rain' ? 1.25 : 1);
     // Разрушения: обломки, пыль и звук; штабель снарядов детонирует с задержкой
     this.booms = [];
     this.world.onDestroy = (pc, fx, fz) => {

@@ -365,6 +365,9 @@ function foliageTexture(kind) {
   return t;
 }
 
+// Высота микрорельефа материалов, м
+const TP_BUMP = { stone: 0.05, brick: 0.05, wood: 0.03, roof: 0.045, cloth: 0.012, concrete: 0.035, metal: 0.012, bark: 0.055, fabric: 0.006, leaves: 0 };
+
 // ---------- Менеджер ----------
 export class Gfx {
   // tex — детализация текстур: 0 — низкая, 1 — высокая, 2 — ультра (вдвое больше)
@@ -375,6 +378,7 @@ export class Gfx {
     this.aniso = Math.min(16, renderer.capabilities.getMaxAnisotropy());
     this.cache = {};
     this.time = { value: 0 };
+    this.wind = { value: 1 };
     this.mats = {};
   }
   terrainTex(kind) {
@@ -393,6 +397,23 @@ export class Gfx {
     const m = new THREE.MeshLambertMaterial({ map: foliageTexture(kind), alphaTest: 0.5, side: THREE.DoubleSide, vertexColors: true });
     // Нормали листвы смотрят наружу от центра кроны — обе стороны карточки освещаются одинаково
     m.onBeforeCompile = (sh) => {
+      // Ветер: крона покачивается целиком (сильнее к верхушке), листья мелко трепещут
+      sh.uniforms.uTime = this.time; sh.uniforms.uWind = this.wind;
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nuniform float uTime; uniform float uWind;')
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+          #ifdef USE_INSTANCING
+            vec3 fip = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
+          #else
+            vec3 fip = vec3(0.0);
+          #endif
+          float fph = fip.x * 0.37 + fip.z * 0.29;
+          float fsw = sin(uTime * 1.1 + fph) * 0.6 + sin(uTime * 2.3 + fph * 1.7) * 0.3;
+          float ffl = sin(uTime * 4.6 + position.x * 3.1 + position.y * 2.3 + position.z * 3.7 + fph);
+          float fk = max(position.y, 0.0);
+          transformed.x += (fsw * 0.013 * fk + ffl * 0.02) * uWind;
+          transformed.z += (fsw * 0.009 * fk + ffl * 0.014) * uWind;
+          transformed.y += ffl * 0.008 * uWind;`);
       sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin.replaceAll('normal *= faceDirection;', ''));
     };
     m.customProgramCacheKey = () => 'foliage';
@@ -415,11 +436,14 @@ export class Gfx {
     m.envMapIntensity = opts.env ?? 0.6;
     const tex = this.detail(kind);
     const scale = opts.scale ?? 0.5, strength = opts.strength ?? 1;
-    m.defines = { TP_LOCAL: opts.local ? 1 : 0 };
+    // Микрорельеф: из той же серой детали строится высота — камень, кирпич и доски получают объём под светом
+    const bump = this.q >= 1 ? (opts.bump ?? TP_BUMP[kind] ?? 0.02) : 0;
+    m.defines = { TP_LOCAL: opts.local ? 1 : 0, TP_BUMP: bump > 0 ? 1 : 0 };
     m.onBeforeCompile = (sh) => {
       sh.uniforms.tpMap = { value: tex };
       sh.uniforms.tpScale = { value: scale };
       sh.uniforms.tpStrength = { value: strength };
+      sh.uniforms.tpBump = { value: bump };
       sh.vertexShader = sh.vertexShader
         .replace('#include <common>', '#include <common>\nvarying vec3 vTpPos;\nvarying vec3 vTpN;')
         .replace('#include <begin_vertex>', `#include <begin_vertex>
@@ -434,12 +458,23 @@ export class Gfx {
             vTpPos = (modelMatrix * tpW).xyz; vTpN = normalize(mat3(modelMatrix) * tpN);
           #endif`);
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform sampler2D tpMap; uniform float tpScale; uniform float tpStrength;\nvarying vec3 vTpPos;\nvarying vec3 vTpN;')
+        .replace('#include <common>', '#include <common>\nuniform sampler2D tpMap; uniform float tpScale; uniform float tpStrength; uniform float tpBump;\nvarying vec3 vTpPos;\nvarying vec3 vTpN;')
         .replace('#include <map_fragment>', `
           vec3 tpw = pow(abs(normalize(vTpN)), vec3(4.0)); tpw /= (tpw.x + tpw.y + tpw.z + 1e-4);
           vec3 tpP = vTpPos * tpScale;
           float tpv = texture2D(tpMap, tpP.zy).r * tpw.x + texture2D(tpMap, tpP.xz).r * tpw.y + texture2D(tpMap, tpP.xy).r * tpw.z;
-          diffuseColor.rgb *= mix(1.0, tpv * 2.0, tpStrength);`);
+          diffuseColor.rgb *= mix(1.0, tpv * 2.0, tpStrength);`)
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+          #if TP_BUMP == 1
+          {
+            vec2 tpdH = vec2(dFdx(tpv), dFdy(tpv)) * tpBump;
+            vec3 tpSx = dFdx(-vViewPosition), tpSy = dFdy(-vViewPosition);
+            vec3 tpR1 = cross(tpSy, normal), tpR2 = cross(normal, tpSx);
+            float tpDet = dot(tpSx, tpR1);
+            normal = normalize(abs(tpDet) * normal - sign(tpDet) * (tpdH.x * tpR1 + tpdH.y * tpR2));
+          }
+          #endif`)
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = clamp(roughnessFactor * mix(1.12, 0.8, tpv), 0.04, 1.0);');
     };
     if (!opts.unique) this.mats[key] = m;
     return m;
@@ -476,8 +511,21 @@ export class Gfx {
           #endif
           vec3 c2 = texture2D(tL2, uvA).rgb;
           vec3 c3 = texture2D(tL3, uvA * 0.7).rgb;
-          diffuseColor.rgb *= c0 * sw.x + c1 * sw.y + c2 * sw.z + c3 * sw.w;`)
-        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = dot(sw, uRough);');
+          vec3 tcol = c0 * sw.x + c1 * sw.y + c2 * sw.z + c3 * sw.w;
+          // Крупные пятна разной яркости скрывают повторение текстур
+          tcol *= mix(0.84, 1.12, texture2D(tL3, vGround * 0.013 + vec2(0.21, 0.63)).g);
+          float tLum = dot(tcol, vec3(0.3, 0.59, 0.11));
+          diffuseColor.rgb *= tcol;`)
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+          {
+            // Микрорельеф земли из яркости слоёв: комья, камешки и колеи отбрасывают блики и тени
+            vec2 tdH = vec2(dFdx(tLum), dFdy(tLum)) * 0.11;
+            vec3 tSx = dFdx(-vViewPosition), tSy = dFdy(-vViewPosition);
+            vec3 tR1 = cross(tSy, normal), tR2 = cross(normal, tSx);
+            float tDet = dot(tSx, tR1);
+            normal = normalize(abs(tDet) * normal - sign(tDet) * (tdH.x * tR1 + tdH.y * tR2));
+          }`)
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = clamp(dot(sw, uRough) * mix(1.08, 0.86, tLum), 0.05, 1.0);');
     };
     return m;
   }
@@ -544,28 +592,105 @@ export function makeSky(T, quality) {
 }
 
 // ---------- Трава ----------
-function grassTuftTexture(dry) {
+// Атлас травяного покрова 2×2: 0 — трава, 1 — высокая трава с метёлками, 2 — цветы (маки, ромашки, васильки),
+// 3 — папоротник. Зимой вместо цветов и папоротника — сухие стебли и репейник
+function grassAtlas(dry) {
   const S = 256;
-  const [cv, c] = canvasOf(S);
+  const [cv, c] = canvasOf(S * 2);
   const r = rng(dry ? 91 : 19);
-  c.clearRect(0, 0, S, S);
+  c.clearRect(0, 0, S * 2, S * 2);
   const cols = dry ? ['#b9a578', '#a38f62', '#cdbb8e', '#8f7d55'] : ['#d8e0a8', '#c2cc8a', '#e4e6b4', '#aab877', '#cfd59a'];
-  for (let i = 0; i < (dry ? 26 : 70); i++) {
-    const x0 = S * 0.1 + r() * S * 0.8, h = S * (0.45 + r() * 0.5), lean = (r() - 0.5) * S * 0.35, w = 2 + r() * 4;
-    c.fillStyle = cols[Math.floor(r() * cols.length)];
+  const blade = (x0, h, lean, w, col) => {
+    c.fillStyle = col;
     c.beginPath();
     c.moveTo(x0 - w, S);
     c.quadraticCurveTo(x0 + lean * 0.3, S - h * 0.6, x0 + lean, S - h);
     c.quadraticCurveTo(x0 + lean * 0.3 + w * 0.5, S - h * 0.6, x0 + w, S);
     c.closePath();
     c.fill();
-  }
-  const g = c.createLinearGradient(0, 0, 0, S);
-  g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(0,0,0,0.35)');
-  c.globalCompositeOperation = 'source-atop';
-  c.fillStyle = g; c.fillRect(0, 0, S, S);
+  };
+  // Ячейка (cx, cy) в координатах текстуры: низ ячейки — земля
+  const cell = (cx, cy, draw, shade = 0.35) => {
+    c.save();
+    c.beginPath(); c.rect(cx * S, (1 - cy) * S, S, S); c.clip();
+    c.translate(cx * S, (1 - cy) * S);
+    draw();
+    const g = c.createLinearGradient(0, 0, 0, S);
+    g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, `rgba(0,0,0,${shade})`);
+    c.globalCompositeOperation = 'source-atop';
+    c.fillStyle = g; c.fillRect(0, 0, S, S);
+    c.restore();
+  };
+  cell(0, 0, () => {
+    for (let i = 0; i < (dry ? 26 : 70); i++) blade(S * 0.1 + r() * S * 0.8, S * (0.45 + r() * 0.5), (r() - 0.5) * S * 0.35, 2 + r() * 4, cols[Math.floor(r() * cols.length)]);
+  });
+  cell(1, 0, () => {
+    // Высокие стебли с метёлками
+    for (let i = 0; i < (dry ? 16 : 30); i++) {
+      const x0 = S * 0.12 + r() * S * 0.76, h = S * (0.7 + r() * 0.26), lean = (r() - 0.5) * S * 0.22;
+      blade(x0, h, lean, 1.2 + r() * 1.8, cols[Math.floor(r() * cols.length)]);
+      if (r() < 0.7) {
+        c.fillStyle = dry ? '#d8c79a' : '#e9dfae';
+        for (let k = 0; k < 7; k++) {
+          const t = k / 7;
+          c.beginPath(); c.ellipse(x0 + lean * (1 - t * 0.12) + (k % 2 ? 3 : -3), S - h + t * S * 0.16, 2.6, 5.5, (k % 2 ? 0.5 : -0.5), 0, Math.PI * 2); c.fill();
+        }
+      }
+    }
+    for (let i = 0; i < 18; i++) blade(S * 0.1 + r() * S * 0.8, S * (0.3 + r() * 0.3), (r() - 0.5) * S * 0.3, 2 + r() * 3, cols[Math.floor(r() * cols.length)]);
+  });
+  cell(0, 1, () => {
+    if (dry) {
+      // Репейник и сухие зонтики
+      for (let i = 0; i < 9; i++) {
+        const x0 = S * 0.15 + r() * S * 0.7, h = S * (0.5 + r() * 0.4), lean = (r() - 0.5) * S * 0.18;
+        c.strokeStyle = '#8a7650'; c.lineWidth = 2;
+        c.beginPath(); c.moveTo(x0, S); c.quadraticCurveTo(x0 + lean * 0.4, S - h * 0.6, x0 + lean, S - h); c.stroke();
+        c.fillStyle = i % 2 ? '#6e5a3a' : '#9a845a';
+        for (let k = 0; k < 9; k++) { const a = (k / 9) * Math.PI * 2; c.beginPath(); c.arc(x0 + lean + Math.cos(a) * 7, S - h + Math.sin(a) * 7, 3.2, 0, Math.PI * 2); c.fill(); }
+      }
+      return;
+    }
+    for (let i = 0; i < 26; i++) blade(S * 0.1 + r() * S * 0.8, S * (0.25 + r() * 0.3), (r() - 0.5) * S * 0.3, 2 + r() * 3, ['#7f9a52', '#6f8a46', '#93a85e'][i % 3]);
+    for (let i = 0; i < 10; i++) {
+      const x0 = S * (0.14 + r() * 0.72), h = S * (0.5 + r() * 0.38), lean = (r() - 0.5) * S * 0.2;
+      c.strokeStyle = '#6f8a46'; c.lineWidth = 2.2;
+      c.beginPath(); c.moveTo(x0, S); c.quadraticCurveTo(x0 + lean * 0.4, S - h * 0.6, x0 + lean, S - h); c.stroke();
+      const bx = x0 + lean, by = S - h, rad = S * (0.05 + r() * 0.03), kind = r();
+      const col = kind < 0.72 ? ['#e23a26', '#c92a1c', '#f0553a'][i % 3] : kind < 0.87 ? '#f4f0e6' : '#5f7fd0';
+      c.fillStyle = col;
+      for (let k = 0; k < 5; k++) {
+        const a = (k / 5) * Math.PI * 2 + r();
+        c.beginPath(); c.ellipse(bx + Math.cos(a) * rad * 0.55, by + Math.sin(a) * rad * 0.55, rad * 0.75, rad * 0.55, a, 0, Math.PI * 2); c.fill();
+      }
+      c.fillStyle = kind < 0.72 ? '#221a14' : '#e8c23a';
+      c.beginPath(); c.arc(bx, by, rad * 0.3, 0, Math.PI * 2); c.fill();
+    }
+  }, 0.2);
+  cell(1, 1, () => {
+    // Вайи папоротника (зимой — голые прутья)
+    for (let i = 0; i < (dry ? 10 : 9); i++) {
+      const a0 = -Math.PI / 2 + (i / 8 - 0.5) * 1.9 + (r() - 0.5) * 0.2, len = S * (0.55 + r() * 0.35);
+      const x0 = S * 0.5 + (r() - 0.5) * S * 0.12;
+      const ex = x0 + Math.cos(a0) * len, ey = S + Math.sin(a0) * len, mx = x0 + Math.cos(a0) * len * 0.5, my = S + Math.sin(a0) * len * 0.5 - S * 0.1;
+      c.strokeStyle = dry ? '#8f7d55' : '#a9bd72'; c.lineWidth = 2;
+      c.beginPath(); c.moveTo(x0, S); c.quadraticCurveTo(mx, my, ex, ey); c.stroke();
+      if (dry) continue;
+      for (let k = 2; k < 22; k++) {
+        const t = k / 22, it = 1 - t;
+        const px = it * it * x0 + 2 * it * t * mx + t * t * ex, py = it * it * S + 2 * it * t * my + t * t * ey;
+        const tx = 2 * it * (mx - x0) + 2 * t * (ex - mx), ty = 2 * it * (my - S) + 2 * t * (ey - my), tl = Math.hypot(tx, ty) || 1;
+        const nx = -ty / tl, ny = tx / tl, ll = S * 0.085 * Math.sin(Math.PI * Math.min(1, t * 1.15)) + 3;
+        c.fillStyle = k % 2 ? '#cfe0a0' : '#b9cf86';
+        for (const sd of [-1, 1]) {
+          c.beginPath(); c.ellipse(px + nx * sd * ll * 0.5, py + ny * sd * ll * 0.5, ll * 0.55, 2.6, Math.atan2(ny * sd, nx * sd), 0, Math.PI * 2); c.fill();
+        }
+      }
+    }
+  }, 0.25);
   const t = new THREE.CanvasTexture(cv);
   t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
   return t;
 }
 export class Grass {
@@ -591,7 +716,9 @@ export class Grass {
     g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
     g.setIndex(idx);
     // Ламберт дешевле PBR, а для травы разницы не видно
-    const mat = new THREE.MeshLambertMaterial({ map: grassTuftTexture(this.dry), alphaTest: 0.45, side: THREE.DoubleSide });
+    this.aType = new THREE.InstancedBufferAttribute(new Float32Array(this.cap), 1);
+    g.setAttribute('aType', this.aType);
+    const mat = new THREE.MeshLambertMaterial({ map: grassAtlas(this.dry), alphaTest: 0.45, side: THREE.DoubleSide });
     this.uCam = { value: new THREE.Vector3() };
     this.uR = { value: this.R };
     const time = gfx.time;
@@ -600,7 +727,8 @@ export class Grass {
       // Нормаль травинки всегда «вверх» с обеих сторон: иначе изнанка у Ламберта получается чёрной
       sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin.replaceAll('normal *= faceDirection;', ''));
       sh.vertexShader = sh.vertexShader
-        .replace('#include <common>', '#include <common>\nuniform float uTime; uniform vec3 uCam; uniform float uR;')
+        .replace('#include <common>', '#include <common>\nuniform float uTime; uniform vec3 uCam; uniform float uR; attribute float aType;')
+        .replace('#include <uv_vertex>', '#include <uv_vertex>\nvMapUv = vMapUv * 0.5 + vec2(mod(aType, 2.0), floor(aType * 0.5)) * 0.5;')
         .replace('#include <begin_vertex>', `#include <begin_vertex>
           vec3 ip = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
           float gd = distance(ip.xz, uCam.xz);
@@ -627,7 +755,7 @@ export class Grass {
     if (ch) return ch;
     const w = this.world, CS = this.CS, r = rng((i * 73856093) ^ (j * 19349663));
     const n = Math.round(CS * CS * this.density);
-    const mats = [], cols = [];
+    const mats = [], cols = [], types = [];
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), s = new THREE.Vector3();
     for (let k = 0; k < n; k++) {
       const x = i * CS + r() * CS, z = j * CS + r() * CS;
@@ -635,16 +763,20 @@ export class Grass {
       if (gw < 0.35 || r() > gw) continue;
       const y = w.height(x, z);
       if (w.groundAt(x, z, y + 0.3) > y + 0.1) continue;
-      const sc = 0.7 + r() * 0.75;
+      // Вид травы: высокая растёт куртинами, цветы — полянами, папоротник — в лесу
+      const type = w.coverAt(x, z, r());
+      const sc = (0.7 + r() * 0.75) * (type === 3 ? 1.35 : type === 2 ? 0.95 : 1);
+      const sh = type === 1 ? 1.75 : type === 3 ? 0.85 : 1;
       e.set((r() - 0.5) * 0.2, r() * Math.PI * 2, (r() - 0.5) * 0.2);
       q.setFromEuler(e);
-      m4.compose(p.set(x, y - 0.03, z), q, s.set(sc, sc * (0.8 + r() * 0.6), sc));
+      m4.compose(p.set(x, y - 0.03, z), q, s.set(sc, sc * (0.8 + r() * 0.6) * sh, sc));
       mats.push(...m4.elements);
-      const t = w.tintAt(x, z);
+      types.push(type);
       const v = 0.75 + r() * 0.35;
-      cols.push(t[0] * v, t[1] * v, t[2] * v);
+      if (type === 2 && !this.dry) cols.push(0.82 * v, 0.82 * v, 0.82 * v); // у цветов свои краски
+      else { const t = w.tintAt(x, z); cols.push(t[0] * v, t[1] * v, t[2] * v); }
     }
-    ch = { mats: new Float32Array(mats), cols: new Float32Array(cols) };
+    ch = { mats: new Float32Array(mats), cols: new Float32Array(cols), types: new Float32Array(types) };
     this.chunks.set(key, ch);
     return ch;
   }
@@ -674,10 +806,12 @@ export class Grass {
       if (take <= 0) continue;
       M.set(ch.mats.subarray(0, take * 16), n * 16);
       C.set(ch.cols.subarray(0, take * 3), n * 3);
+      this.aType.array.set(ch.types.subarray(0, take), n);
       n += take;
     }
     this.mesh.count = n;
     this.mesh.instanceMatrix.needsUpdate = true;
     this.mesh.instanceColor.needsUpdate = true;
+    this.aType.needsUpdate = true;
   }
 }

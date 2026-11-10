@@ -85,7 +85,8 @@ export function limb(b, ax, ay, az, bx, by, bz, rA, rB, color, seg = 8) {
   if (!LIMB[key]) LIMB[key] = new THREE.CylinderGeometry(rB / rA, 1, 1, seg, 1).toNonIndexed();
   _M.compose(_V.set((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2), _Q, _S.set(rA, len, rA));
   b.add(LIMB[key], _M, color, 0.03);
-  b.sphere(rB * 0.98, bx, by, bz, color, 1, 1, 1, 1, 0.03);
+  // У тонких веток (мало граней) — простая заглушка: на лесной карте таких тысячи
+  b.sphere(rB * 0.98, bx, by, bz, color, 1, 1, 1, seg <= 5 ? 0 : 1, 0.03);
 }
 
 // ---------- Оружие ----------

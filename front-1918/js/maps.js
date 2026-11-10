@@ -18,6 +18,15 @@ export const THEMES = {
     stone: 0x8c8a86, brick: 0x7d6b60, roof: 0xdfe5ea, wood: 0x6a5137, woodDark: 0x4a3826, canvas: 0xb8b29c,
     leaves: [0x2f4a35, 0x3a5640, 0x29402f], water: 0x7c8c96, weather: 'snow',
   },
+  // Рассвет в лесу: низкое тёплое солнце, длинные тени, туман между стволами, листопад
+  forest: {
+    skyTop: 0x7f9bb8, skyHorizon: 0xf0d9b0, fog: 0xd9c9a4, fogNear: 22, fogFar: 215,
+    cloudLight: 0xfff0d8, cloudDark: 0xa39a8e, cloudCover: 0.5,
+    sun: 0xffd9a0, sunIntensity: 2.4, sunDir: [-0.62, 0.36, -0.42], hemiSky: 0xc9d4d6, hemiGround: 0x4a4a32, hemiIntensity: 1.15,
+    grass: 0x55702f, grass2: 0x6f8238, mud: 0x54432f, mud2: 0x45372a, dark: 0x2e2a1e, road: 0x77664c,
+    stone: 0x8f8a7c, brick: 0x8a6650, roof: 0x5a4332, wood: 0x6b5238, woodDark: 0x4a3826, canvas: 0x8f8668,
+    leaves: [0x4f7a32, 0x64883a, 0x7d8f3a, 0xa08a34], water: 0x3f4d48, weather: 'leaves', wind: 0.8, fogDensity: 0.0075,
+  },
 };
 
 // Зигзаг окопа поперёк карты
@@ -133,11 +142,16 @@ export const MAPS = {
     craters: { count: 190, zMin: -96, zMax: 96 },
     trees: [
       { type: 'dead', count: 55, zMin: -95, zMax: 95 },
-      { type: 'poplar', count: 70, zMin: 104, zMax: 141 },
-      { type: 'poplar', count: 70, zMin: -141, zMax: -104 },
-      { type: 'oak', count: 40, xMin: 118, xMax: 141, zMin: -141, zMax: 141 },
-      { type: 'oak', count: 40, xMin: -141, xMax: -118, zMin: -141, zMax: 141 },
+      { type: 'poplar', count: 55, zMin: 104, zMax: 141 },
+      { type: 'poplar', count: 55, zMin: -141, zMax: -104 },
+      { type: 'birch', count: 26, zMin: 100, zMax: 141 }, { type: 'birch', count: 26, zMin: -141, zMax: -100 },
+      { type: 'oak', count: 34, xMin: 118, xMax: 141, zMin: -141, zMax: 141 },
+      { type: 'oak', count: 34, xMin: -141, xMax: -118, zMin: -141, zMax: 141 },
+      { type: 'willow', count: 6, xMin: -100, xMax: -40, zMin: 55, zMax: 100 }, { type: 'willow', count: 6, xMin: 40, xMax: 100, zMin: -100, zMax: -55 },
+      { type: 'bush', count: 60, zMin: 60, zMax: 141 }, { type: 'bush', count: 60, zMin: -141, zMax: -60 }, { type: 'bush', count: 26, zMin: -60, zMax: 60 },
+      { type: 'sapling', count: 22, zMin: 96, zMax: 141 }, { type: 'sapling', count: 22, zMin: -141, zMax: -96 },
     ],
+    stumps: 26, fallen: 10,
     puddles: 0.35,
   },
 
@@ -206,13 +220,88 @@ export const MAPS = {
     ],
     craters: { count: 90, zMin: -92, zMax: 92 },
     trees: [
-      { type: 'pine', count: 150, xMin: -141, xMax: -78, zMin: -141, zMax: 141 },
-      { type: 'pine', count: 150, xMin: 78, xMax: 141, zMin: -141, zMax: 141 },
-      { type: 'pine', count: 110, xMin: -78, xMax: 78, zMin: -141, zMax: 141 },
+      { type: 'pine', count: 95, xMin: -141, xMax: -78, zMin: -141, zMax: 141 }, { type: 'spruce', count: 70, xMin: -141, xMax: -78, zMin: -141, zMax: 141 },
+      { type: 'pine', count: 95, xMin: 78, xMax: 141, zMin: -141, zMax: 141 }, { type: 'spruce', count: 70, xMin: 78, xMax: 141, zMin: -141, zMax: 141 },
+      { type: 'pine', count: 65, xMin: -78, xMax: 78, zMin: -141, zMax: 141 }, { type: 'spruce', count: 50, xMin: -78, xMax: 78, zMin: -141, zMax: 141 },
       { type: 'deadpine', count: 30, zMin: -90, zMax: 90 },
     ],
-    rocks: 55,
+    rocks: 55, stumps: 34, fallen: 14,
     puddles: 0,
+  },
+
+  forest: {
+    id: 'forest', name: 'Туманный лес', theme: 'forest',
+    desc: 'Рассвет в старом лесу: охотничий дом, лагерь, вышка на перекрёстке и укреплённая высота в центре.',
+    noiseAmp: 3.6, mud: 0.35,
+    hills: [
+      { x: 0, z: 0, r: 34, h: 6.5 }, { x: -90, z: 20, r: 40, h: 6 }, { x: 90, z: -20, r: 40, h: 6 },
+      { x: 70, z: 90, r: 30, h: 4 }, { x: -70, z: -90, r: 30, h: 4 }, { x: -120, z: 100, r: 30, h: 7 }, { x: 120, z: -100, r: 30, h: 7 },
+    ],
+    hq: [{ x: 0, z: 124, yaw: 0 }, { x: 0, z: -124, yaw: P }],
+    tankSpawn: [{ x: 18, z: 118, yaw: 0 }, { x: -18, z: -118, yaw: P }],
+    flags: [
+      { id: 'A', name: 'Охотничий дом', x: -58, z: 68, r: 14 },
+      { id: 'B', name: 'Вышка', x: 60, z: 42, r: 14 },
+      { id: 'C', name: 'Высота', x: 0, z: 0, r: 16 },
+      { id: 'D', name: 'Лагерь', x: -60, z: -42, r: 14 },
+      { id: 'E', name: 'Хутор', x: 58, z: -68, r: 14 },
+    ],
+    roads: [
+      [[2, 140], [6, 104], [-8, 70], [-4, 36], [0, 0], [4, -36], [8, -70], [-6, -104], [-2, -140]],
+      [[-8, 70], [-30, 72], [-58, 68]],
+      [[8, -70], [30, -72], [58, -68]],
+      [[-4, 36], [26, 44], [60, 42]],
+      [[4, -36], [-26, -44], [-60, -42]],
+    ],
+    trenches: [
+      { pts: zigzag(104, -90, 90, 13, 2.5), side: -1 },
+      { pts: zigzag(-104, -90, 90, 13, 2.5, 1), side: 1 },
+      // Кольцо окопов вокруг высоты
+      { pts: [[-16, 10], [-8, 17], [6, 18], [16, 10]], side: -1 },
+      { pts: [[16, -10], [8, -17], [-6, -18], [-16, -10]], side: 1 },
+      { pts: [[-16, 10], [-19, 0], [-16, -10]], side: 0 },
+    ],
+    wires: [
+      ...wireLine(92, [[-88, -40], [-10, 44]]),
+      ...wireLine(-92, [[-44, 10], [40, 88]]),
+      { pts: [[-24, 22], [-10, 28]] }, { pts: [[24, -22], [10, -28]] },
+    ],
+    structures: [
+      // A — охотничий дом
+      { t: 'cabin', x: -62, z: 72, yaw: 0.15, w: 10, d: 7, h: 4.2 },
+      { t: 'shed', x: -48, z: 62, yaw: 0.15, w: 7, d: 5, h: 3.2 },
+      { t: 'logs', x: -70, z: 60, yaw: 0.4 }, { t: 'well', x: -54, z: 76 }, { t: 'cart', x: -66, z: 82, yaw: 1.0 },
+      { t: 'fence', pts: [[-78, 58], [-78, 86], [-50, 88]] }, { t: 'crates', x: -56, z: 64 },
+      { t: 'sandbags', x: -50, z: 74, yaw: 1.3, len: 5 },
+      // B — вышка на перекрёстке
+      { t: 'tower', x: 60, z: 42, yaw: 0.2 },
+      { t: 'sandbags', x: 52, z: 36, yaw: 0.4, len: 6 }, { t: 'sandbags', x: 68, z: 48, yaw: -0.3, len: 6 },
+      { t: 'tent', x: 67, z: 33, yaw: 0.3 }, { t: 'crates', x: 54, z: 49 }, { t: 'logs', x: 73, z: 41, yaw: 1.2 },
+      // C — высота
+      { t: 'bunker', x: 0, z: 0, yaw: 0, w: 7, d: 5 },
+      { t: 'sandbags', x: -8, z: 7, yaw: 0.6, len: 5 }, { t: 'sandbags', x: 8, z: -7, yaw: 0.6, len: 5 },
+      { t: 'gun', x: 10, z: 8, yaw: 0.4 }, { t: 'gun', x: -10, z: -8, yaw: P + 0.4 }, { t: 'shells', x: 6, z: 11 }, { t: 'shells', x: -6, z: -11 },
+      { t: 'crates', x: -11, z: -2 },
+      // D — лагерь
+      { t: 'tent', x: -65, z: -37, yaw: 0.2 }, { t: 'tent', x: -58, z: -49, yaw: -0.4 }, { t: 'tent', x: -52, z: -37, yaw: 1.2 }, { t: 'tent', x: -69, z: -48, yaw: 0.9 },
+      { t: 'crates', x: -60, z: -42 }, { t: 'cart', x: -49, z: -47, yaw: 0.3 }, { t: 'logs', x: -72, z: -33, yaw: 0.2 },
+      { t: 'sandbags', x: -56, z: -31, yaw: 0, len: 6 },
+      // E — хутор
+      { t: 'cabin', x: 62, z: -72, yaw: -0.1, w: 8, d: 6, h: 4 }, { t: 'barn', x: 50, z: -61, yaw: 0.1, w: 7, d: 10, h: 4.8 },
+      { t: 'hay', x: 69, z: -61 }, { t: 'hay', x: 72, z: -65 }, { t: 'well', x: 56, z: -76 },
+      { t: 'fence', pts: [[44, -84], [74, -86], [80, -60]] }, { t: 'sandbags', x: 58, z: -57, yaw: 0, len: 5 },
+      // Лес
+      { t: 'tankwreck', x: 30, z: 66, yaw: 2.0 }, { t: 'tankwreck', x: -30, z: -66, yaw: -1.0 },
+      { t: 'cabin', x: 100, z: 10, yaw: 0.8, w: 6, d: 5, h: 3.6 }, { t: 'cabin', x: -100, z: -10, yaw: -0.8, w: 6, d: 5, h: 3.6 },
+      { t: 'logs', x: 27, z: 20, yaw: 0.9 }, { t: 'logs', x: -27, z: -20, yaw: 0.9 },
+    ],
+    craters: { count: 40, zMin: -60, zMax: 60 },
+    trees: [
+      { type: 'pine', count: 150 }, { type: 'spruce', count: 130 }, { type: 'birch', count: 150 }, { type: 'oak', count: 60 },
+      { type: 'willow', count: 10 }, { type: 'sapling', count: 110 }, { type: 'bush', count: 220 }, { type: 'dead', count: 14, zMin: -40, zMax: 40 },
+    ],
+    rocks: 24, stumps: 60, fallen: 26,
+    puddles: 0.2,
   },
 };
 export const MAP_LIST = Object.values(MAPS);

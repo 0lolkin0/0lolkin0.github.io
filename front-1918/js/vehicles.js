@@ -252,7 +252,7 @@ export const VEHICLES = {
   },
   car: {
     name: 'Броневик', short: 'БРОНЕВИК', inside: 'Вы в броневике', hp: 520, speed: 11.5, rev: 5, acc: 5.5, brake: 9, turn: 1.3, radius: 2.1, len: 1.6, wid: 0.95, turretTurn: 2.4, wheeled: true,
-    reload: 0, shell: null, mg: { dmg: 24, cd: 0.08 }, hit: [1.0, 1.1, 2.3], hitY: 1.2, cam: [7.5, 3.0], respawn: 40, score: 300, muzzleZ: -0.95, mass: 1, bulletMul: 2.5,
+    reload: 0, shell: null, mg: { dmg: 24, cd: 0.08 }, hit: [1.0, 1.1, 2.3], hitY: 1.2, cam: [7.5, 3.0], respawn: 40, score: 300, muzzleZ: -0.95, mass: 2, bulletMul: 2.5,
     geos: carGeos, turret: () => [0, 1.98, 0.6], pivot: [0, 0.3, -0.66],
   },
 };

@@ -24,6 +24,8 @@ class MultiBuilder {
   rock(rad, x, y, z, color, ...r) { this.get(color).rock(rad, x, y, z, color, ...r); return this; }
   get vertexCount() { let n = 0; for (const k in this.b) n += this.b[k].vertexCount; return n; }
 }
+// Оттенок листвы по породам (умножается на цвета листвы темы)
+const LEAF_TINT = { birch: [1.3, 1.18, 0.55], willow: [0.92, 1.08, 0.72], bush: [0.9, 1.0, 0.8], spruce: [0.72, 0.9, 0.8], sapling: [1.08, 1.12, 0.78] };
 const MAT_OPTS = {
   stone: { scale: 0.33, roughness: 0.92 }, brick: { scale: 0.5, roughness: 0.9 }, wood: { scale: 0.55, roughness: 0.85 },
   roof: { scale: 0.5, roughness: 0.78 }, cloth: { scale: 1.3, roughness: 0.97 }, concrete: { scale: 0.4, roughness: 0.95 },
@@ -71,6 +73,7 @@ export class World {
     this.buildFlagPoles();
     this.buildTrees();
     this.buildRocks();
+    this.buildForestProps();
     this.buildMeshes();
     this.buildNav();
     this.buildMinimap();
@@ -100,6 +103,7 @@ export class World {
       case 'fort': return [19, 19, 9];
       case 'gun': case 'cart': case 'tankwreck': case 'logs': return [3, 3, 2];
       case 'tent': return [3, 3, 2];
+      case 'tower': return [2.4, 2.4, 2];
       default: return null;
     }
   }
@@ -544,7 +548,10 @@ export class World {
   }
   // Техника наехала на препятствие: валит дерево или ломает укрытие, если хватает массы
   crush(col, dx, dz, mass) {
-    if (col.tree) { if (mass >= (col.tree.type === 'oak' ? 3 : 2)) this.fellTree(col.tree, dx, dz); }
+    if (col.tree) {
+      const tp = col.tree.type, need = tp === 'oak' || tp === 'willow' ? 3 : tp === 'sapling' ? 1 : 2;
+      if (mass >= need) this.fellTree(col.tree, dx, dz);
+    }
     else if (col.piece && col.piece.strength <= mass) this.destroyPiece(col.piece, col.x - dx, col.z - dz);
   }
   // Заборы и прочее без коллайдеров ломаются, когда по ним проезжают
@@ -607,7 +614,7 @@ export class World {
   }
   // Дерево падает в сторону (dx, dz): коллайдер выключается сразу, само падение анимируется в update
   fellTree(t, dx, dz) {
-    if (t.fallen || !t.mesh) return;
+    if (t.fallen || !t.mesh || !t.col) return;
     t.fallen = true;
     t.col.dead = true;
     const l = Math.hypot(dx, dz) || 1;
@@ -939,6 +946,45 @@ export class World {
           break;
         }
         case 'tankwreck': this.tankWreck(st, y); break;
+        case 'tent': {
+          // Палатка: брезентовая двускатная, с растяжками и колышками; рвётся от любого взрыва
+          const w = 3.0, d = 4.0, h = 2.0;
+          this.beginPiece();
+          this.roof(st, w - 0.9, d - 0.7, y - 0.05, h, C.canvas);
+          for (const sz of [-1, 1]) {
+            const [px, pz] = this.L(st, 0, sz * (d / 2 + 0.05));
+            this.sb.box(0.07, h + 0.25, 0.07, px, y + h / 2 + 0.1, pz, C.woodDark, yaw);
+            for (const sx of [-1, 1]) {
+              const [kx, kz] = this.L(st, sx * (w / 2 + 0.5), sz * (d / 2 - 0.3));
+              this.sb.box(0.05, 0.3, 0.05, kx, this.height(kx, kz) + 0.1, kz, C.woodDark, yaw, 0.3 * sz, 0);
+            }
+          }
+          this.endPiece({ strength: 1, x: st.x, z: st.z, rad: 2.2, y0: y, y1: y + h, color: C.canvas });
+          break;
+        }
+        case 'tower': {
+          // Наблюдательная вышка: четыре столба, раскосы, площадка с перилами и крыша
+          const h = 6.2, half = 1.25;
+          for (const [lx, lz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+            const [x, z] = this.L(st, lx * half, lz * half);
+            this.solid(0.24, h + 2.3, 0.24, x, this.height(x, z) - 0.1, z, yaw, C.woodDark, 'wood');
+          }
+          this.sb.box(half * 2 + 0.9, 0.14, half * 2 + 0.9, st.x, y + h, st.z, C.wood, yaw);
+          for (const [lx, lz, len, ry] of [[0, -1, 1, 0], [0, 1, 1, 0], [-1, 0, 1, Math.PI / 2], [1, 0, 1, Math.PI / 2]]) {
+            const [x, z] = this.L(st, lx * (half + 0.4), lz * (half + 0.4));
+            this.sb.box(half * 2 + 0.9, 0.1, 0.08, x, y + h + 1.0, z, C.wood, yaw + ry);
+            this.sb.box(half * 2 + 0.9, 0.5, 0.05, x, y + h + 0.35, z, C.woodDark, yaw + ry, 0, 0, 0.1);
+            // Раскосы между столбами
+            const [bx, bz] = this.L(st, lx * half, lz * half);
+            for (const [yy, tilt] of [[1.7, 0.72], [4.4, -0.72]]) this.sb.box(0.1, 0.1, half * 2.9, bx, y + yy, bz, C.wood, yaw + ry + Math.PI / 2, tilt, 0, 0.1);
+          }
+          this.roof(st, half * 2 + 0.4, half * 2 + 0.4, y + h + 2.2, 1.3, C.roof);
+          // Лестница
+          const [ax, az] = this.L(st, 0, half + 0.55);
+          for (const sx of [-0.28, 0.28]) { const [rx, rz] = this.L(st, sx, half + 0.55); this.sb.box(0.07, h + 0.4, 0.07, rx, y + h / 2, rz, C.woodDark, yaw, 0.08, 0); }
+          for (let k = 0; k < 13; k++) this.sb.box(0.6, 0.05, 0.05, ax, y + 0.4 + k * 0.45, az, C.wood, yaw);
+          break;
+        }
       }
     }
   }
@@ -1202,14 +1248,19 @@ export class World {
         if (this.def.flags.some((f) => Math.hypot(x - f.x, z - f.z) < 7)) continue;
         if (this.trenchDist[clamp(Math.round(z + HALF), 0, N) * V + clamp(Math.round(x + HALF), 0, N)] < 3) continue;
         if (this.roadDist(x, z) < 3) continue;
-        if (this.trees.some((t) => Math.abs(t.x - x) < 2.2 && Math.abs(t.z - z) < 2.2)) continue;
+        const gap = spec.type === 'bush' || spec.type === 'sapling' ? 1.3 : 2.2;
+        if (this.trees.some((t) => Math.abs(t.x - x) < gap && Math.abs(t.z - z) < gap)) continue;
         const s = r.range(0.8, 1.3);
         const y = this.height(x, z) - 0.2;
         const tree = { x, z, y, s, type: spec.type, fallen: false };
         this.trees.push(tree);
         (types[spec.type] ||= []).push(tree);
-        tree.col = this.addCyl(x, z, y, y + 7 * s, 0.32 * s, 'wood');
-        tree.col.tree = tree;
+        // Кусты проходимы; молодое деревце — тонкий ствол, который свалит даже броневик
+        if (spec.type !== 'bush') {
+          const thin = spec.type === 'sapling';
+          tree.col = this.addCyl(x, z, y, y + (thin ? 3 : 7) * s, (thin ? 0.1 : 0.32) * s, 'wood');
+          tree.col.tree = tree;
+        }
         placed++;
       }
     }
@@ -1219,6 +1270,13 @@ export class World {
     const needleMat = this.gfx ? this.gfx.foliage('needles') : this.mat('leaves');
     const plane = new THREE.PlaneGeometry(1, 1).toNonIndexed();
     const rr = rng(4242);
+    // Нормали карточек — наружу от оси кроны и вверх: листва освещается объёмно с обеих сторон
+    const outNormals = (b, start, cx, cy, cz, up) => {
+      for (let k = start; k < b.pos.length; k += 3) {
+        const nx = b.pos[k] - cx, nz = b.pos[k + 2] - cz, l = Math.hypot(nx, up, nz) || 1;
+        b.norm[k] = nx / l; b.norm[k + 1] = up / l; b.norm[k + 2] = nz / l;
+      }
+    };
     // Пучок карточек листвы; нормали смотрят от центра кроны, чтобы листва освещалась объёмно
     const clump = (b, cx, cy, cz, rad, n, size) => {
       const start = b.pos.length;
@@ -1280,6 +1338,67 @@ export class World {
           const nx = crown.pos[k], nz = crown.pos[k + 2], l = Math.hypot(nx, 0.8, nz);
           crown.norm[k] = nx / l; crown.norm[k + 1] = 0.8 / l; crown.norm[k + 2] = nz / l;
         }
+      } else if (type === 'spruce') {
+        // Ель: плотные ярусы лап конусом почти до земли
+        crownMat = needleMat;
+        limb(trunk, 0, 0, 0, 0, 9.6, 0, 0.24, 0.04, trunkCol, 9);
+        for (let i = 0; i < 9; i++) {
+          const y = 1.0 + i * 0.95, R = 2.35 * (1 - i / 10.5), n = Math.max(5, 10 - i);
+          for (let k = 0; k < n; k++) {
+            const a = (k / n) * TAU + i * 0.55 + rr() * 0.25, ca = Math.cos(a), sa = Math.sin(a);
+            crown.add(plane, GeoBuilder.mat(ca * R * 0.5, y - 0.28, sa * R * 0.5, -(Math.PI / 2 + 0.5 + rr() * 0.12), Math.atan2(-ca, -sa), Math.PI, R * 0.95, R * 1.15, 1), 0xffffff, 0.12);
+          }
+        }
+        for (let k = 0; k < 3; k++) crown.add(plane, GeoBuilder.mat(0, 9.4, 0, 0, (k * Math.PI) / 3, Math.PI, 0.9, 1.5, 1), 0xffffff, 0.08);
+        outNormals(crown, 0, 0, 0, 0, 0.8);
+      } else if (type === 'birch') {
+        // Берёза: белый ствол с тёмными отметинами, лёгкая свисающая крона
+        limb(trunk, 0, 0, 0, 0.12, 7.6, 0.06, 0.2, 0.06, 0xd9d5c8, 9);
+        for (let k = 0; k < 9; k++) {
+          const h = 0.5 + k * 0.75 + rr() * 0.3, a = rr() * TAU, rad = 0.2 - h * 0.017;
+          trunk.box(0.09, 0.05 + rr() * 0.05, 0.03, Math.cos(a) * rad + 0.12 * h / 7.6, h, Math.sin(a) * rad + 0.06 * h / 7.6, 0x2a2622, Math.PI / 2 - a, 0, 0, 0.1);
+        }
+        const ends = [];
+        for (let k = 0; k < 6; k++) {
+          const a = (k / 6) * TAU + rr() * 0.6, h = 3.2 + k * 0.62, L = 1.1 + rr() * 0.7;
+          const ex = Math.cos(a) * L, ez = Math.sin(a) * L, ey = h + 0.9 + rr() * 0.5;
+          limb(trunk, 0.06, h, 0.03, ex, ey, ez, 0.06, 0.02, 0xcfcabb, 5);
+          ends.push([ex, ey, ez]);
+        }
+        for (const [x, y, z] of ends) { clump(crown, x, y, z, 1.0, 9, 1.15); clump(crown, x * 1.25, y - 0.7, z * 1.25, 0.7, 5, 1.0); }
+        clump(crown, 0.1, 7.3, 0.05, 1.1, 10, 1.2);
+      } else if (type === 'willow') {
+        // Ива: толстый наклонный ствол, раскидистая крона и свисающие пряди
+        limb(trunk, 0, 0, 0, 0.3, 2.6, 0.1, 0.5, 0.34, trunkCol, 12);
+        const ends = [];
+        for (let k = 0; k < 6; k++) {
+          const a = (k / 6) * TAU + rr() * 0.4, L = 2.0 + rr() * 0.9;
+          const ex = 0.3 + Math.cos(a) * L, ez = 0.1 + Math.sin(a) * L, ey = 4.6 + rr() * 0.8;
+          limb(trunk, 0.3, 2.5, 0.1, ex * 0.6, ey, ez * 0.6, 0.2, 0.09, trunkCol, 7);
+          limb(trunk, ex * 0.6, ey, ez * 0.6, ex, ey - 0.3, ez, 0.09, 0.03, trunkCol, 5);
+          ends.push([ex, ey, ez]);
+        }
+        clump(crown, 0.3, 5.4, 0.1, 2.0, 16, 1.7);
+        for (const [x, y, z] of ends) {
+          clump(crown, x, y, z, 1.1, 8, 1.4);
+          const st0 = crown.pos.length;
+          for (let q2 = 0; q2 < 5; q2++) {
+            const len = 2.2 + rr() * 1.6;
+            crown.add(plane, GeoBuilder.mat(x + (rr() - 0.5) * 1.6, y - len / 2 + 0.2, z + (rr() - 0.5) * 1.6, 0, rr() * TAU, 0, 0.9, len, 1), 0xffffff, 0.14);
+          }
+          outNormals(crown, st0, 0.3, 0, 0.1, 0.7);
+        }
+      } else if (type === 'bush') {
+        // Куст: несколько прутьев и плотная листва у самой земли
+        for (let k = 0; k < 5; k++) { const a = rr() * TAU, L = 0.5 + rr() * 0.5; limb(trunk, 0, 0, 0, Math.cos(a) * L, 0.9 + rr() * 0.6, Math.sin(a) * L, 0.035, 0.012, trunkCol, 4); }
+        clump(crown, 0, 0.85, 0, 1.15, 16, 1.25);
+        clump(crown, 0.5, 0.6, 0.3, 0.8, 8, 1.0);
+        clump(crown, -0.45, 0.65, -0.3, 0.8, 8, 1.0);
+      } else if (type === 'sapling') {
+        limb(trunk, 0, 0, 0, 0.08, 3.4, 0.03, 0.07, 0.02, trunkCol, 6);
+        for (let k = 0; k < 3; k++) { const a = rr() * TAU, h = 1.6 + k * 0.5; limb(trunk, 0.04, h, 0, Math.cos(a) * 0.5, h + 0.5, Math.sin(a) * 0.5, 0.025, 0.01, trunkCol, 4); }
+        clump(crown, 0.06, 2.9, 0.02, 0.85, 10, 0.95);
+        clump(crown, 0, 2.2, 0, 0.6, 5, 0.8);
       } else if (type === 'deadpine') {
         limb(trunk, 0, 0, 0, 0, 7.5, 0, 0.26, 0.05, 0x3d342c, 8);
         for (let i = 0; i < 9; i++) {
@@ -1300,6 +1419,8 @@ export class World {
         if (cm) {
           cm.setMatrixAt(i, m4);
           const lc = leafCols[i % leafCols.length].clone();
+          const lt = LEAF_TINT[type];
+          if (lt) { lc.r *= lt[0]; lc.g *= lt[1]; lc.b *= lt[2]; }
           if (this.def.theme === 'winter') lc.lerp(new THREE.Color(0xffffff), 0.12);
           cm.setColorAt(i, lc);
         }
@@ -1323,6 +1444,39 @@ export class World {
       this.addCyl(x, z, y - 1, y + s * 0.9, s * 0.95, 'stone');
       placed++;
     }
+  }
+  // Пни и поваленные стволы
+  buildForestProps() {
+    const r = this.rand, d = this.def;
+    const place = (n, pad, fn) => {
+      let placed = 0, tries = 0;
+      while (placed < n && tries++ < n * 30) {
+        const x = r.range(-PLAY + 5, PLAY - 5), z = r.range(-PLAY + 5, PLAY - 5);
+        if (this.nearFootprint(x, z, pad) || this.roadDist(x, z) < pad) continue;
+        if (this.def.flags.some((f) => Math.hypot(x - f.x, z - f.z) < 6)) continue;
+        if (this.trenchDist[clamp(Math.round(z + HALF), 0, N) * V + clamp(Math.round(x + HALF), 0, N)] < 3.5) continue;
+        if (this.blockedAt(x, z, this.height(x, z), pad * 0.6)) continue;
+        fn(x, z, this.height(x, z));
+        placed++;
+      }
+    };
+    place(d.stumps || 0, 2, (x, z, y) => {
+      const rad = r.range(0.28, 0.5), h = r.range(0.35, 0.8);
+      this.sb.cyl(rad * 0.9, rad * 1.15, h, 9, x, y + h / 2 - 0.05, z, 0x4b4036, 0, r() * 3, 0, 0.08);
+      this.sb.cyl(rad * 0.84, rad * 0.84, 0.03, 9, x, y + h - 0.03, z, 0x7a5c3c, 0, 0, 0, 0.08);
+      this.addCyl(x, z, y - 0.2, y + h, rad, 'wood');
+    });
+    place(d.fallen || 0, 4, (x, z, y) => {
+      const L = r.range(3.5, 6.5), rad = r.range(0.2, 0.34), yaw = r() * TAU;
+      this.beginPiece();
+      this.sb.cyl(rad * 0.8, rad, L, 8, x, y + rad * 0.85, z, 0x4b4036, 0, yaw, Math.PI / 2, 0.08);
+      for (let k = 0; k < 3; k++) {
+        const t = r.range(-0.4, 0.4) * L, bx = x + Math.cos(yaw) * t, bz = z - Math.sin(yaw) * t;
+        this.sb.cyl(0.03, 0.05, 0.9, 5, bx, y + rad * 1.5 + 0.3, bz, 0x4b4036, r.range(-0.6, 0.6), 0, r.range(-0.6, 0.6), 0.08);
+      }
+      this.addBox(x, z, y - 0.2, y + rad * 1.8, L / 2, rad, yaw, 'wood');
+      this.endPiece({ strength: 2, x, z, rad: L / 2, y0: y, y1: y + rad * 2, color: 0x5b4a36 });
+    });
   }
   roadDist(x, z) {
     let best = 99;
@@ -1357,9 +1511,21 @@ export class World {
     const i = clamp(Math.round(x + HALF), 0, N), j = clamp(Math.round(z + HALF), 0, N);
     return this.grassW[j * V + i];
   }
+  // Что растёт в точке: 0 — трава, 1 — высокая трава куртинами, 2 — цветы полянами (маки), 3 — папоротник и бурьян
+  coverAt(x, z, rv) {
+    const n = this.noise, th = this.def.theme;
+    if (th === 'winter') return rv < 0.25 ? 1 : rv < 0.33 ? 2 : rv < 0.4 ? 3 : 0;
+    const patch = n.get(x * 0.045 + 77, z * 0.045 - 31), tall = n.get(x * 0.06 - 13, z * 0.06 + 55);
+    if (patch > 0.36 && rv < 0.55) return 2;
+    if (rv < 0.025) return 2;
+    if (tall > 0.22 && rv > 0.5) return 1;
+    if (rv > (th === 'forest' ? 0.7 : 0.94)) return 3;
+    return 0;
+  }
   tintAt(x, z) {
     if (this.def.theme === 'winter') return [0.62, 0.52, 0.34];
     const n = this.noise.get(x * 0.05 + 9, z * 0.05) * 0.5 + 0.5, m = this.noise.get(x * 0.2, z * 0.2 + 4) * 0.5 + 0.5;
+    if (this.def.theme === 'forest') return [lerp(0.15, 0.27, n) + m * 0.04, lerp(0.3, 0.42, n), lerp(0.06, 0.1, n)];
     return [lerp(0.2, 0.4, n) + m * 0.05, lerp(0.27, 0.36, n), lerp(0.07, 0.11, n)];
   }
 
@@ -1390,7 +1556,7 @@ export class World {
       const n1 = nz.get(x * 0.08, z * 0.08) * 0.5 + 0.5, n2 = nz.get(x * 0.03 + 50, z * 0.03) * 0.5 + 0.5;
       c.copy(cG).lerp(cG2, n1);
       let m = 1 - smoothstep(86, 112, Math.abs(z));
-      m = clamp(m * (0.6 + 0.6 * n2) + (winter ? -0.25 : 0), 0, 1);
+      m = clamp(m * (0.6 + 0.6 * n2) * (this.def.mud ?? 1) + (winter ? -0.25 : 0), 0, 1);
       c2.copy(cM).lerp(cM2, n1);
       c.lerp(c2, m * (winter ? 0.55 : 0.88));
       const dep = B[k] - H[k];
@@ -1499,7 +1665,7 @@ export class World {
       const d = this.distToCollider(c, x, z);
       if (d < 0.45) cost = Math.max(cost, tall > 1.3 ? BLOCK : 6);
       // Деревья танк валит, поэтому для него они не преграда
-      if (d < 2.3 && tall > 1.3 && !c.tree) tank = BLOCK;
+      if (d < 2.3 && tall > 1.3 && !(c.tree && c.tree.type !== 'oak' && c.tree.type !== 'willow')) tank = BLOCK;
     });
     if (cost < BLOCK && this.inWire(x, z)) cost = Math.max(cost, 8);
     nav[k] = cost;
