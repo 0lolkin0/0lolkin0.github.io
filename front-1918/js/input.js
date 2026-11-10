@@ -2,7 +2,7 @@
 // Режим переключается сам: двинули мышью или нажали клавишу — ПК, коснулись экрана — телефон
 const KEY_EVENTS = {
   Space: 'jump', KeyR: 'reload', KeyG: 'grenade', KeyF: 'gadget', KeyV: 'melee', KeyQ: 'spot', KeyE: 'interact', KeyX: 'exit',
-  KeyP: 'pause', KeyM: 'map', Digit1: 'slot1', Digit2: 'slot2', KeyH: 'help', Enter: 'giveup',
+  KeyP: 'pause', KeyM: 'map', Digit1: 'slot1', Digit2: 'slot2', KeyH: 'help', Enter: 'giveup', KeyT: 'mask',
 };
 
 export class Input {

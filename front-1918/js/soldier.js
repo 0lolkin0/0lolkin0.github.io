@@ -4,7 +4,7 @@ import * as THREE from './three.module.min.js';
 import { clamp, lerp, DEG, TAU, dirFromYawPitch, angleDiff } from './util.js';
 import { TEAMS, WEAPONS, CLASS_BY_ID, SIGHTS, sightZoom } from './config.js';
 import { PLAY } from './world.js';
-import { torsoGeo, thighGeo, shinGeo, armsGeo, WEAPON_IDS } from './models.js';
+import { torsoGeo, thighGeo, shinGeo, armsGeo, maskGeo, WEAPON_IDS } from './models.js';
 
 const GRAV = 15;
 const _push = {};
@@ -30,7 +30,7 @@ export class Soldier {
     this.lieT = 0;
     this.respawnT = 0; this.downT = 0;
     this.stats = { kills: 0, deaths: 0, score: 0, revives: 0, caps: 0, assists: 0, heads: 0 };
-    this.input = { mx: 0, mz: 0, sprint: false, crouch: false, prone: false, jump: false, fire: false, ads: false, reload: false, grenade: false, gadget: false, melee: false, swap: false, hold: false };
+    this.input = { mx: 0, mz: 0, sprint: false, crouch: false, prone: false, jump: false, fire: false, ads: false, reload: false, grenade: false, gadget: false, melee: false, swap: false, hold: false, mask: false };
     this.ammo = {};
     this.sights = {};
     this.slot = 0;
@@ -43,9 +43,10 @@ export class Soldier {
     this.recoilP = 0; this.recoilY = 0;
     this.switchT = 0;
   }
-  setClass(id) {
+  // wid — выбранное основное оружие класса (если не задано — первое из списка)
+  setClass(id, wid) {
     this.cls = CLASS_BY_ID[id];
-    this.slots = [this.cls.weapon, TEAMS[this.team].sidearm];
+    this.slots = [this.cls.weapons.includes(wid) ? wid : this.cls.weapon, TEAMS[this.team].sidearm];
     this.slot = 0;
   }
   get weapon() { return WEAPONS[this.slots[this.slot]]; }
@@ -75,6 +76,14 @@ export class Soldier {
     this.hp = 100;
     this.lieT = 0; this.crouchT = 0; this.proneT = 0; this.adsT = 0;
     this.slot = 0;
+    // Боты берут разное оружие своего класса и разные гранаты
+    if (this.bot) {
+      const ws = this.cls.weapons;
+      this.slots[0] = Math.random() < 0.55 ? ws[0] : ws[Math.floor(Math.random() * ws.length)];
+      const r = Math.random();
+      this.nadeType = r < 0.72 ? 'frag' : r < 0.9 ? 'gas' : 'smoke';
+    } else this.nadeType = this.game.save.nade || 'frag';
+    this.maskT = 0; this.gasT = 0;
     for (const [i, wid] of this.slots.entries()) {
       const wp = WEAPONS[wid];
       this.ammo[wid] = { mag: wp.mag, reserve: wp.reserve * (this.bot && i === 0 ? 2 : 1) };
@@ -155,7 +164,9 @@ export class Soldier {
     this.crouchT = clamp(this.crouchT + (crouch ? 6 : -6) * dt, 0, 1);
     this.proneT = clamp(this.proneT + (wantProne ? 1.8 : -2.4) * dt, 0, 1);
     const adsTime = wpn.adsTime + (this.sight.optic ? 0.08 + this.zoom * 0.008 : 0);
-    const adsWant = inp.ads && !reloading && this.throwT <= 0 && this.meleeT <= 0 && this.switchT <= 0 && !charging;
+    // Противогаз: надевается и снимается за полсекунды; в нём нельзя целиться через прицел
+    this.maskT = clamp(this.maskT + (inp.mask ? 1 : -1) * dt / 0.55, 0, 1);
+    const adsWant = inp.ads && !reloading && this.throwT <= 0 && this.meleeT <= 0 && this.switchT <= 0 && !charging && this.maskT < 0.5;
     this.adsT = clamp(this.adsT + (adsWant ? 1 : -1.6) * dt / adsTime, 0, 1);
     this.sprinting = sprint;
 
@@ -219,11 +230,21 @@ export class Soldier {
 
     // Оружие
     if (reloading) {
-      this.reloadT -= dt;
-      if (this.reloadT <= 0) {
-        const need = wpn.mag - this.mag, take = Math.min(need, this.reserve);
-        this.mag += take; this.reserve -= take;
-        this.reloadT = 0;
+      // Ружьё заряжается по одному патрону; выстрел прерывает зарядку
+      if (wpn.shellReload && inp.fire && this.mag > 0) this.reloadT = 0;
+      else {
+        this.reloadT -= dt;
+        if (this.reloadT <= 0) {
+          if (wpn.shellReload) {
+            this.mag++; this.reserve--;
+            if (this.mag < wpn.mag && this.reserve > 0) { this.reloadT = wpn.reload; if (this.isPlayer) g.audio.reload(0.3); }
+            else this.reloadT = 0;
+          } else {
+            const need = wpn.mag - this.mag, take = Math.min(need, this.reserve);
+            this.mag += take; this.reserve -= take;
+            this.reloadT = 0;
+          }
+        }
       }
     }
     if (inp.reload) { inp.reload = false; this.startReload(); }
@@ -236,7 +257,7 @@ export class Soldier {
         this.bloom = Math.min(wpn.bloomMax, this.bloom + wpn.bloom);
         this.lastShot = g.time;
         this.spottedUntil = Math.max(this.spottedUntil, g.time + 2.2);
-        if (wpn.id === 'bolt' && this.isPlayer) g.audio.bolt();
+        if (wpn.cycle && this.isPlayer) g.audio.bolt();
       } else if (this.isPlayer && this.fireCd <= 0) {
         g.audio.empty();
         this.fireCd = 0.3;
@@ -250,7 +271,7 @@ export class Soldier {
         this.grenades--;
         this.throwT = 0.65;
         this.reloadT = 0;
-        g.combat.throwProjectile(this, 'frag');
+        g.combat.throwProjectile(this, this.nadeType || 'frag');
       }
     }
     if (inp.gadget) {
@@ -308,7 +329,7 @@ export class Soldier {
   startReload() {
     const wpn = this.weapon;
     if (this.reloadT > 0 || this.mag >= wpn.mag || this.reserve <= 0 || this.switchT > 0) return;
-    this.reloadT = wpn.reload * (this.mag === 0 ? 1.15 : 1);
+    this.reloadT = wpn.shellReload ? wpn.reload * 1.3 : wpn.reload * (this.mag === 0 ? 1.15 : 1);
     this.adsT = Math.min(this.adsT, 0.3);
     if (this.isPlayer) this.game.audio.reload(this.reloadT);
   }
@@ -364,6 +385,11 @@ export class SoldierRenderer {
       for (const w of WEAPON_IDS) arms[w] = mk(armsGeo(t, w), perTeam);
       return { thigh: mk(thighGeo(t), perTeam * 2), shin: mk(shinGeo(t), perTeam * 2), torso: mk(torsoGeo(t), perTeam), arms };
     });
+    // Противогазы — одна сетка на обе стороны, ставится на голову поверх лица
+    this.mask = new THREE.InstancedMesh(maskGeo(), mat, perTeam * 2);
+    this.mask.frustumCulled = false; this.mask.castShadow = true; this.mask.count = 0;
+    this.mask.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    scene.add(this.mask);
     // Шаблонный скелет
     const O = () => new THREE.Object3D();
     this.root = O(); this.hip = O(); this.torso = O(); this.arms = O();
@@ -441,6 +467,7 @@ export class SoldierRenderer {
       T.n = 0; T.l = 0; T.an = {};
       for (const w of WEAPON_IDS) T.an[w] = 0;
     }
+    let mn = 0;
     for (const s of soldiers) {
       if (s === hide || s.vehicle) continue;
       if (s.state === 'dead' && s.lieT >= 1 && s.game.time - s.deadAt > 9) continue;
@@ -448,6 +475,7 @@ export class SoldierRenderer {
       const T = this.teams[s.team];
       this.pose(s, time);
       T.torso.setMatrixAt(T.n, this.torso.matrixWorld);
+      if (s.maskT > 0.5 && mn < this.mask.instanceMatrix.count) this.mask.setMatrixAt(mn++, this.torso.matrixWorld);
       const wid = s.weapon.id;
       T.arms[wid].setMatrixAt(T.an[wid]++, this.arms.matrixWorld);
       T.thigh.setMatrixAt(T.l, this.thL.matrixWorld);
@@ -456,6 +484,8 @@ export class SoldierRenderer {
       T.shin.setMatrixAt(T.l++, this.shR.matrixWorld);
       T.n++;
     }
+    this.mask.count = mn;
+    this.mask.instanceMatrix.needsUpdate = true;
     for (const T of this.teams) {
       T.torso.count = T.n; T.thigh.count = T.l; T.shin.count = T.l;
       T.torso.instanceMatrix.needsUpdate = true; T.thigh.instanceMatrix.needsUpdate = true; T.shin.instanceMatrix.needsUpdate = true;

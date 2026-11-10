@@ -5,7 +5,7 @@ import { GeoBuilder, clamp, lerp } from './util.js';
 import { GUN, viewArmsGeo } from './models.js';
 
 // Как далеко целик от глаза при прицеливании
-const REAR_DIST = { smg: 0.17, semi: 0.15, bolt: 0.17, lmg: 0.09, revolver: 0.42, pistol: 0.42 };
+const REAR_DIST = { smg: 0.17, semi: 0.15, bolt: 0.17, lmg: 0.09, revolver: 0.42, pistol: 0.42, shotgun: 0.16, auto: 0.15, hmg: 0.1, carbine: 0.17, atr: 0.2 };
 
 export class ViewModel {
   constructor(gfx) {
@@ -40,7 +40,7 @@ export class ViewModel {
     const mesh = new THREE.Mesh(viewArmsGeo(team, wid, optic), this.mat);
     g.add(mesh);
     const G = GUN[wid];
-    if (!G.pistol && wid !== 'lmg') {
+    if (!G.pistol && wid !== 'lmg' && wid !== 'hmg' && wid !== 'atr') {
       const bb = new GeoBuilder();
       const mz = G.muzzle;
       bb.box(0.012, 0.03, 0.4, 0.025, mz[1] - 0.02, mz[2] - 0.17, 0x9a9a98, 0, 0, 0, 0.02);
@@ -65,7 +65,7 @@ export class ViewModel {
     this.cur = this.models[key];
   }
   kick(w) {
-    this.kickZ = Math.min(0.12, this.kickZ + (w.id === 'bolt' ? 0.08 : w.id === 'semi' ? 0.045 : w.side ? 0.05 : 0.022));
+    this.kickZ = Math.min(0.14, this.kickZ + (w.kick ?? (w.side ? 0.05 : 0.022)));
     this.kickR = Math.min(0.32, this.kickR + w.recoil * (w.side ? 0.05 : 0.035));
     this.flashT = 0.045;
     if (this.cur) {

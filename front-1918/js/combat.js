@@ -6,6 +6,7 @@ const _c1 = new THREE.Vector3(), _c2 = new THREE.Vector3(), _c3 = new THREE.Vect
 
 const _d = new THREE.Vector3(), _o = new THREE.Vector3(), _m = new THREE.Vector3(), _r = new THREE.Vector3(), _u = new THREE.Vector3();
 const _hit = {}, _shape = {};
+const _pd = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 
 function projGeo(type, team) {
@@ -17,6 +18,12 @@ function projGeo(type, team) {
     b.cyl(0.035, 0.035, 0.3, 6, 0, 0, 0, 0x6b4a2c);
     for (let i = 0; i < 5; i++) b.cyl(0.05, 0.05, 0.16, 6, Math.cos(i * 1.26) * 0.08, 0.2, Math.sin(i * 1.26) * 0.08, 0x4d4f48);
   } else if (type === 'flare') b.cyl(0.03, 0.03, 0.12, 6, 0, 0, 0, 0xc04030);
+  else if (type === 'gas' || type === 'smoke') {
+    // Жестяной баллон с цветной полосой: жёлтая — газ, белая — дым
+    b.cyl(0.045, 0.045, 0.16, 8, 0, 0, 0, type === 'gas' ? 0x6a6f3a : 0x8a8d86);
+    b.cyl(0.047, 0.047, 0.03, 8, 0, 0.03, 0, type === 'gas' ? 0xc9b23a : 0xd8d8d2);
+    b.cyl(0.02, 0.02, 0.05, 6, 0, 0.1, 0, 0x3a3a34);
+  }
   else if (type === 'shell') b.cyl(0.05, 0.08, 0.5, 6, 0, 0, 0, 0x9a7b3f, Math.PI / 2);
   else if (type === 'bomb') { b.cyl(0.12, 0.18, 0.9, 8, 0, 0, 0, 0x3f403b); b.box(0.4, 0.3, 0.02, 0, 0.5, 0, 0x3f403b); }
   return b.build();
@@ -43,6 +50,7 @@ export class Combat {
     this.projectiles = [];
     this.deployables = [];
     this.flares = [];
+    this.clouds = [];
     this.geos = {};
     this.mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.1 });
     this.lastWhiz = 0;
@@ -88,61 +96,67 @@ export class Combat {
   }
   fireWeapon(s) {
     const g = this.g, w = s.weapon;
-    if (s.isPlayer && !s.bot) {
-      _o.set(s.pos.x, s.eyeY, s.pos.z);
-      g.camera.getWorldDirection(_d);
-    } else {
-      _o.set(s.pos.x, s.eyeY, s.pos.z);
-      s.aimDir(_d);
-    }
+    _o.set(s.pos.x, s.eyeY, s.pos.z);
+    if (s.isPlayer && !s.bot) g.camera.getWorldDirection(_d);
+    else s.aimDir(_d);
     this.spreadDir(_d, s.spread(), _d);
-    const res = this.trace(s, s.team, _o.x, _o.y, _o.z, _d.x, _d.y, _d.z, w.range);
-    const t = Math.min(res.t, w.range);
-    const hx = _o.x + _d.x * t, hy = _o.y + _d.y * t, hz = _o.z + _d.z * t;
-    if (res.target) {
-      if (res.target.kind) res.target.damage(res.target.kind === 'airship' ? (w.dmg[0] * 0.4) : 2, s);
-      else {
-        let dmg = lerp(w.dmg[0], w.dmg[1], smoothstep(w.fall[0], w.fall[1], t));
-        if (w.sweet && t >= w.sweet[0] && t <= w.sweet[1]) dmg = 100;
-        if (res.head) dmg *= w.head;
-        if (s.bot && res.target.isPlayer) dmg *= g.diff.dmgMul;
-        this.damage(res.target, dmg, s, w.id, res.head, _d.x, _d.z, false);
-        g.effects.blood(hx, hy, hz, -_d.x, -_d.y, -_d.z);
-      }
-      if (res.target.kind === 'tank') g.effects.impact(hx, hy, hz, -_d.x, -_d.y, -_d.z, 'metal');
-    } else if (res.world) {
-      g.effects.impact(hx, hy, hz, res.nx, res.ny, res.nz, res.mat);
-    }
-    // Дуло, трассер, звук
     if (s.isPlayer) g.viewmodel.muzzleWorld(_m);
     else s.muzzle(_m);
     s.shotN = (s.shotN || 0) + 1;
-    if (s.shotN % w.tracerEvery === 0) g.effects.tracers.add(_m.x, _m.y, _m.z, hx, hy, hz, w.id === 'bolt' ? 600 : 430);
+    // Дробь — несколько лучей вокруг линии прицеливания; у остального оружия один луч
+    const n = w.pellets || 1;
+    let far = 0;
+    for (let i = 0; i < n; i++) {
+      const d = n > 1 ? this.spreadDir(_d, w.pelletSpread * DEG, _pd) : _d;
+      const res = this.trace(s, s.team, _o.x, _o.y, _o.z, d.x, d.y, d.z, w.range);
+      const t = Math.min(res.t, w.range);
+      if (t > far) far = t;
+      const hx = _o.x + d.x * t, hy = _o.y + d.y * t, hz = _o.z + d.z * t;
+      if (res.target) {
+        if (res.target.kind) res.target.damage(res.target.kind === 'airship' ? (w.dmg[0] * 0.4) : res.target.bulletDmg(w), s);
+        else {
+          let dmg = lerp(w.dmg[0], w.dmg[1], smoothstep(w.fall[0], w.fall[1], t));
+          if (w.sweet && t >= w.sweet[0] && t <= w.sweet[1]) dmg = 100;
+          if (res.head) dmg *= w.head;
+          if (s.bot && res.target.isPlayer) dmg *= g.diff.dmgMul;
+          this.damage(res.target, dmg, s, w.id, res.head, d.x, d.z, false);
+          g.effects.blood(hx, hy, hz, -d.x, -d.y, -d.z);
+        }
+        if (res.target.kind === 'tank') g.effects.impact(hx, hy, hz, -d.x, -d.y, -d.z, 'metal');
+      } else if (res.world) {
+        g.effects.impact(hx, hy, hz, res.nx, res.ny, res.nz, res.mat);
+        // Тяжёлая пуля противотанкового ружья выбивает куски из стен и заборов
+        if (w.vehicleDmg) g.world.blast && g.world.blast(hx, hy, hz, 0.9, 1);
+      }
+      if (n > 1 ? i % 3 === 0 : s.shotN % w.tracerEvery === 0) g.effects.tracers.add(_m.x, _m.y, _m.z, hx, hy, hz, w.sniper ? 600 : 430);
+    }
+    // Дуло, гильза, звук
     if (!s.isPlayer) {
       // Вспышка у дула освещает окоп вокруг стрелка, если он недалеко от камеры
       const cp = g.camera.position, near = (cp.x - _m.x) ** 2 + (cp.z - _m.z) ** 2 < 40 * 40;
-      g.effects.muzzle(_m.x, _m.y, _m.z, _d.x, _d.y, _d.z, w.id === 'lmg' || w.id === 'bolt', near);
+      g.effects.muzzle(_m.x, _m.y, _m.z, _d.x, _d.y, _d.z, !!w.bigFlash, near);
     } else {
-      g.effects.flash(_m.x, _m.y, _m.z, w.id === 'bolt' ? 6 : 3.5, 12, 0.06, 0xffc070);
-      // Гильза из затвора (у револьвера гильзы остаются в барабане)
+      g.effects.flash(_m.x, _m.y, _m.z, w.bigFlash ? 6 : 3.5, 12, 0.06, 0xffc070);
+      // Гильза из затвора (у револьвера гильзы остаются в барабане); у ружья — красная картонная
       if (w.id !== 'revolver') {
         const c = g.camera, cq = c.quaternion;
         _c1.set(1, 0, 0).applyQuaternion(cq); _c2.set(0, 1, 0).applyQuaternion(cq); _c3.set(0, 0, -1).applyQuaternion(cq);
         const ex = c.position.x + _c3.x * 0.35 + _c1.x * 0.1 - _c2.x * 0.1, ey = c.position.y + _c3.y * 0.35 + _c1.y * 0.1 - _c2.y * 0.1, ez = c.position.z + _c3.z * 0.35 + _c1.z * 0.1 - _c2.z * 0.1;
         const sp = rand(1.8, 2.8);
-        g.effects.casing(ex, ey, ez, _c1.x * sp + _c2.x * 1.4 + s.vel.x, _c1.y * sp + _c2.y * 1.4 + rand(0.5, 1.2), _c1.z * sp + _c2.z * 1.4 + s.vel.z);
+        g.effects.casing(ex, ey, ez, _c1.x * sp + _c2.x * 1.4 + s.vel.x, _c1.y * sp + _c2.y * 1.4 + rand(0.5, 1.2), _c1.z * sp + _c2.z * 1.4 + s.vel.z,
+          w.pellets ? 0xa33a2a : 0xc9a24a, w.pellets || w.vehicleDmg ? 1.35 : 1);
       }
     }
     g.audio.shot(w.snd, _m.x, _m.y, _m.z, s.isPlayer);
     if (s.isPlayer) {
-      const k = lerp(1, 0.7, s.adsT) * lerp(1, 0.8, s.crouchT);
+      const k = lerp(1, 0.7, s.adsT) * lerp(1, 0.8, s.crouchT) * lerp(1, 0.7, s.proneT);
       s.recoilP += w.recoil * rand(0.85, 1.15) * DEG * k;
       s.recoilY += rand(-1, 1) * w.recoilYaw * DEG * k;
       g.viewmodel.kick(w);
-      if (w.id === 'bolt' || w.id === 'semi') g.shake(w.id === 'bolt' ? 0.12 : 0.05);
+      if (w.shake) g.shake(w.shake);
     }
     if (s.bot) s.bot.onFired();
-    this.whizCheck(s, _o, _d, t);
+    this.whizCheck(s, _o, _d, far);
     g.hearShot(s);
   }
   whizCheck(shooter, o, d, len) {
@@ -164,12 +178,12 @@ export class Combat {
     const t = Math.min(res.t, range);
     const hx = o.x + d.x * t, hy = o.y + d.y * t, hz = o.z + d.z * t;
     if (res.target) {
-      if (res.target.kind) res.target.damage(res.target.kind === 'airship' ? dmg * 0.4 : 2, shooter);
+      if (res.target.kind) res.target.damage(res.target.kind === 'airship' ? dmg * 0.4 : res.target.bulletDmg(null), shooter);
       else {
         let k = 1;
         if (vehicle && vehicle.kind === 'airship' && res.target.isPlayer) k = g.diff.dmgMul;
         else if (shooter && shooter.bot && res.target.isPlayer) k = g.diff.dmgMul;
-        this.damage(res.target, dmg * (res.head ? 1.5 : 1) * k, shooter, vehicle ? vehicle.kind : 'mg', res.head, d.x, d.z, false);
+        this.damage(res.target, dmg * (res.head ? 1.5 : 1) * k, shooter, vehicle ? (vehicle.wname || vehicle.kind) : 'mg', res.head, d.x, d.z, false);
         g.effects.blood(hx, hy, hz, -d.x, -d.y, -d.z);
       }
     } else if (res.world) g.effects.impact(hx, hy, hz, res.nx, res.ny, res.nz, res.mat);
@@ -315,7 +329,7 @@ export class Combat {
     dirFromYawPitch(yaw, pitch, _d);
     const vel = _d.clone().multiplyScalar(spec.speed);
     vel.x += s.vel.x * 0.5; vel.z += s.vel.z * 0.5;
-    this.addProjectile({ type, owner: s, team: s.team, pos: o, vel, fuse: type === 'frag' ? spec.fuse : 6, age: 0, rest: false });
+    this.addProjectile({ type, owner: s, team: s.team, pos: o, vel, fuse: spec.fuse ?? 6, age: 0, rest: false });
     g.audio.throwSnd();
   }
   spawnShell(tank, pos, dir) {
@@ -360,7 +374,7 @@ export class Combat {
           }
           if (tHit <= step) {
             const hx = p.pos.x + _d.x * tHit, hy = p.pos.y + _d.y * tHit, hz = p.pos.z + _d.z * tHit;
-            if (p.type === 'frag') {
+            if (p.type === 'frag' || p.type === 'gas' || p.type === 'smoke') {
               const vn = p.vel.x * _hit.nx + p.vel.y * _hit.ny + p.vel.z * _hit.nz;
               p.vel.x = (p.vel.x - 2 * vn * _hit.nx) * 0.4;
               p.vel.y = (p.vel.y - 2 * vn * _hit.ny) * 0.32;
@@ -389,6 +403,7 @@ export class Combat {
       p.fuse -= dt;
       if (p.fuse <= 0) {
         if (p.type === 'frag' || p.type === 'at') this.detonate(p, null);
+        else if (p.type === 'gas' || p.type === 'smoke') this.startCloud(p);
         this.removeProj(i);
         continue;
       }
@@ -411,9 +426,11 @@ export class Combat {
       if (directV) directV.damage(GRENADE.at.vehicle, p.owner);
       this.explode(x, y, z, GRENADE.at.radius, GRENADE.at.dmg, p.owner, 'at', directV ? 0 : 180, 0.7);
     } else if (p.type === 'shell') {
-      if (directV) directV.damage(260, p.owner);
+      // Снаряд: мощность зависит от орудия, из которого он выпущен
+      const sh = (p.vehicle && p.vehicle.cfg && p.vehicle.cfg.shell) || { dmg: 115, radius: 5.5, direct: 260 };
+      if (directV) directV.damage(sh.direct, p.owner);
       if (p.directS) this.damage(p.directS, 150, p.owner, 'tank', false, 0, 0, true);
-      this.explode(x, y, z, 5.5, 115, p.owner, 'tank', directV ? 0 : 90, 1.1);
+      this.explode(x, y, z, sh.radius, sh.dmg, p.owner, 'tank', directV ? 0 : 90, sh.radius / 5);
     } else if (p.type === 'bomb') {
       if (directV) directV.damage(200, p.owner);
       this.explode(x, y, z, 9, 160, null, 'airship', 150, 1.6, p.team);
@@ -447,6 +464,58 @@ export class Combat {
     const dc = Math.hypot(cam.x - x, cam.y - y, cam.z - z);
     if (dc < 40) g.shake(Math.min(1, (1 - dc / 40) * radius / 5));
     if (p && dc < radius * 1.6) g.hud.flashWhite(1 - dc / (radius * 1.6));
+  }
+
+  // ---------- Газ и дым ----------
+  startCloud(p) {
+    const spec = GRENADE[p.type];
+    this.clouds.push({ type: p.type, x: p.pos.x, y: p.pos.y, z: p.pos.z, r: 1.5, R: spec.radius, t: spec.time, owner: p.owner, team: p.team, tick: 0, acc: 3 });
+    this.g.audio.pop(p.pos.x, p.pos.y, p.pos.z);
+  }
+  updateClouds(dt) {
+    const g = this.g, fx = g.effects;
+    for (let i = this.clouds.length - 1; i >= 0; i--) {
+      const c = this.clouds[i];
+      c.t -= dt;
+      if (c.t <= 0) { this.clouds.splice(i, 1); continue; }
+      c.r = Math.min(c.R, c.r + dt * 3.2);
+      const fade = Math.min(1, c.t / 4);
+      c.acc += dt * (c.type === 'gas' ? 9 : 13) * fade;
+      while (c.acc > 1) { c.acc -= 1; fx.cloudPuff(c.type, c.x, c.y, c.z, c.r); }
+      if (c.type !== 'gas') continue;
+      c.tick -= dt;
+      if (c.tick > 0) continue;
+      c.tick = 0.5;
+      // Газ травит врагов и самого бросившего; противогаз спасает
+      for (const s of g.soldiers) {
+        if (s.state !== 'alive' || s.vehicle) continue;
+        if (s.team === c.team && s !== c.owner) continue;
+        const dx = s.pos.x - c.x, dz = s.pos.z - c.z;
+        if (dx * dx + dz * dz > c.r * c.r || Math.abs(s.pos.y + 1 - c.y) > 3.5) continue;
+        if (s.maskT > 0.6) continue;
+        this.damage(s, GRENADE.gas.dps * 0.5 * (0.5 + 0.5 * fade), c.owner === s ? null : c.owner, 'gas', false, 0, 0, false);
+      }
+    }
+  }
+  // Есть ли в точке газ (боты надевают противогаз, игроку показывается предупреждение)
+  gasAt(x, y, z) {
+    for (const c of this.clouds) {
+      if (c.type === 'gas' && (x - c.x) ** 2 + (z - c.z) ** 2 < (c.r + 1) ** 2 && Math.abs(y - c.y) < 4) return true;
+    }
+    return false;
+  }
+  // Закрывает ли дым (и отчасти газ) линию взгляда: расстояние от центра облака до отрезка
+  smokeBlocks(ax, ay, az, bx, by, bz) {
+    for (const c of this.clouds) {
+      if (c.r < 2.5) continue;
+      const k = c.type === 'smoke' ? 0.72 : 0.3;
+      const cy = c.y + 1.2;
+      const dx = bx - ax, dy = by - ay, dz = bz - az, l2 = dx * dx + dy * dy + dz * dz;
+      const t = l2 > 0 ? clamp(((c.x - ax) * dx + (cy - ay) * dy + (c.z - az) * dz) / l2, 0, 1) : 0;
+      const px = ax + dx * t - c.x, py = ay + dy * t - cy, pz = az + dz * t - c.z;
+      if (px * px + py * py * 2 + pz * pz < c.r * c.r * k) return true;
+    }
+    return false;
   }
 
   // ---------- Снабжение ----------
@@ -515,6 +584,6 @@ export class Combat {
   clear() {
     for (const p of this.projectiles) if (p.mesh) this.g.scene.remove(p.mesh);
     for (const d of this.deployables) this.g.scene.remove(d.mesh);
-    this.projectiles = []; this.deployables = [];
+    this.projectiles = []; this.deployables = []; this.clouds = [];
   }
 }

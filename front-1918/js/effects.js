@@ -262,6 +262,7 @@ const C = {
   fire1: COL(0xffc46a), fire2: COL(0xff7a2a), smoke: COL(0x4a4540), smokeL: COL(0x8a857c), dirt: COL(0x4a3a2a), dirtL: COL(0x7a6650),
   snow: COL(0xe8edf2), stone: COL(0x9a958c), wood: COL(0x8a6a48), spark: COL(0xffd890), blood: COL(0x7a1010), flash: COL(0xffe0a0),
   sand: COL(0xb09a6a), flare: COL(0xff5040), flareCore: COL(0xffffff), dust: COL(0xa49a88),
+  gas: COL(0xa9ad4e), gas2: COL(0x8e9a44), smokeW: COL(0xc9cac6), smokeW2: COL(0xaeb0ac),
 };
 
 // Обломки с физикой: комья земли, камни и щепки от взрывов, гильзы. Летят, вращаются, отскакивают от земли
@@ -469,8 +470,18 @@ export class Effects {
     if (Math.random() < 0.4) this.normal.spawn(x, y, z, rand(-0.2, 0.2), rand(-0.2, 0.3), rand(-0.2, 0.2), 0.5, 3, 2, C.smokeL, 0.3, 0, 0.2);
   }
   // Гильза: вылетает вправо-вверх от затвора, звенит о землю
-  casing(x, y, z, vx, vy, vz) {
-    this.brass.spawn(x, y, z, vx, vy, vz, 0.011, 0.032, 0.011, 0xc9a24a, 4);
+  casing(x, y, z, vx, vy, vz, color = 0xc9a24a, k = 1) {
+    this.brass.spawn(x, y, z, vx, vy, vz, 0.011 * k, 0.032 * k, 0.011 * k, color, 4);
+  }
+  // Пыль из-под гусениц и колёс
+  dust(x, y, z, s = 1) {
+    this.normal.spawn(x, y, z, rand(-0.5, 0.5), rand(0.4, 1.1), rand(-0.5, 0.5), rand(0.8, 1.4) * s, 2.2, rand(1, 1.8), this.winter ? C.snow : C.dust, 0.26, -0.1, 0.8);
+  }
+  // Клуб газа или дыма внутри облака радиуса r
+  cloudPuff(type, x, y, z, r) {
+    const a = Math.random() * TAU, d = Math.sqrt(Math.random()) * r * 0.85, gas = type === 'gas';
+    this.normal.spawn(x + Math.cos(a) * d, y + rand(0.3, gas ? 1.7 : 2.8), z + Math.sin(a) * d, rand(-0.35, 0.35), rand(0.02, 0.3), rand(-0.35, 0.35),
+      rand(3.2, 5), 0.7, rand(3.6, 5.6), gas ? (Math.random() < 0.5 ? C.gas : C.gas2) : (Math.random() < 0.5 ? C.smokeW : C.smokeW2), gas ? 0.32 : 0.6, -0.02, 0.25);
   }
   heal(x, y, z) {
     this.add.spawn(x + rand(-0.4, 0.4), y, z + rand(-0.4, 0.4), 0, 1.2, 0, 0.18, 0, 0.7, COL(0x70ff90), 0.8, 0, 0);

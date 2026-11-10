@@ -29,6 +29,8 @@ export const ICONS = {
   swap: svg('<path d="M3 9h11l1-2h3v4h-6l-1 3.5h-3l.5-3.5H3z" fill="currentColor" fill-opacity=".25"/><path d="M5 17h13M15 14.5l3 2.5-3 2.5"/>'),
   // Пулемёт танка
   mg: svg('<path d="M2 11h14v3H2z" fill="currentColor" fill-opacity=".25"/><path d="M16 12.5h6M5 14v4M10 14l1 4"/><circle cx="9" cy="8" r="2.5"/>'),
+  // Противогаз: очки и коробка фильтра
+  mask: svg('<path d="M4 11c0-5 3.5-8 8-8s8 3 8 8c0 3-1.5 5-4 6"/><path d="M4 11c0 3 1.5 5 4 6"/><circle cx="8.5" cy="10" r="2.6"/><circle cx="15.5" cy="10" r="2.6"/><rect x="9" y="14.5" width="6" height="6.5" rx="2" fill="currentColor" fill-opacity=".3"/>'),
   // Пометка: глаз и маркер-треугольник
   spot: svg('<path d="M2.5 9.5C5 5.8 8.2 4 12 4s7 1.8 9.5 5.5C19 13.2 15.8 15 12 15s-7-1.8-9.5-5.5z"/><circle cx="12" cy="9.5" r="2.6" fill="currentColor"/><path d="M8.5 17.5h7L12 22z" fill="currentColor"/>'),
   exit: svg('<path d="M14 4H6v16h8"/><path d="M11 12h10M17 8l4 4-4 4"/>'),

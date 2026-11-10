@@ -1,7 +1,8 @@
 // Интерфейс боя: очки, флаги, миникарта, лента убийств, маркеры над головами, прицел, индикаторы урона
 import * as THREE from './three.module.min.js';
 import { clamp, TAU, DEG, fmtTime, yawTo } from './util.js';
-import { WEAPONS, TEAMS, GADGETS, WNAME } from './config.js';
+import { WEAPONS, TEAMS, GADGETS, WNAME, GRENADE_TYPES } from './config.js';
+const NADE_SHORT = Object.fromEntries(GRENADE_TYPES.map((t) => [t.id, t.short]));
 import { HALF } from './world.js';
 
 const $ = (id) => document.getElementById(id);
@@ -188,9 +189,9 @@ export class Hud {
     this.set('hpNum', Math.ceil(Math.max(0, p.hp)));
     if (p.vehicle) {
       const v = p.vehicle;
-      this.set('wname', 'Лёгкий танк · броня ' + Math.ceil(v.hp / 10) + '%');
-      this.set('mag', v.reload > 0 ? '…' : '●');
-      this.set('reserve', v.reload > 0 ? 'заряжание' : 'орудие готово');
+      this.set('wname', v.cfg.name + ' · броня ' + Math.ceil(v.hp / v.maxHp * 100) + '%');
+      this.set('mag', v.cfg.shell && v.reload > 0 ? '…' : '●');
+      this.set('reserve', !v.cfg.shell ? 'пулемёт' : v.reload > 0 ? 'заряжание' : 'орудие готово');
       $('ammoBox').classList.add('tank');
     } else {
       $('ammoBox').classList.remove('tank');
@@ -201,7 +202,7 @@ export class Hud {
       const o = p.other, oa = o && p.ammo[o.id];
       this.set('otherW', o ? `${o.short} ${oa ? oa.mag + '/' + oa.reserve : ''}` : '');
     }
-    this.set('nades', 'Гранаты: ' + p.grenades);
+    this.set('nades', (NADE_SHORT[p.nadeType] || 'Гранаты') + ': ' + p.grenades);
     this.set('gadget', GADGETS[p.cls.gadget].short + ': ' + p.gadgets);
     const sw = document.querySelector('[data-btn="swap"] em');
     if (sw && p.other && sw.textContent !== p.other.short) sw.textContent = p.other.short;
@@ -303,14 +304,14 @@ export class Hud {
       const friend = v.team === p.team;
       const spotted = v.spottedUntil > g.time || (v.driver && v.driver.spottedUntil > g.time);
       if (!friend && !spotted && d > 60) continue;
-      const pt = this.project(v.pos.x, v.pos.y + 3.6, v.pos.z);
+      const pt = this.project(v.pos.x, v.pos.y + v.cfg.hitY * 2 + 1.1, v.pos.z);
       if (!pt) continue;
       if (!friend && spotted) { this.spotMarker(c, [pt[0], pt[1] - 16 * D], v, d, D, g.time); }
       c.fillStyle = friend ? COL.friend : COL.enemy;
       c.font = `700 ${12 * D}px Oswald, sans-serif`;
       // Свой танк: подсказка, можно ли в него сесть
       const free = friend && (!v.driver || (v.driver.bot && !v.driver.isPlayer));
-      c.fillText(free ? `ТАНК · ${Math.round(d)} м${v.driver ? '' : ' · свободен'}` : '▣', pt[0], pt[1]);
+      c.fillText(free ? `${v.cfg.short} · ${Math.round(d)} м${v.driver ? '' : ' · свободен'}` : '▣', pt[0], pt[1]);
       c.fillStyle = 'rgba(0,0,0,0.5)'; c.fillRect(pt[0] - 18 * D, pt[1] + 8 * D, 36 * D, 4 * D);
       c.fillStyle = friend ? COL.friend : COL.enemy; c.fillRect(pt[0] - 18 * D, pt[1] + 8 * D, 36 * D * (v.hp / v.maxHp), 4 * D);
     }
@@ -576,7 +577,7 @@ export class Hud {
       c.fillStyle = friend ? COL.friend : COL.enemy;
       const rr = v.kind === 'airship' ? 10 : 6;
       c.fillRect(x - rr, y - rr * 0.6, rr * 2, rr * 1.2);
-      if (friend && v.kind === 'tank') { c.font = '600 10px Oswald, sans-serif'; c.fillText('ТАНК', x, y - 12); }
+      if (friend && v.kind === 'tank') { c.font = '600 10px Oswald, sans-serif'; c.fillText(v.cfg.short, x, y - 12); }
     }
     const pp = p.vehicle ? p.vehicle.pos : p.pos;
     const [px, py] = toS(pp.x, pp.z);

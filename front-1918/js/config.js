@@ -25,18 +25,58 @@ export const WEAPONS = {
     dmg: [46, 34], fall: [25, 75], range: 320, mag: 10, reserve: 70, reload: 2.7,
     hip: 2.8, ads: 0.25, moveAdd: 1.5, bloom: 0.55, bloomMax: 2.4, recover: 5,
     recoil: 1.2, recoilYaw: 0.35, head: 1.85, ironZoom: 1.8, sights: ['iron', 'opt3'], adsTime: 0.24, speedMul: 1.0, snd: 'rifle', tracerEvery: 1,
+    kick: 0.045, shake: 0.05,
   },
   lmg: {
     id: 'lmg', name: 'Ручной пулемёт обр. 1915', short: 'РП-15', auto: true, rpm: 480,
     dmg: [27, 20], fall: [20, 60], range: 320, mag: 47, reserve: 188, reload: 4.0,
     hip: 3.6, ads: 1.0, moveAdd: 1.9, bloom: 0.1, bloomMax: 1.4, recover: 3,
     recoil: 0.45, recoilYaw: 0.42, head: 1.6, ironZoom: 1.55, sights: ['iron', 'opt2'], adsTime: 0.3, speedMul: 0.92, snd: 'lmg', tracerEvery: 2,
+    bigFlash: true, heavy: true,
   },
   bolt: {
     id: 'bolt', name: 'Снайперская винтовка обр. 1898', short: 'СН-98', auto: false, rpm: 50,
     dmg: [80, 75], fall: [80, 160], sweet: [45, 85], range: 520, mag: 5, reserve: 35, reload: 3.2,
     hip: 6.5, ads: 0.0, moveAdd: 2.6, bloom: 0, bloomMax: 0, recover: 10,
     recoil: 4.0, recoilYaw: 0.6, head: 2.2, ironZoom: 2.0, sights: ['sc6', 'sc10', 'iron'], adsTime: 0.34, speedMul: 1.0, snd: 'sniper', tracerEvery: 1,
+    kick: 0.08, shake: 0.12, bigFlash: true, cycle: true, sniper: true,
+  },
+  // Дополнительное основное оружие классов
+  shotgun: {
+    id: 'shotgun', name: 'Окопное ружьё обр. 1897', short: 'ОР-97', auto: false, rpm: 78, pellets: 10, pelletSpread: 3.1,
+    dmg: [13, 4], fall: [7, 24], range: 70, mag: 5, reserve: 35, reload: 0.5, shellReload: true,
+    hip: 1.1, ads: 0.5, moveAdd: 0.6, bloom: 0, bloomMax: 0, recover: 10,
+    recoil: 3.4, recoilYaw: 0.9, head: 1.3, ironZoom: 1.25, sights: ['iron'], adsTime: 0.18, speedMul: 1.0, snd: 'shotgun', tracerEvery: 1,
+    kick: 0.1, shake: 0.14, bigFlash: true, cycle: true, close: true,
+  },
+  auto: {
+    id: 'auto', name: 'Автоматическая винтовка обр. 1916', short: 'АВ-16', auto: true, rpm: 380,
+    dmg: [31, 22], fall: [18, 60], range: 300, mag: 25, reserve: 125, reload: 2.9,
+    hip: 3.0, ads: 0.4, moveAdd: 1.6, bloom: 0.3, bloomMax: 2.2, recover: 5,
+    recoil: 0.85, recoilYaw: 0.5, head: 1.7, ironZoom: 1.6, sights: ['iron', 'opt2'], adsTime: 0.24, speedMul: 0.98, snd: 'rifle2', tracerEvery: 2,
+    kick: 0.03, shake: 0.03,
+  },
+  hmg: {
+    id: 'hmg', name: 'Станковый пулемёт на сошках обр. 1908', short: 'СП-08', auto: true, rpm: 520,
+    dmg: [28, 22], fall: [25, 70], range: 340, mag: 100, reserve: 200, reload: 5.6,
+    hip: 4.6, ads: 1.3, moveAdd: 2.4, bloom: 0.07, bloomMax: 1.2, recover: 2.5,
+    recoil: 0.42, recoilYaw: 0.5, head: 1.6, ironZoom: 1.5, sights: ['iron', 'opt2'], adsTime: 0.42, speedMul: 0.84, snd: 'hmg', tracerEvery: 2,
+    kick: 0.02, bigFlash: true, heavy: true,
+  },
+  carbine: {
+    id: 'carbine', name: 'Кавалерийский карабин обр. 1895', short: 'КК-95', auto: false, rpm: 82,
+    dmg: [72, 55], fall: [35, 110], range: 380, mag: 5, reserve: 45, reload: 2.4,
+    hip: 3.2, ads: 0.05, moveAdd: 1.6, bloom: 0, bloomMax: 0, recover: 10,
+    recoil: 2.6, recoilYaw: 0.5, head: 2.0, ironZoom: 1.9, sights: ['iron', 'opt3'], adsTime: 0.2, speedMul: 1.03, snd: 'rifle', tracerEvery: 1,
+    kick: 0.07, shake: 0.1, cycle: true,
+  },
+  // Противотанковое ружьё: один патрон, пробивает броню; точно бьёт только с колена или лёжа
+  atr: {
+    id: 'atr', name: 'Противотанковое ружьё обр. 1918', short: 'ПТР-18', auto: false, rpm: 30,
+    dmg: [130, 110], fall: [80, 200], range: 420, mag: 1, reserve: 16, reload: 2.5, vehicleDmg: 150,
+    hip: 9, ads: 0.7, moveAdd: 4, bloom: 0, bloomMax: 0, recover: 10,
+    recoil: 7, recoilYaw: 1.2, head: 1.5, ironZoom: 1.7, sights: ['iron'], adsTime: 0.5, speedMul: 0.86, snd: 'atr', tracerEvery: 1,
+    kick: 0.12, shake: 0.28, bigFlash: true, sniper: true, heavy: true,
   },
   // Личное оружие: у Антанты револьвер, у Центральных держав самозарядный пистолет
   revolver: {
@@ -75,20 +115,20 @@ export const GADGETS = {
 
 export const CLASSES = [
   {
-    id: 'assault', name: 'Штурмовик', weapon: 'smg', gadget: 'at', gadgetCount: 2, grenades: 2, speed: 1.0,
-    desc: 'Ближний бой и охота на танки. Пистолет-пулемёт и противотанковые гранаты.',
+    id: 'assault', name: 'Штурмовик', weapon: 'smg', weapons: ['smg', 'shotgun'], gadget: 'at', gadgetCount: 2, grenades: 2, speed: 1.0,
+    desc: 'Ближний бой и охота на танки. Пистолет-пулемёт или окопное ружьё, противотанковые гранаты.',
   },
   {
-    id: 'medic', name: 'Медик', weapon: 'semi', gadget: 'medkit', gadgetCount: 2, grenades: 1, speed: 1.0, revive: true,
-    desc: 'Поднимает раненых и ставит аптечки. Самозарядная винтовка.',
+    id: 'medic', name: 'Медик', weapon: 'semi', weapons: ['semi', 'auto'], gadget: 'medkit', gadgetCount: 2, grenades: 1, speed: 1.0, revive: true,
+    desc: 'Поднимает раненых и ставит аптечки. Самозарядная или автоматическая винтовка.',
   },
   {
-    id: 'support', name: 'Поддержка', weapon: 'lmg', gadget: 'ammo', gadgetCount: 2, grenades: 2, speed: 0.93,
-    desc: 'Ручной пулемёт и ящики с патронами для товарищей.',
+    id: 'support', name: 'Поддержка', weapon: 'lmg', weapons: ['lmg', 'hmg'], gadget: 'ammo', gadgetCount: 2, grenades: 2, speed: 0.93,
+    desc: 'Ручной или станковый пулемёт и ящики с патронами для товарищей.',
   },
   {
-    id: 'scout', name: 'Разведчик', weapon: 'bolt', gadget: 'flare', gadgetCount: 3, grenades: 1, speed: 1.0,
-    desc: 'Снайперская винтовка с оптикой и ракеты, подсвечивающие врагов.',
+    id: 'scout', name: 'Разведчик', weapon: 'bolt', weapons: ['bolt', 'carbine', 'atr'], gadget: 'flare', gadgetCount: 3, grenades: 1, speed: 1.0,
+    desc: 'Снайперская винтовка, карабин или противотанковое ружьё; ракеты подсвечивают врагов.',
   },
 ];
 export const CLASS_BY_ID = Object.fromEntries(CLASSES.map((c) => [c.id, c]));
@@ -97,7 +137,15 @@ export const GRENADE = {
   frag: { dmg: 115, radius: 7, fuse: 3.0, speed: 17 },
   at: { dmg: 90, radius: 3.5, vehicle: 340, speed: 14 },
   flare: { radius: 38, time: 12, speed: 30 },
+  // Газ: облако травит всех без противогаза; дым: закрывает обзор
+  gas: { radius: 7.5, time: 16, speed: 16, fuse: 2.0, dps: 17 },
+  smoke: { radius: 8.5, time: 20, speed: 16, fuse: 1.5 },
 };
+export const GRENADE_TYPES = [
+  { id: 'frag', name: 'Осколочная', short: 'Гранаты' },
+  { id: 'gas', name: 'Газовая', short: 'Газ' },
+  { id: 'smoke', name: 'Дымовая', short: 'Дым' },
+];
 
 export const DIFFICULTY = [
   { id: 0, name: 'Новобранец', reaction: [0.75, 1.2], aimErr: 7.5, converge: 1.5, floor: 0.9, turn: 3.2, spreadMul: 1.5, dmgMul: 0.7, fov: 100, view: 75, burst: [2, 4] },
@@ -137,6 +185,7 @@ export const DEFAULT_SETTINGS = {
 // Названия оружия для ленты убийств
 export const WNAME = {
   smg: 'ПП-18', semi: 'СВ-16', lmg: 'РП-15', bolt: 'СН-98', revolver: 'револьвер', pistol: 'пистолет', frag: 'граната', at: 'ПТ-граната',
+  shotgun: 'ОР-97', auto: 'АВ-16', hmg: 'СП-08', carbine: 'КК-95', atr: 'ПТР-18', gas: 'газ', gun: 'орудие', car: 'броневик',
   melee: 'штык', tank: 'танк', mg: 'пулемёт', airship: 'цеппелин', fall: 'падение', flare: 'ракета',
 };
 export const MATCH_LENGTH = [
