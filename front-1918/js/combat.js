@@ -461,7 +461,7 @@ export class Combat {
       }
     }
     // Разрушения: укрытия и стены, деревья, воронка (после урона — укрытие успевает защитить)
-    g.world.blast(x, y, z, radius, wid === 'frag' ? 1 : wid === 'at' || dmg >= 100 ? 3 : 2);
+    g.world.blast(x, y, z, radius, wid === 'frag' ? 1 : wid === 'at' || dmg >= 100 ? 3 : 2, true, owner && owner.isPlayer ? 0 : 0.5);
     const p = g.player, cam = g.camera.position;
     const dc = Math.hypot(cam.x - x, cam.y - y, cam.z - z);
     if (dc < 40) g.shake(Math.min(1, (1 - dc / 40) * radius / 5));

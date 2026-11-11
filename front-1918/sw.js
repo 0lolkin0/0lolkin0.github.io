@@ -1,5 +1,5 @@
 // Офлайн-кэш: игра целиком сохраняется на телефоне после первого запуска
-const VERSION = 'front1918-v5';
+const VERSION = 'front1918-v6';
 const CORE = [
   './', 'index.html', 'manifest.webmanifest',
   'js/main.js', 'js/three.module.min.js', 'js/util.js', 'js/config.js', 'js/maps.js', 'js/world.js', 'js/effects.js',

@@ -526,10 +526,12 @@ export class World {
   }
   // Взрыв: ломает укрытия и стены (по силе), валит деревья, оставляет воронку.
   // power: 1 — граната (дерево), 2 — средний (мешки, низкие стены), 3 — снаряд или бомба (стены домов)
-  blast(x, y, z, radius, power, crater = true) {
+  // keep — шанс, что прочный кусок или дерево устоит (взрывы ботов крушат не всё подряд, иначе к концу боя не остаётся укрытий)
+  blast(x, y, z, radius, power, crater = true, keep = 0) {
     const list = [];
     this.forPieces(x, z, radius, (pc) => {
       if (pc.strength > power) return;
+      if (keep && pc.strength >= 2 && Math.random() < keep) return;
       const reach = radius * (pc.strength >= 3 ? 0.42 : pc.strength === 2 ? 0.55 : 0.7);
       if (Math.hypot(pc.x - x, pc.z - z) - pc.rad > reach) return;
       if (y < pc.y0 - reach || y > pc.y1 + reach) return;
@@ -539,7 +541,7 @@ export class World {
     if (power >= 2) {
       const tr = [];
       this.forNear(x, z, radius * 0.5, (c) => { if (c.tree && !c.tree.fallen && Math.hypot(c.x - x, c.z - z) < radius * 0.5) tr.push(c.tree); });
-      for (const t of tr) this.fellTree(t, t.x - x, t.z - z);
+      for (const t of tr) if (!keep || Math.random() >= keep) this.fellTree(t, t.x - x, t.z - z);
     }
     if (crater && y - this.height(x, z) < 1.5) {
       const cr = power <= 1 ? 1.3 : clamp(radius * 0.4, 1.4, 6);
