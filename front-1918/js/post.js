@@ -355,6 +355,16 @@ export class Post {
     this.setSize(renderer);
   }
   setScene(scene) { this.main.scene = scene; this.scene = scene; if (this.gtao) this.gtao.scene = scene; }
+  // Погода меняется по ходу боя: fog — множитель густоты тумана, sun — яркости солнца, wet — мокрой земли
+  setWeather(fog, sun, wet) {
+    const env = this.env;
+    if (this.atmo) {
+      this.atmo.uniforms.uDensity.value = env.fogDensity * fog;
+      this.atmo.uniforms.uSunCol.value.copy(env.sunCol).multiplyScalar(sun);
+    }
+    if (this.rays) this.rays.uniforms.uSunCol.value.copy(env.sunCol).multiplyScalar(sun);
+    if (this.ssr && wet !== undefined) this.ssr.uniforms.uWet.value = env.wet * wet;
+  }
   setSize(renderer) {
     const pr = renderer.getPixelRatio();
     const w = Math.round(innerWidth * pr), h = Math.round(innerHeight * pr);

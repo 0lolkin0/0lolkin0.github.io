@@ -1,6 +1,6 @@
 // Эффекты: частицы (дым, грязь, огонь, искры), трассеры, вспышки света, дождь и снег
 import * as THREE from './three.module.min.js';
-import { rand, TAU } from './util.js';
+import { rand, clamp, TAU } from './util.js';
 
 const VS = `
 attribute float size;
@@ -200,8 +200,9 @@ class Weather {
     this.type = type;
     // Снег и дождь — густые; листопад — редкие крупные листья
     const flake = type === 'snow' || type === 'leaves';
-    const n = type === 'snow' ? 1400 : type === 'leaves' ? 260 : 1000;
-    this.n = n;
+    // Запас частиц — на ливень и метель; в обычную погоду рисуется только часть (setIntensity)
+    const n = type === 'snow' ? 2100 : type === 'leaves' ? 380 : 1600;
+    this.n = n; this.act = n;
     this.box = flake ? [36, 18] : [32, 16];
     this.p = new Float32Array(n * 3);
     this.v = new Float32Array(n);
@@ -240,17 +241,28 @@ class Weather {
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);
     this.obj.frustumCulled = false;
     this.t = 0;
+    this.baseOp = this.obj.material.opacity;
+    this.wind = 1;
+    this.setIntensity(0.62);
+  }
+  // k — сила осадков 0..1: сколько частиц в воздухе и насколько они заметны; wind — снос ветром
+  setIntensity(k, wind = 1) {
+    this.act = Math.max(1, Math.round(this.n * clamp(k, 0.05, 1)));
+    this.obj.geometry.setDrawRange(0, this.act * (this.type === 'rain' ? 2 : 1));
+    if (this.type === 'rain') this.obj.material.opacity = this.baseOp * (0.75 + k * 0.6);
+    this.wind = wind;
   }
   update(dt, cam) {
     this.t += dt;
     const [bx, by] = this.box, p = this.p, a = this.attr.array, snow = this.type === 'snow' || this.type === 'leaves', leaf = this.type === 'leaves';
-    for (let i = 0; i < this.n; i++) {
+    const wd = this.wind, slant = 0.1 * wd;
+    for (let i = 0; i < this.act; i++) {
       let y = p[i * 3 + 1] - this.v[i] * dt;
       if (y < -by) y += by * 2;
       p[i * 3 + 1] = y;
-      if (leaf) { p[i * 3] += (0.5 + Math.sin(this.t * 1.3 + i) * 1.1) * dt; p[i * 3 + 2] += Math.cos(this.t * 0.9 + i * 1.7) * 0.7 * dt; }
-      else if (snow) p[i * 3] += Math.sin(this.t * 0.8 + i) * 0.4 * dt;
-      else p[i * 3] += 1.5 * dt;
+      if (leaf) { p[i * 3] += (0.5 * wd + Math.sin(this.t * 1.3 + i) * 1.1) * dt; p[i * 3 + 2] += Math.cos(this.t * 0.9 + i * 1.7) * 0.7 * dt; }
+      else if (snow) p[i * 3] += (Math.sin(this.t * 0.8 + i) * 0.4 + (wd - 1) * 2.2) * dt;
+      else p[i * 3] += 1.5 * wd * dt;
       // Держим частицы вокруг камеры
       let x = p[i * 3], z = p[i * 3 + 2];
       x = ((((x - cam.x) % (bx * 2)) + bx * 3) % (bx * 2)) - bx + cam.x;
@@ -261,7 +273,7 @@ class Weather {
       else {
         const o = i * 6;
         a[o] = x; a[o + 1] = wy; a[o + 2] = z;
-        a[o + 3] = x - 0.1; a[o + 4] = wy + 0.75; a[o + 5] = z;
+        a[o + 3] = x - slant; a[o + 4] = wy + 0.75; a[o + 5] = z;
       }
     }
     this.attr.needsUpdate = true;

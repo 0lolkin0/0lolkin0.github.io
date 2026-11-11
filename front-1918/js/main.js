@@ -32,6 +32,7 @@ function loadSave() {
   try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; } catch (_) { return {}; }
 }
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _d = new THREE.Vector3();
+const _wc = new THREE.Color();
 
 class Game {
   constructor() {
@@ -129,6 +130,54 @@ class Game {
       wet: T.weather === 'rain' ? 1 : 0, rain: T.weather === 'rain', fogDensity: T.fogDensity ?? (T.weather === 'snow' ? 0.006 : 0.0045),
     };
   }
+  // ---------- Погода ----------
+  // Погода меняется по ходу боя: приходит фронт — туман густеет, дождь переходит в ливень (снег — в метель),
+  // темнеет, усиливается ветер, а бойцы видят хуже. Потом снова проясняется
+  initWeather() {
+    const T = this.world.theme;
+    this.wx = {
+      k: 0.15, to: 0.15, t: rand(50, 85), kind: T.weather === 'rain' ? 0 : T.weather === 'snow' ? 1 : 2,
+      skyTop: new THREE.Color(T.skyTop), skyHor: new THREE.Color(T.skyHorizon), fog: new THREE.Color(T.fog), sun: new THREE.Color(T.sun),
+      cover: T.cloudCover ?? 0.45, wind: T.wind ?? (T.weather === 'rain' ? 1.25 : 1),
+    };
+    this.applyWeather();
+  }
+  updateWeather(dt) {
+    const x = this.wx;
+    if (!x) return;
+    x.t -= dt;
+    if (x.t <= 0) {
+      const front = x.to < 0.4;
+      x.to = front ? rand(0.7, 1) : rand(0, 0.18);
+      x.t = front ? rand(75, 120) : rand(70, 110);
+      this.hud.announce([['Надвигается ливень', 'Дождь стихает'], ['Начинается метель', 'Метель стихает'], ['Опускается густой туман', 'Туман рассеивается']][x.kind][front ? 0 : 1], !front);
+    }
+    if (x.k !== x.to) {
+      x.k += clamp(x.to - x.k, -dt / 28, dt / 28);
+      this.applyWeather();
+    }
+  }
+  applyWeather() {
+    const x = this.wx, T = this.world && this.world.theme;
+    if (!x || !T || !this.scene) return;
+    const k = x.k, s = smoothstep(0.15, 1, k);
+    const fogMul = 0.8 + (x.kind === 2 ? 1.5 : 2.3) * Math.pow(k, 1.2);
+    this.scene.fog.near = T.fogNear * lerp(1.1, 0.35, k);
+    this.scene.fog.far = T.fogFar * lerp(1.08, 0.42, k);
+    this.sun.intensity = T.sunIntensity * 1.35 * (1 - 0.5 * s);
+    this.hemi.intensity = T.hemiIntensity * 0.55 * (1 - 0.12 * s);
+    // Небо затягивает: облаков больше, солнце тускнеет, горизонт сливается с туманом
+    const u = this.sky.material.uniforms;
+    u.uTop.value.copy(x.skyTop).lerp(_wc.copy(x.fog).multiplyScalar(0.8), s * 0.7);
+    u.uHorizon.value.copy(x.skyHor).lerp(x.fog, s * 0.85);
+    u.uSun.value.copy(x.sun).multiplyScalar(1 - 0.85 * s);
+    u.uCover.value = x.cover - 0.25 * s;
+    this.gfx.wind.value = x.wind * (0.85 + 0.9 * s);
+    if (this.effects && this.effects.weather) this.effects.weather.setIntensity(x.kind === 2 ? 0.55 + 0.45 * s : lerp(0.42, 1, k), 1 + 1.4 * s);
+    if (this.post) this.post.setWeather(fogMul, 1 - 0.7 * s, 1);
+    // В тумане и ливне боты замечают врага с меньшего расстояния
+    this.viewK = 1 - 0.42 * s;
+  }
   // Объекты без нормалей в G-буфере (небо, частицы, трава, листва с прозрачными краями) — на отдельный слой
   markLayers() {
     if (!this.scene) return;
@@ -167,6 +216,7 @@ class Game {
     }
     if (this.post) { this.post.dispose(); this.post = null; }
     if (this.scene && this.world && needsPost(o)) this.post = new Post(this.renderer, this.scene, this.camera, this.viewmodel.scene, this.viewmodel.camera, o, this.postEnv());
+    this.applyWeather();
     if (this.scene && this.world) {
       if (this.grass && this.grass.mesh) this.scene.remove(this.grass.mesh);
       this.grass = new Grass(this.scene, this.world, GRASS_LEVELS[o.grass] || null, this.gfx, (o.shadows || 0) >= 2);
@@ -213,6 +263,7 @@ class Game {
   // ---------- Мир ----------
   prepareWorld(def) {
     if (this.world && this.world.def === def) return;
+    this.wx = null;
     const scene = (this.scene = new THREE.Scene());
     const T = THEMES[def.theme];
     this.world = new World(def, this.quality, this.gfx);
@@ -380,6 +431,7 @@ class Game {
     $('menu').hidden = true;
     $('end').hidden = true;
     this.audio.setRain(this.world.theme.weather === 'rain');
+    this.initWeather();
     if (AUTOPLAY) { this.enterPlay(); this.audio.whistle(); }
     else this.showDeploy();
   }
@@ -1124,6 +1176,7 @@ class Game {
       this.updateFlags(dt);
       this.respawnBots(dt);
       this.director(dt);
+      this.updateWeather(dt);
     }
     this.world.update(dt);
     // Смерть игрока → экран развёртывания

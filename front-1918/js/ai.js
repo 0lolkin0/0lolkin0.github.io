@@ -204,7 +204,7 @@ export class BotBrain {
     let best = null, bestScore = Infinity;
     const ex = s.pos.x, ey = s.eyeY, ez = s.pos.z;
     const fx = -Math.sin(s.yaw), fz = -Math.cos(s.yaw);
-    const view = s.weapon.sniper ? diff.view * 1.5 : s.weapon.id === 'carbine' ? diff.view * 1.2 : diff.view;
+    const view = (s.weapon.sniper ? diff.view * 1.5 : s.weapon.id === 'carbine' ? diff.view * 1.2 : diff.view) * (g.viewK ?? 1);
     const cosFov = Math.cos((diff.fov / 2) * DEG);
     let checks = 0;
     const cands = [];
@@ -411,7 +411,7 @@ export class BotBrain {
     if (this.thinkT <= 0) {
       this.thinkT = 0.35;
       // Ищем цели
-      let best = null, bd = 110;
+      let best = null, bd = 110 * (g.viewK ?? 1);
       for (const o of g.soldiers) {
         if (o.team === s.team || o.state !== 'alive') continue;
         // Броневик с одним пулемётом не лезет на бронетехнику
