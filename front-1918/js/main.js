@@ -414,6 +414,11 @@ class Game {
       this.tanks.push(new Tank(this, t, this.world.def.tankSpawn[t], 'light'));
       if (perTeam >= 10) this.tanks.push(new Tank(this, t, this.vehSpawn(t, 'car'), 'car'));
     }
+    // Стационарные орудия у флагов: пулемётные гнёзда и полевые пушки — ничьи, пока к ним не встал расчёт
+    this.flags.forEach((f, i) => {
+      const sp = this.emplacementSpot(f, i);
+      if (sp) this.tanks.push(new Tank(this, -1, sp, i % 2 ? 'gun' : 'nest'));
+    });
     this.vehicles = [...this.tanks];
     this.heavyAt = perTeam >= 12 ? 200 : Infinity;
     // Боты появляются в штабе
@@ -471,10 +476,24 @@ class Game {
       opts.push({ kind: 'squad', label: s.name, x: s.pos.x, z: s.pos.z, mate: s });
     }
     for (const tk of this.tanks) {
-      if (tk.team !== team || !tk.alive) continue;
+      if (tk.team !== team || !tk.alive || tk.cfg.static) continue;
       if (!tk.driver || (forPlayer && tk.driver.bot && !tk.driver.isPlayer)) opts.push({ kind: 'tank', label: tk.cfg.name, x: tk.pos.x, z: tk.pos.z, tank: tk });
     }
     return opts;
+  }
+  // Место для орудия у флага: ровная свободная площадка в 6–17 м от древка (чем ближе, тем лучше), стволом наружу
+  emplacementSpot(f, i) {
+    const w = this.world;
+    for (let k = 0; k < 160; k++) {
+      const a = i * 2.4 + k * 0.83, d = 6.5 + Math.floor(k / 8) * 0.55;
+      const x = f.x + Math.sin(a) * d, z = f.z + Math.cos(a) * d, h = w.height(x, z);
+      if (Math.abs(x) > PLAY - 6 || Math.abs(z) > PLAY - 6 || w.nearFootprint(x, z, 2.2) || w.blockedAt(x, z, h, 2.2)) continue;
+      let lo = h, hi = h;
+      for (let q = 0; q < 8; q++) { const hh = w.height(x + Math.sin(q * 0.785) * 1.8, z + Math.cos(q * 0.785) * 1.8); lo = Math.min(lo, hh); hi = Math.max(hi, hh); }
+      if (hi - lo > 0.5 || w.puddles.some((pd) => Math.hypot(x - pd.x, z - pd.z) < pd.r + 2)) continue;
+      return { x, z, yaw: yawTo(x - f.x, z - f.z) };
+    }
+    return null;
   }
   // Где у штаба стоит дополнительная техника: броневик — по другую сторону от танка, тяжёлый танк — дальше в ту же
   vehSpawn(team, type) {
@@ -980,7 +999,7 @@ class Game {
     const ctx = this.interactTarget();
     this.ctxAction = ctx;
     if (ev.has('interact') && ctx) {
-      if (ctx.kind === 'tank' && ctx.tank.takeOver(p)) { this.updateControls(); this.camYaw = ctx.tank.turretYaw; this.camPitch = 0.1; this.input.setAds(false); this.maskOn = false; this.hud.announce(ctx.tank.cfg.inside, true); }
+      if (ctx.kind === 'tank' && ctx.tank.takeOver(p)) { this.updateControls(); this.camYaw = ctx.tank.turretYaw; this.camPitch = ctx.tank.cfg.static ? 0 : 0.1; this.input.setAds(false); this.maskOn = false; this.hud.announce(ctx.tank.cfg.inside, true); }
       else if (ctx.kind === 'revive') { this.reviveT = 0; this.reviving = ctx.target; }
     }
     if (this.reviving) {
@@ -1036,9 +1055,10 @@ class Game {
       if (best) return { kind: 'revive', target: best, label: 'Поднять' };
     }
     for (const t of this.tanks) {
-      if (!t || t.team !== p.team || !t.alive) continue;
-      if (t.driver && (!t.driver.bot || t.driver.isPlayer)) continue;
-      if (Math.hypot(t.pos.x - p.pos.x, t.pos.z - p.pos.z) < t.cfg.radius + 2.7) return { kind: 'tank', tank: t, label: 'Сесть: ' + t.cfg.name.toLowerCase() };
+      if (!t || !t.alive) continue;
+      // Свою машину можно забрать у бота; орудие у флага — ничьё, пока свободно
+      if (t.driver ? t.driver.team !== p.team || !t.driver.bot || t.driver.isPlayer : !t.cfg.static && t.team !== p.team) continue;
+      if (Math.hypot(t.pos.x - p.pos.x, t.pos.z - p.pos.z) < t.cfg.radius + 2.7) return { kind: 'tank', tank: t, label: (t.cfg.use || 'Сесть') + ': ' + t.cfg.name.toLowerCase() };
     }
     return null;
   }
@@ -1064,7 +1084,7 @@ class Game {
       consider(s, 'soldier', s.pos.x, s.aimY, s.pos.z, 0.6);
     }
     for (const t of this.tanks) {
-      if (!t || t.team === p.team || !t.alive) continue;
+      if (!t || t.team === p.team || t.team < 0 || !t.alive) continue;
       consider(t, 'tank', t.pos.x, t.pos.y + 1.4, t.pos.z, 2.6);
     }
     if (!best) return;
@@ -1157,11 +1177,13 @@ class Game {
       const dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z, rr = a.cfg.radius + b.cfg.radius - 0.4, d2 = dx * dx + dz * dz;
       if (d2 >= rr * rr || d2 < 1e-6) continue;
       const d = Math.sqrt(d2), k = (rr - d) / d;
-      const wa = a.alive ? b.cfg.mass / (a.cfg.mass + b.cfg.mass) : 0, wb = b.alive ? (a.alive ? 1 - wa : 1) : 0;
+      // Остовы и стационарные орудия с места не сдвинуть
+      const fa = a.alive && !a.cfg.static, fb = b.alive && !b.cfg.static;
+      const wa = fa ? (fb ? b.cfg.mass / (a.cfg.mass + b.cfg.mass) : 1) : 0, wb = fb ? (fa ? 1 - wa : 1) : 0;
       a.pos.x -= dx * k * wa; a.pos.z -= dz * k * wa; b.pos.x += dx * k * wb; b.pos.z += dz * k * wb;
       a.speed *= 0.9; b.speed *= 0.9;
     }
-    for (const s of S) if (s.vehicle) { s.pos.copy(s.vehicle.pos); s.pos.y += 1.5; }
+    for (const s of S) if (s.vehicle) { if (s.vehicle.cfg.static) s.vehicle.seat(s); else { s.pos.copy(s.vehicle.pos); s.pos.y += 1.5; } }
     for (let i = this.vehicles.length - 1; i >= 0; i--) if (!this.vehicles[i].alive && this.vehicles[i].kind === 'airship') this.vehicles.splice(i, 1);
     for (const pl of this.planes) pl.update(dt);
     this.combat.updateProjectiles(dt);
@@ -1281,6 +1303,25 @@ class Game {
       this.audio.announce(false);
     }
   }
+  // К свободному орудию встаёт ближайший боец, если рядом нет врага вплотную, а дальше есть в кого стрелять
+  assignCrew(gun) {
+    if (this.time - gun.lastDriverExit < 14) return;
+    const pl = this.player;
+    if (pl.state === 'alive' && !pl.vehicle && Math.hypot(pl.pos.x - gun.pos.x, pl.pos.z - gun.pos.z) < 12) return;
+    let best = null, bd = 30, near = [Infinity, Infinity];
+    for (const s of this.soldiers) {
+      if (s.state !== 'alive' || s.inside) continue;
+      const d = Math.hypot(s.pos.x - gun.pos.x, s.pos.z - gun.pos.z);
+      near[s.team] = Math.min(near[s.team], d);
+      if (s.bot && s.bot.wantTank === gun) return;
+      if (!s.bot || s.isPlayer || s.squad || s.vehicle || s.bot.wantTank || d >= bd) continue;
+      bd = d; best = s;
+    }
+    if (!best) return;
+    const foe = near[1 - best.team];
+    if (foe < 16 || foe > 130) return;
+    best.bot.wantTank = gun;
+  }
   director(dt) {
     const T = this.teams;
     // Танкисты
@@ -1289,6 +1330,7 @@ class Game {
       this.assignT = 4;
       for (const tk of this.tanks) {
         if (!tk.alive || tk.driver) continue;
+        if (tk.cfg.static) { this.assignCrew(tk); continue; }
         const t = tk.team;
         const has = this.soldiers.some((s) => s.bot && s.bot.wantTank === tk && s.state === 'alive' && !s.isPlayer);
         if (has || this.time - tk.lastDriverExit < 10) continue;
@@ -1413,6 +1455,14 @@ class Game {
       cam.position.set(Math.sin(t) * r, 85, Math.cos(t) * r);
       cam.lookAt(0, 0, 0);
       this.viewYaw = cam.rotation.y;
+    } else if (p.vehicle && p.vehicle.cfg.static) {
+      // У орудия — вид глазами стрелка поверх щита; «прицел» приближает
+      const v = p.vehicle;
+      v.turret.updateWorldMatrix(true, false);
+      cam.position.set(...v.cfg.eye).applyMatrix4(v.turret.matrixWorld);
+      cam.rotation.set(this.camPitch + sy * 0.4, this.camYaw + sx * 0.4, 0);
+      this.viewYaw = this.camYaw;
+      fov = this.tankZoom ? zoomFov(st.fov, 2.2) : st.fov;
     } else if (p.vehicle && this.tankZoom) {
       // Прицел наводчика: камера на башне, приближение ×3.5
       const v = p.vehicle;
@@ -1509,7 +1559,7 @@ class Game {
     for (const c of this.hqCloth) this.waveCloth(c, t + 1);
     this.updateCamera(dt);
     const p = this.player;
-    const hideSelf = p.state !== 'dead' && !p.vehicle ? p : null;
+    const hideSelf = p.state !== 'dead' ? p : null;
     this.soldierR.update(this.soldiers, t, (this.state === 'play' || this.state === 'pause' || this.state === 'end') && p.state === 'alive' ? hideSelf : null, this.camera.position);
     const fp = (this.state === 'play' || this.state === 'end') && p.state === 'alive' && !p.vehicle;
     if (fp) {
@@ -1517,7 +1567,7 @@ class Game {
       if (!vc || vc.wid !== p.weapon.id || vc.optic !== p.sight.optic) this.viewmodel.set(p.team, p.weapon.id, p.sight.optic);
       this.viewmodel.update(dt, p, (this.lookDX || 0) * 0.004, (this.lookDY || 0) * 0.004, this.camera.aspect);
     }
-    const scopeKind = fp && p.scoped ? p.sight.reticle : this.state === 'play' && p.vehicle && this.tankZoom ? 'tank' : null;
+    const scopeKind = fp && p.scoped ? p.sight.reticle : this.state === 'play' && p.vehicle && this.tankZoom && !p.vehicle.cfg.static ? 'tank' : null;
     this.hud.setScope(scopeKind);
     if (!$('bigmap').hidden) { this.mapT -= dt; if (this.mapT <= 0) { this.mapT = 0.3; this.hud.drawFullMap($('bigmapCv')); } }
     this.render(fp && this.viewmodel.visible);

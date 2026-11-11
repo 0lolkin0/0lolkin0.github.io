@@ -74,7 +74,7 @@ export class Combat {
     let best = g.world.raycast(ox, oy, oz, dx, dy, dz, range, _hit);
     const res = { t: best, target: null, head: false, world: best < Infinity, nx: _hit.nx, ny: _hit.ny, nz: _hit.nz, mat: _hit.mat };
     for (const s of g.soldiers) {
-      if (s.team === team || s.state === 'dead' || s.vehicle || s === shooter) continue;
+      if (s.team === team || s.state === 'dead' || s.inside || s === shooter) continue;
       const cx = s.pos.x - ox, cy = s.pos.y + 0.9 - oy, cz = s.pos.z - oz;
       const tc = cx * dx + cy * dy + cz * dz;
       if (tc < -2 || tc > best + 2) continue;
@@ -290,7 +290,7 @@ export class Combat {
     const fx = -Math.sin(s.yaw), fz = -Math.cos(s.yaw);
     let best = null, bd = charge ? 1.9 : 2.5;
     for (const o of g.soldiers) {
-      if (o.team === s.team || o.state === 'dead' || o.vehicle) continue;
+      if (o.team === s.team || o.state === 'dead' || o.inside) continue;
       const dx = o.pos.x - s.pos.x, dz = o.pos.z - s.pos.z;
       const d = Math.hypot(dx, dz);
       if (d > bd || Math.abs(o.pos.y - s.pos.y) > 1.6) continue;
@@ -442,7 +442,7 @@ export class Combat {
     g.effects.explosion(x, y, z, fxScale ?? radius / 6);
     g.audio.explosion(x, y, z, Math.min(2, radius / 6));
     for (const s of g.soldiers) {
-      if (s.state === 'dead' || s.vehicle) continue;
+      if (s.state === 'dead' || s.inside) continue;
       if (team >= 0 && s.team === team && s !== owner) continue;
       const cy = s.pos.y + (s.state === 'downed' ? 0.3 : 0.9);
       const dx = s.pos.x - x, dy = cy - y, dz = s.pos.z - z;

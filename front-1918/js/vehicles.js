@@ -2,7 +2,7 @@
 import * as THREE from './three.module.min.js';
 import { GeoBuilder, clamp, lerp, angleDiff, DEG, TAU, rand, dirFromYawPitch, raySphere, smoothstep } from './util.js';
 import { TEAMS } from './config.js';
-import { profile, lathe, latheZ } from './models.js';
+import { profile, lathe, latheZ, capsule } from './models.js';
 import { PLAY } from './world.js';
 
 const _push = {};
@@ -10,6 +10,7 @@ const _v = new THREE.Vector3(), _d = new THREE.Vector3();
 
 // Модели танков: боковые профили, выдавленные по ширине, катки, гусеничные траки, заклёпки и навесное
 const M = GeoBuilder.mat;
+const BAG = new THREE.IcosahedronGeometry(1, 1);
 function rivets(b, n, ax, ay, az, bx, by, bz, r = 0.022) {
   for (let i = 0; i < n; i++) {
     const t = n > 1 ? i / (n - 1) : 0.5;
@@ -238,6 +239,82 @@ function carGeos(team) {
   return { hull: hull.build(), tur: tur.build(), gun: gun.build() };
 }
 
+// Полевая пушка: лафет с деревянными колёсами и станиной, щит, ствол с противооткатным цилиндром
+function gunGeos() {
+  const hull = new GeoBuilder(), tur = new GeoBuilder(), gun = new GeoBuilder();
+  const c = 0x5d6350, dk = 0x474c3e, iron = 0x34322c, wood = 0x6e5536, brass = 0xb08a3c;
+  // Ось и колёса: обод из сегментов, спицы, ступица
+  hull.cyl(0.05, 0.05, 1.72, 8, 0, 0.62, 0, iron, 0, 0, Math.PI / 2, 0.02);
+  for (const s of [-1, 1]) {
+    const x = s * 0.82;
+    for (let k = 0; k < 14; k++) { const a = k / 14 * TAU; hull.box(0.09, 0.07, 0.31, x, 0.62 + Math.cos(a) * 0.58, Math.sin(a) * 0.58, wood, 0, a, 0, 0.06); }
+    for (let k = 0; k < 14; k++) { const a = (k + 0.5) / 14 * TAU; hull.box(0.1, 0.02, 0.3, x, 0.62 + Math.cos(a) * 0.62, Math.sin(a) * 0.62, iron, 0, a, 0, 0.03); }
+    for (let k = 0; k < 10; k++) { const a = k / 10 * TAU; hull.box(0.05, 0.5, 0.05, x, 0.62 + Math.cos(a) * 0.3, Math.sin(a) * 0.3, wood, 0, a, 0, 0.05); }
+    hull.cyl(0.11, 0.11, 0.2, 10, x, 0.62, 0, iron, 0, 0, Math.PI / 2, 0.02);
+    // Сиденья расчёта у станины
+    hull.cyl(0.15, 0.15, 0.03, 10, s * 0.34, 0.66, 0.5, dk, 0, 0, 0, 0.03);
+    hull.box(0.03, 0.2, 0.03, s * 0.34, 0.55, 0.5, iron);
+  }
+  // Станина с сошником и правилом
+  hull.box(0.24, 0.13, 2.42, 0, 0.37, 1.18, c, 0, 0.193, 0, 0.03);
+  hull.box(0.4, 0.3, 0.05, 0, 0.12, 2.36, iron, 0, -0.3, 0, 0.03);
+  hull.cyl(0.025, 0.025, 0.5, 6, 0, 0.3, 2.4, wood, 0, 0, Math.PI / 2, 0.04);
+  // Ящик со снарядами
+  hull.box(0.56, 0.3, 0.4, 0.86, 0.15, 1.35, wood, 0.2, 0, 0, 0.06);
+  for (let i = 0; i < 4; i++) hull.cyl(0.04, 0.04, 0.3, 8, 0.7 + i * 0.105, 0.36, 1.33 + i * 0.02, brass, Math.PI / 2, 0, 0.2, 0.04);
+  // Верхний станок и щит из двух половин с амбразурой
+  tur.box(0.34, 0.22, 0.5, 0, 0.12, 0.02, dk, 0, 0, 0, 0.03);
+  for (const s of [-1, 1]) {
+    tur.box(0.6, 1.08, 0.03, s * 0.47, 0.3, -0.33, c, 0, -0.1, 0, 0.03);
+    rivets(tur, 7, s * 0.2, -0.18, -0.4, s * 0.2, 0.78, -0.3, 0.018);
+    rivets(tur, 7, s * 0.74, -0.18, -0.4, s * 0.74, 0.78, -0.3, 0.018);
+    tur.box(0.05, 0.3, 0.3, s * 0.2, 0.2, -0.12, dk, 0, 0, 0, 0.03);
+  }
+  tur.box(0.36, 0.36, 0.03, 0, 0.67, -0.29, c, 0, -0.1, 0, 0.03);
+  tur.box(0.36, 0.26, 0.03, 0, -0.1, -0.37, c, 0, -0.1, 0, 0.03);
+  tur.box(1.54, 0.2, 0.03, 0, 0.92, -0.21, dk, 0, -0.75, 0, 0.03);
+  // Прицел слева
+  tur.box(0.05, 0.16, 0.12, -0.3, 0.66, -0.12, 0x1c1c1a);
+  tur.cyl(0.025, 0.025, 0.14, 8, -0.3, 0.76, -0.12, 0x1c1c1a, Math.PI / 2, 0, 0, 0);
+  // Ствол с казёнником, люлька и противооткатный цилиндр
+  gun.add(latheZ([[0.115, -0.5], [0.115, -0.18], [0.088, -0.1], [0.072, 0.0], [0.058, 1.74], [0.074, 1.77], [0.074, 1.9], [0.034, 1.905]], 14), M(0, 0, 0), 0x34332e, 0.02);
+  gun.cyl(0.034, 0.034, 0.02, 10, 0, 0, -1.903, 0x0a0a0a, Math.PI / 2, 0, 0, 0);
+  gun.box(0.25, 0.25, 0.2, 0, 0, 0.52, iron, 0, 0, 0, 0.03);
+  gun.box(0.05, 0.05, 0.2, 0.16, 0.06, 0.5, 0x1c1c1a);
+  gun.box(0.2, 0.07, 1.25, 0, -0.17, -0.3, dk, 0, 0, 0, 0.03);
+  gun.cyl(0.06, 0.06, 1.0, 10, 0, -0.12, -0.42, 0x2c2b27, Math.PI / 2, 0, 0, 0.02);
+  return { hull: hull.build(), tur: tur.build(), gun: gun.build() };
+}
+
+// Станковый пулемёт: кольцо мешков с песком, тренога, щиток и пулемёт с водяным кожухом
+function nestGeos() {
+  const hull = new GeoBuilder(), tur = new GeoBuilder(), gun = new GeoBuilder();
+  const bag = 0x8f7f5a, iron = 0x34322c, dk = 0x474c3e, wood = 0x6e5536;
+  // Два ряда мешков по кругу с проходом сзади
+  for (let k = 0; k < 8; k++) { const a = (-0.78 + k * 0.222) * Math.PI; hull.add(BAG, M(Math.sin(a) * 1.15, 0.17, -Math.cos(a) * 1.15, 0, -a, 0, 0.42, 0.17, 0.25), bag, 0.1); }
+  for (let k = 0; k < 7; k++) { const a = (-0.67 + k * 0.222) * Math.PI; hull.add(BAG, M(Math.sin(a) * 1.13, 0.47, -Math.cos(a) * 1.13, 0, -a, 0, 0.41, 0.16, 0.24), bag, 0.1); }
+  // Тренога и вертлюг
+  for (const a of [0, 2.25, -2.25]) capsule(hull, 0, 0.76, 0, Math.sin(a) * 0.55, 0.03, -Math.cos(a) * 0.55, 0.026, iron, 6);
+  hull.cyl(0.07, 0.09, 0.1, 10, 0, 0.78, 0, iron, 0, 0, 0, 0.02);
+  // Ящики с лентами
+  hull.box(0.34, 0.2, 0.22, 0.5, 0.1, 0.45, wood, 0.3, 0, 0, 0.06);
+  hull.box(0.3, 0.18, 0.2, -0.52, 0.09, 0.4, dk, -0.2, 0, 0, 0.05);
+  // Вертлюг и щиток с прорезью
+  tur.cyl(0.05, 0.05, 0.14, 8, 0, 0.07, 0, iron, 0, 0, 0, 0.02);
+  for (const s of [-1, 1]) tur.box(0.2, 0.34, 0.02, s * 0.145, 0.15, -0.3, dk, 0, 0, 0, 0.03);
+  tur.box(0.09, 0.08, 0.02, 0, 0.28, -0.3, dk, 0, 0, 0, 0.03);
+  tur.box(0.09, 0.1, 0.02, 0, 0.03, -0.3, dk, 0, 0, 0, 0.03);
+  // Пулемёт: кожух, ствол, короб, рукоятки и коробка с лентой
+  gun.add(latheZ([[0.056, -0.12], [0.056, 0.56], [0.05, 0.58], [0.022, 0.6], [0.019, 0.8], [0.03, 0.81], [0.03, 0.86], [0.01, 0.865]], 12), M(0, 0, 0), 0x3a3d34, 0.02);
+  gun.box(0.085, 0.13, 0.36, 0, 0, 0.3, 0x2c2b27, 0, 0, 0, 0.03);
+  for (const s of [-1, 1]) gun.cyl(0.016, 0.016, 0.12, 6, s * 0.045, 0, 0.53, wood, 0, 0, 0, 0.04);
+  gun.box(0.13, 0.02, 0.02, 0, 0.06, 0.52, iron);
+  gun.box(0.02, 0.05, 0.02, 0, 0.09, 0.2, iron);
+  gun.box(0.13, 0.15, 0.2, -0.13, -0.04, 0.22, dk, 0, 0, 0, 0.04);
+  gun.cyl(0.012, 0.012, 0.03, 6, 0.03, 0.062, -0.5, 0xb08a3c, 0, 0, 0, 0.02);
+  return { hull: hull.build(), tur: tur.build(), gun: gun.build() };
+}
+
 // Типы наземной техники. len / wid — полубаза для наклона по рельефу, hit — половины размеров корпуса для попаданий
 export const VEHICLES = {
   light: {
@@ -255,6 +332,19 @@ export const VEHICLES = {
     reload: 0, shell: null, mg: { dmg: 24, cd: 0.08 }, hit: [1.0, 1.1, 2.3], hitY: 1.2, cam: [7.5, 3.0], respawn: 40, score: 300, muzzleZ: -0.95, mass: 2, bulletMul: 2.5,
     geos: carGeos, turret: () => [0, 1.98, 0.6], pivot: [0, 0.3, -0.66],
   },
+  // Стационарные орудия у флагов: ничьи, пока к ним не встал расчёт. Стрелок виден и уязвим — спереди его прикрывает щит
+  // или мешки, с флангов и сверху он открыт. seat — где стоит стрелок (позади оси), eye — глаза игрока в осях башни,
+  // follow — скорость, с которой лафет доворачивается за стволом
+  gun: {
+    name: 'Полевая пушка', short: 'ПУШКА', inside: 'Вы у полевой пушки', use: 'К орудию', gone: 'Полевая пушка уничтожена', hp: 420, speed: 0, rev: 0, acc: 1, brake: 1, turn: 0, radius: 1.5, len: 1.1, wid: 0.8, turretTurn: 1.0,
+    reload: 2.8, shell: { dmg: 120, radius: 5.5, direct: 280 }, mg: null, hit: [0.95, 0.75, 1.3], hitY: 0.75, cam: [5, 2], respawn: 70, score: 150, muzzleZ: -1.9, mass: 40,
+    static: true, follow: 0.7, seat: 1.5, eye: [0, 1.24, 0.8], geos: gunGeos, turret: () => [0, 0.62, 0], pivot: [0, 0.3, -0.05],
+  },
+  nest: {
+    name: 'Станковый пулемёт', short: 'ПУЛЕМЁТ', inside: 'Вы за станковым пулемётом', use: 'К пулемёту', hp: 320, speed: 0, rev: 0, acc: 1, brake: 1, turn: 0, radius: 1.45, len: 1, wid: 1, turretTurn: 2.6,
+    reload: 0, shell: null, mg: { dmg: 26, cd: 0.085 }, hit: [1.3, 0.42, 1.3], hitY: 0.42, cam: [5, 2], respawn: 60, score: 100, muzzleZ: -0.86, mass: 40,
+    static: true, follow: 0, seat: 0.78, eye: [0, 0.56, 0.66], geos: nestGeos, turret: () => [0, 0.8, 0], pivot: [0, 0.16, 0],
+  },
 };
 
 export class Tank {
@@ -266,7 +356,7 @@ export class Tank {
     const cfg = (this.cfg = VEHICLES[type]);
     this.maxHp = cfg.hp;
     this.kind = 'tank';
-    this.wname = type === 'car' ? 'car' : 'tank';
+    this.wname = cfg.shell ? (cfg.static ? 'gun' : 'tank') : cfg.static ? 'mg' : 'car';
     const g = cfg.geos(team);
     this.mat = game.gfx.triplanar('metal', { local: true, scale: 1.2, roughness: 0.6, metalness: 0.3, strength: 0.8, unique: true });
     this.root = new THREE.Group();
@@ -300,6 +390,7 @@ export class Tank {
     this.respawnT = 0;
     this.spottedUntil = 0;
     this.lastDriverExit = -99;
+    if (this.cfg.static) this.team = -1;
     this.mat.color.setHex(0xffffff);
     this.root.visible = true;
     this.setEmitter(0);
@@ -343,7 +434,20 @@ export class Tank {
     s.vehicle = this;
     s.reloadT = 0; s.adsT = 0;
     this.input.aimYaw = this.turretYaw; this.input.aimPitch = this.gunPitch;
+    if (this.cfg.static) {
+      // Расчёт стоит за орудием, пригнувшись; орудие принадлежит тому, кто к нему встал
+      this.team = s.team;
+      s.crouchT = 1; s.proneT = 0; s.sprinting = false; s.vel.set(0, 0, 0);
+      this.seat(s);
+    }
     return true;
+  }
+  // Место стрелка у стационарного орудия — позади оси, по направлению ствола
+  seat(s) {
+    const d = this.cfg.seat, w = this.game.world;
+    const x = this.pos.x + Math.sin(this.turretYaw) * d, z = this.pos.z + Math.cos(this.turretYaw) * d;
+    s.pos.set(x, w.groundAt(x, z, this.pos.y + 1.2), z);
+    s.yaw = this.turretYaw; s.pitch = this.gunPitch;
   }
   exit() {
     const s = this.driver;
@@ -351,6 +455,8 @@ export class Tank {
     this.driver = null;
     s.vehicle = null;
     this.lastDriverExit = this.game.time;
+    this.input.throttle = 0; this.input.steer = 0; this.input.fire = false; this.input.mg = false;
+    if (this.cfg.static) { this.team = -1; s.vel.set(0, 0, 0); return; }
     const w = this.game.world, off = this.cfg.radius + 0.4;
     const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
     let px = this.pos.x + rx * off, pz = this.pos.z + rz * off;
@@ -358,7 +464,6 @@ export class Tank {
     s.pos.set(px, w.groundAt(px, pz, w.height(px, pz) + 1), pz);
     s.vel.set(0, 0, 0);
     s.yaw = this.turretYaw;
-    this.input.throttle = 0; this.input.steer = 0; this.input.fire = false; this.input.mg = false;
   }
   update(dt) {
     const g = this.game, w = g.world, cfg = this.cfg;
@@ -371,32 +476,38 @@ export class Tank {
     }
     const inp = this.input;
     if (!this.driver) { inp.throttle = 0; inp.steer = 0; inp.fire = false; inp.mg = false; }
-    const tgt = inp.throttle * (inp.throttle > 0 ? cfg.speed : cfg.rev);
-    const acc = Math.abs(tgt) > Math.abs(this.speed) ? cfg.acc : cfg.brake;
     const prevSpeed = this.speed;
-    this.speed += clamp(tgt - this.speed, -acc * dt, acc * dt);
-    // Колёсная машина не разворачивается на месте
-    const grip = cfg.wheeled ? clamp(Math.abs(this.speed) / 3, 0, 1) : 1;
-    const turn = inp.steer * cfg.turn * grip * (this.speed < -0.2 ? -1 : 1);
-    this.yaw -= turn * dt;
     const p = this.pos;
-    p.x += this.forwardX * this.speed * dt;
-    p.z += this.forwardZ * this.speed * dt;
-    w.pushCircle(p, cfg.radius, p.y + 0.9, p.y + 2.6, _push);
-    if (_push.hits) {
-      // Ломаем деревья, заборы и мешки с песком, если наехали с разгона
-      if (Math.abs(this.speed) > 1.2 && _push.block && w.crush) {
-        const sg = Math.sign(this.speed);
-        w.crush(_push.block, this.forwardX * sg, this.forwardZ * sg, cfg.mass);
-      }
+    if (cfg.static) {
+      // Орудие стоит на месте; лафет со станиной доворачивается следом за стволом
+      this.speed = 0;
+      if (cfg.follow) this.yaw += clamp(angleDiff(this.yaw, this.turretYaw), -cfg.follow * dt, cfg.follow * dt);
+    } else {
+      const tgt = inp.throttle * (inp.throttle > 0 ? cfg.speed : cfg.rev);
+      const acc = Math.abs(tgt) > Math.abs(this.speed) ? cfg.acc : cfg.brake;
+      this.speed += clamp(tgt - this.speed, -acc * dt, acc * dt);
+      // Колёсная машина не разворачивается на месте
+      const grip = cfg.wheeled ? clamp(Math.abs(this.speed) / 3, 0, 1) : 1;
+      const turn = inp.steer * cfg.turn * grip * (this.speed < -0.2 ? -1 : 1);
+      this.yaw -= turn * dt;
+      p.x += this.forwardX * this.speed * dt;
+      p.z += this.forwardZ * this.speed * dt;
       w.pushCircle(p, cfg.radius, p.y + 0.9, p.y + 2.6, _push);
-      this.speed *= Math.pow(0.1, dt);
-    }
-    p.x = clamp(p.x, -PLAY + 2, PLAY - 2); p.z = clamp(p.z, -PLAY + 2, PLAY - 2);
-    // Заборы под гусеницами и колёсами ломаются
-    if (Math.abs(this.speed) > 0.8) {
-      const sg = Math.sign(this.speed);
-      w.crushAround(p.x + this.forwardX * cfg.len * sg, p.z + this.forwardZ * cfg.len * sg, cfg.radius * 0.7);
+      if (_push.hits) {
+        // Ломаем деревья, заборы и мешки с песком, если наехали с разгона
+        if (Math.abs(this.speed) > 1.2 && _push.block && w.crush) {
+          const sg = Math.sign(this.speed);
+          w.crush(_push.block, this.forwardX * sg, this.forwardZ * sg, cfg.mass);
+        }
+        w.pushCircle(p, cfg.radius, p.y + 0.9, p.y + 2.6, _push);
+        this.speed *= Math.pow(0.1, dt);
+      }
+      p.x = clamp(p.x, -PLAY + 2, PLAY - 2); p.z = clamp(p.z, -PLAY + 2, PLAY - 2);
+      // Заборы под гусеницами и колёсами ломаются
+      if (Math.abs(this.speed) > 0.8) {
+        const sg = Math.sign(this.speed);
+        w.crushAround(p.x + this.forwardX * cfg.len * sg, p.z + this.forwardZ * cfg.len * sg, cfg.radius * 0.7);
+      }
     }
     // Наклон по рельефу
     const fx = this.forwardX, fz = this.forwardZ, rx = -fz, rz = fx, L = cfg.len, Wd = cfg.wid;
@@ -424,7 +535,7 @@ export class Tank {
       if (cfg.shell) { if (this.reload <= 0) this.fireCannon(); }
       else if (this.mgCd <= 0) this.fireMG();
     }
-    if (inp.mg && this.mgCd <= 0) this.fireMG();
+    if (inp.mg && cfg.mg && cfg.shell && this.mgCd <= 0) this.fireMG();
     // Давим врагов
     if (Math.abs(this.speed) > 1.5) {
       const r2 = (cfg.radius + 0.25) ** 2;
@@ -439,7 +550,7 @@ export class Tank {
     }
     this.sync();
     if (this.emitter) { this.emitter.x = p.x; this.emitter.y = p.y + 2.2; this.emitter.z = p.z; }
-    if (this.driver && this.driver.isPlayer) g.audio.engine(0.2 + Math.min(1, Math.abs(this.speed) / cfg.speed) * 0.8);
+    if (this.driver && this.driver.isPlayer && !cfg.static) g.audio.engine(0.2 + Math.min(1, Math.abs(this.speed) / cfg.speed) * 0.8);
   }
   sync() {
     this.root.position.copy(this.pos);
@@ -453,7 +564,7 @@ export class Tank {
     this.reload = this.cfg.reload;
     this.recoil = 1;
     // Отдача качает корпус в сторону, противоположную выстрелу
-    const rel = angleDiff(this.yaw, this.turretYaw), kick = 2.2 / this.cfg.mass;
+    const rel = angleDiff(this.yaw, this.turretYaw), kick = this.cfg.static ? 0.55 : 2.2 / this.cfg.mass;
     this.pitchV += Math.cos(rel) * kick; this.rollV -= Math.sin(rel) * kick;
     const m = this.muzzle(_v.clone());
     const d = this.gunDir(_d);
@@ -499,7 +610,7 @@ export class Tank {
     const g = this.game;
     amount = Math.min(amount, this.hp);
     this.hp -= amount;
-    if (attacker && attacker.team !== this.team) {
+    if (attacker && attacker.team !== this.team && this.team >= 0) {
       g.addScore(attacker, Math.round(amount / 10) * 2, null);
       if (attacker.isPlayer) g.hud.hitMarker(false, false, true);
     }
@@ -509,7 +620,7 @@ export class Tank {
     if (this.hp <= 0) this.destroy(attacker);
   }
   destroy(attacker) {
-    const g = this.game, cfg = this.cfg;
+    const g = this.game, cfg = this.cfg, team = this.team;
     this.alive = false;
     this.hp = 0;
     this.respawnT = cfg.respawn;
@@ -523,12 +634,12 @@ export class Tank {
       g.combat.damage(d, 999, attacker, 'tank', false, 0, 0, true);
       g.combat.finishOff(d, attacker);
     }
-    if (attacker && attacker.team !== this.team) {
-      g.addScore(attacker, cfg.score, cfg.name + ' уничтожен');
-      g.hud.killfeed(attacker, 'at', { name: cfg.name + ' ' + TEAMS[this.team].adj, team: this.team }, false);
+    if (attacker && team >= 0 && attacker.team !== team) {
+      g.addScore(attacker, cfg.score, cfg.gone || cfg.name + ' уничтожен');
+      g.hud.killfeed(attacker, 'at', { name: cfg.static ? cfg.name : cfg.name + ' ' + TEAMS[team].adj, team }, false);
     }
-    g.combat.explode(this.pos.x, this.pos.y + 1, this.pos.z, 6, 80, attacker, 'tank', 0);
-    if (g.player && g.player.team === this.team) g.hud.announce('Наш ' + cfg.name.toLowerCase() + ' уничтожен', false);
+    g.combat.explode(this.pos.x, this.pos.y + 1, this.pos.z, cfg.static ? 4 : 6, cfg.static ? 60 : 80, attacker, 'tank', 0);
+    if (g.player && g.player.team === team && !cfg.static) g.hud.announce('Наш ' + cfg.name.toLowerCase() + ' уничтожен', false);
   }
 }
 

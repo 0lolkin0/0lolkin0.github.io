@@ -49,6 +49,8 @@ export class Soldier {
     this.slots = [this.cls.weapons.includes(wid) ? wid : this.cls.weapon, TEAMS[this.team].sidearm];
     this.slot = 0;
   }
+  // Спрятан в броне (танк, броневик): не виден и недосягаем. Расчёт стационарного орудия — снаружи
+  get inside() { return !!this.vehicle && !this.vehicle.cfg.static; }
   get weapon() { return WEAPONS[this.slots[this.slot]]; }
   get other() { return WEAPONS[this.slots[1 - this.slot]]; }
   get mag() { return this.ammo[this.weapon.id]?.mag ?? 0; }
@@ -469,7 +471,7 @@ export class SoldierRenderer {
     }
     let mn = 0;
     for (const s of soldiers) {
-      if (s === hide || s.vehicle) continue;
+      if (s === hide || s.inside) continue;
       if (s.state === 'dead' && s.lieT >= 1 && s.game.time - s.deadAt > 9) continue;
       if (camPos && s.pos.distanceToSquared(camPos) > 300 * 300) continue;
       const T = this.teams[s.team];

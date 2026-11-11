@@ -189,7 +189,7 @@ export class Hud {
     this.set('hpNum', Math.ceil(Math.max(0, p.hp)));
     if (p.vehicle) {
       const v = p.vehicle;
-      this.set('wname', v.cfg.name + ' · броня ' + Math.ceil(v.hp / v.maxHp * 100) + '%');
+      this.set('wname', v.cfg.name + (v.cfg.static ? ' · цела на ' : ' · броня ') + Math.ceil(v.hp / v.maxHp * 100) + '%');
       this.set('mag', v.cfg.shell && v.reload > 0 ? '…' : '●');
       this.set('reserve', !v.cfg.shell ? 'пулемёт' : v.reload > 0 ? 'заряжание' : 'орудие готово');
       $('ammoBox').classList.add('tank');
@@ -302,6 +302,16 @@ export class Hud {
       const d = v.pos.distanceTo(cam);
       if (d > 200 || (v === p.vehicle)) continue;
       const friend = v.team === p.team;
+      // Свободное орудие у флага: подпись видна вблизи любой стороне
+      if (v.team < 0) {
+        if (d > 45 || p.vehicle) continue;
+        const pt = this.project(v.pos.x, v.pos.y + v.cfg.hitY * 2 + 0.7, v.pos.z);
+        if (!pt) continue;
+        c.fillStyle = 'rgba(255,255,255,0.85)';
+        c.font = `700 ${11 * D}px Oswald, sans-serif`;
+        c.fillText(`${v.cfg.short} · ${Math.round(d)} м`, pt[0], pt[1]);
+        continue;
+      }
       const spotted = v.spottedUntil > g.time || (v.driver && v.driver.spottedUntil > g.time);
       if (!friend && !spotted && d > 60) continue;
       const pt = this.project(v.pos.x, v.pos.y + v.cfg.hitY * 2 + 1.1, v.pos.z);
@@ -359,7 +369,7 @@ export class Hud {
         c.globalAlpha = 1;
       }
       if (ads < 0.5) { c.fillStyle = 'rgba(255,255,255,0.85)'; c.fillRect(cx - 1.2 * D, cy - 1.2 * D, 2.4 * D, 2.4 * D); }
-    } else if (p.vehicle && !g.tankZoom) {
+    } else if (p.vehicle && (!g.tankZoom || p.vehicle.cfg.static)) {
       // Прицел танка: перекрестье с разрывом, дальность до точки прицеливания
       c.strokeStyle = 'rgba(255,255,255,0.9)'; c.lineWidth = 2 * D;
       c.beginPath();
@@ -457,11 +467,11 @@ export class Hud {
     for (const v of g.vehicles) {
       if (!v.alive) continue;
       const friend = v.team === p.team;
-      if (!friend && v.kind === 'tank' && !(v.spottedUntil > g.time || (v.driver && v.driver.spottedUntil > g.time))) continue;
+      if (!friend && v.team >= 0 && v.kind === 'tank' && !(v.spottedUntil > g.time || (v.driver && v.driver.spottedUntil > g.time))) continue;
       const pt = toS(v.pos.x, v.pos.z);
       if (!inside(pt) && v.kind !== 'airship') continue;
-      c.fillStyle = friend ? COL.friend : COL.enemy;
-      const r = v.kind === 'airship' ? S * 0.06 : S * 0.04;
+      c.fillStyle = v.team < 0 ? 'rgba(255,255,255,0.75)' : friend ? COL.friend : COL.enemy;
+      const r = v.kind === 'airship' ? S * 0.06 : v.cfg && v.cfg.static ? S * 0.024 : S * 0.04;
       c.fillRect(pt[0] - r, pt[1] - r * 0.7, r * 2, r * 1.4);
     }
     // Игрок
@@ -572,12 +582,12 @@ export class Hud {
     for (const v of g.vehicles) {
       if (!v.alive) continue;
       const friend = v.team === p.team;
-      if (!friend && v.kind === 'tank' && !(v.spottedUntil > g.time || (v.driver && v.driver.spottedUntil > g.time))) continue;
+      if (!friend && v.team >= 0 && v.kind === 'tank' && !(v.spottedUntil > g.time || (v.driver && v.driver.spottedUntil > g.time))) continue;
       const [x, y] = toS(v.pos.x, v.pos.z);
-      c.fillStyle = friend ? COL.friend : COL.enemy;
-      const rr = v.kind === 'airship' ? 10 : 6;
+      c.fillStyle = v.team < 0 ? 'rgba(255,255,255,0.8)' : friend ? COL.friend : COL.enemy;
+      const rr = v.kind === 'airship' ? 10 : v.cfg && v.cfg.static ? 4 : 6;
       c.fillRect(x - rr, y - rr * 0.6, rr * 2, rr * 1.2);
-      if (friend && v.kind === 'tank') { c.font = '600 10px Oswald, sans-serif'; c.fillText(v.cfg.short, x, y - 12); }
+      if ((friend || v.team < 0) && v.kind === 'tank') { c.font = '600 10px Oswald, sans-serif'; c.fillText(v.cfg.short, x, y - 12); }
     }
     const pp = p.vehicle ? p.vehicle.pos : p.pos;
     const [px, py] = toS(pp.x, pp.z);
