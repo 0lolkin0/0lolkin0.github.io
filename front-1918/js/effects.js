@@ -1,6 +1,6 @@
 // Эффекты: частицы (дым, грязь, огонь, искры), трассеры, вспышки света, дождь и снег
 import * as THREE from './three.module.min.js';
-import { rand, TAU } from './util.js';
+import { rand, clamp, TAU } from './util.js';
 
 const VS = `
 attribute float size;
@@ -198,30 +198,41 @@ class Tracers {
 class Weather {
   constructor(type) {
     this.type = type;
-    const n = type === 'snow' ? 1400 : 1000;
-    this.n = n;
-    this.box = type === 'snow' ? [36, 18] : [32, 16];
+    // Снег и дождь — густые; листопад — редкие крупные листья
+    const flake = type === 'snow' || type === 'leaves';
+    // Запас частиц — на ливень и метель; в обычную погоду рисуется только часть (setIntensity)
+    const n = type === 'snow' ? 2100 : type === 'leaves' ? 380 : 1600;
+    this.n = n; this.act = n;
+    this.box = flake ? [36, 18] : [32, 16];
     this.p = new Float32Array(n * 3);
     this.v = new Float32Array(n);
     for (let i = 0; i < n; i++) {
       this.p[i * 3] = rand(-this.box[0], this.box[0]);
       this.p[i * 3 + 1] = rand(-this.box[1], this.box[1]);
       this.p[i * 3 + 2] = rand(-this.box[0], this.box[0]);
-      this.v[i] = type === 'snow' ? rand(0.9, 1.7) : rand(13, 17);
+      this.v[i] = type === 'snow' ? rand(0.9, 1.7) : type === 'leaves' ? rand(0.5, 1.2) : rand(13, 17);
     }
     const g = new THREE.BufferGeometry();
-    if (type === 'snow') {
+    if (flake) {
       this.attr = new THREE.BufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage);
       g.setAttribute('position', this.attr);
       const cv = document.createElement('canvas');
       cv.width = cv.height = 32;
       const c = cv.getContext('2d');
-      const gr = c.createRadialGradient(16, 16, 0, 16, 16, 16);
-      gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
-      c.fillStyle = gr; c.fillRect(0, 0, 32, 32);
-      this.obj = new THREE.Points(g, new THREE.PointsMaterial({
-        size: 0.14, map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false, color: 0xffffff, opacity: 0.9,
-      }));
+      if (type === 'leaves') {
+        // Лист: вытянутый овал с жилкой
+        c.translate(16, 16); c.rotate(0.6);
+        c.fillStyle = '#fff';
+        c.beginPath(); c.moveTo(-13, 0); c.quadraticCurveTo(0, -9, 13, 0); c.quadraticCurveTo(0, 9, -13, 0); c.fill();
+        c.strokeStyle = 'rgba(90,60,20,0.6)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(-12, 0); c.lineTo(12, 0); c.stroke();
+      } else {
+        const gr = c.createRadialGradient(16, 16, 0, 16, 16, 16);
+        gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+        c.fillStyle = gr; c.fillRect(0, 0, 32, 32);
+      }
+      this.obj = new THREE.Points(g, new THREE.PointsMaterial(type === 'leaves'
+        ? { size: 0.2, map: new THREE.CanvasTexture(cv), transparent: true, alphaTest: 0.3, depthWrite: false, color: 0xc98a2e, opacity: 0.95 }
+        : { size: 0.14, map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false, color: 0xffffff, opacity: 0.9 }));
     } else {
       this.attr = new THREE.BufferAttribute(new Float32Array(n * 6), 3).setUsage(THREE.DynamicDrawUsage);
       g.setAttribute('position', this.attr);
@@ -230,16 +241,28 @@ class Weather {
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);
     this.obj.frustumCulled = false;
     this.t = 0;
+    this.baseOp = this.obj.material.opacity;
+    this.wind = 1;
+    this.setIntensity(0.62);
+  }
+  // k — сила осадков 0..1: сколько частиц в воздухе и насколько они заметны; wind — снос ветром
+  setIntensity(k, wind = 1) {
+    this.act = Math.max(1, Math.round(this.n * clamp(k, 0.05, 1)));
+    this.obj.geometry.setDrawRange(0, this.act * (this.type === 'rain' ? 2 : 1));
+    if (this.type === 'rain') this.obj.material.opacity = this.baseOp * (0.75 + k * 0.6);
+    this.wind = wind;
   }
   update(dt, cam) {
     this.t += dt;
-    const [bx, by] = this.box, p = this.p, a = this.attr.array, snow = this.type === 'snow';
-    for (let i = 0; i < this.n; i++) {
+    const [bx, by] = this.box, p = this.p, a = this.attr.array, snow = this.type === 'snow' || this.type === 'leaves', leaf = this.type === 'leaves';
+    const wd = this.wind, slant = 0.1 * wd;
+    for (let i = 0; i < this.act; i++) {
       let y = p[i * 3 + 1] - this.v[i] * dt;
       if (y < -by) y += by * 2;
       p[i * 3 + 1] = y;
-      if (snow) p[i * 3] += Math.sin(this.t * 0.8 + i) * 0.4 * dt;
-      else p[i * 3] += 1.5 * dt;
+      if (leaf) { p[i * 3] += (0.5 * wd + Math.sin(this.t * 1.3 + i) * 1.1) * dt; p[i * 3 + 2] += Math.cos(this.t * 0.9 + i * 1.7) * 0.7 * dt; }
+      else if (snow) p[i * 3] += (Math.sin(this.t * 0.8 + i) * 0.4 + (wd - 1) * 2.2) * dt;
+      else p[i * 3] += 1.5 * wd * dt;
       // Держим частицы вокруг камеры
       let x = p[i * 3], z = p[i * 3 + 2];
       x = ((((x - cam.x) % (bx * 2)) + bx * 3) % (bx * 2)) - bx + cam.x;
@@ -250,7 +273,7 @@ class Weather {
       else {
         const o = i * 6;
         a[o] = x; a[o + 1] = wy; a[o + 2] = z;
-        a[o + 3] = x - 0.1; a[o + 4] = wy + 0.75; a[o + 5] = z;
+        a[o + 3] = x - slant; a[o + 4] = wy + 0.75; a[o + 5] = z;
       }
     }
     this.attr.needsUpdate = true;
@@ -262,6 +285,7 @@ const C = {
   fire1: COL(0xffc46a), fire2: COL(0xff7a2a), smoke: COL(0x4a4540), smokeL: COL(0x8a857c), dirt: COL(0x4a3a2a), dirtL: COL(0x7a6650),
   snow: COL(0xe8edf2), stone: COL(0x9a958c), wood: COL(0x8a6a48), spark: COL(0xffd890), blood: COL(0x7a1010), flash: COL(0xffe0a0),
   sand: COL(0xb09a6a), flare: COL(0xff5040), flareCore: COL(0xffffff), dust: COL(0xa49a88),
+  gas: COL(0xa9ad4e), gas2: COL(0x8e9a44), smokeW: COL(0xc9cac6), smokeW2: COL(0xaeb0ac),
 };
 
 // Обломки с физикой: комья земли, камни и щепки от взрывов, гильзы. Летят, вращаются, отскакивают от земли
@@ -348,7 +372,7 @@ export class Effects {
     this.setLights(3);
     // Обломки и гильзы
     const chunkGeo = new THREE.DodecahedronGeometry(0.5, 0);
-    this.debris = new Debris(scene, chunkGeo, new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 }), quality >= 2 ? 360 : 160);
+    this.debris = new Debris(scene, chunkGeo, new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 }), quality >= 2 ? 520 : 240);
     const caseGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 7);
     this.brass = new Debris(scene, caseGeo, new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.85 }), 60);
     this.world = null;
@@ -469,8 +493,33 @@ export class Effects {
     if (Math.random() < 0.4) this.normal.spawn(x, y, z, rand(-0.2, 0.2), rand(-0.2, 0.3), rand(-0.2, 0.2), 0.5, 3, 2, C.smokeL, 0.3, 0, 0.2);
   }
   // Гильза: вылетает вправо-вверх от затвора, звенит о землю
-  casing(x, y, z, vx, vy, vz) {
-    this.brass.spawn(x, y, z, vx, vy, vz, 0.011, 0.032, 0.011, 0xc9a24a, 4);
+  casing(x, y, z, vx, vy, vz, color = 0xc9a24a, k = 1) {
+    this.brass.spawn(x, y, z, vx, vy, vz, 0.011 * k, 0.032 * k, 0.011 * k, color, 4);
+  }
+  // Обломки разрушенного укрытия, стены или крыши: куски летят от взрыва и остаются лежать; облако пыли
+  shatter(pc, fx, fz) {
+    const n = pc.roofPiece ? 24 : pc.strength >= 3 ? 12 : pc.strength === 2 ? 8 : 6;
+    const dx = pc.x - (fx ?? pc.x), dz = pc.z - (fz ?? pc.z), l = Math.hypot(dx, dz) || 1;
+    const ux = dx / l, uz = dz / l, wood = pc.strength === 1 || pc.roofPiece;
+    for (let i = 0; i < n; i++) {
+      const sz = pc.strength >= 3 || pc.roofPiece ? rand(0.12, 0.34) : rand(0.08, 0.22), sp = rand(1.5, 6);
+      this.debris.spawn(pc.x + rand(-1, 1) * pc.rad * 0.8, rand(pc.y0 + 0.2, Math.max(pc.y0 + 0.4, pc.y1)), pc.z + rand(-1, 1) * pc.rad * 0.8,
+        ux * sp + rand(-2, 2), rand(1.5, 6), uz * sp + rand(-2, 2), wood ? sz * 0.5 : sz, sz * rand(0.6, 1), wood ? sz * rand(1.8, 3) : sz * rand(0.8, 1.2), pc.color, rand(10, 18));
+    }
+    for (let i = 0; i < (pc.roofPiece ? 12 : 5); i++) {
+      this.normal.spawn(pc.x + rand(-1, 1) * pc.rad, rand(pc.y0 + 0.3, pc.y1 + 0.3), pc.z + rand(-1, 1) * pc.rad, rand(-1, 1), rand(0.4, 1.6), rand(-1, 1),
+        rand(1.6, 2.8), 2.2, rand(1.8, 3.4), pc.hay ? C.sand : C.dust, 0.5, -0.08, 0.9);
+    }
+  }
+  // Пыль из-под гусениц и колёс
+  dust(x, y, z, s = 1) {
+    this.normal.spawn(x, y, z, rand(-0.5, 0.5), rand(0.4, 1.1), rand(-0.5, 0.5), rand(0.8, 1.4) * s, 2.2, rand(1, 1.8), this.winter ? C.snow : C.dust, 0.26, -0.1, 0.8);
+  }
+  // Клуб газа или дыма внутри облака радиуса r
+  cloudPuff(type, x, y, z, r) {
+    const a = Math.random() * TAU, d = Math.sqrt(Math.random()) * r * 0.85, gas = type === 'gas';
+    this.normal.spawn(x + Math.cos(a) * d, y + rand(0.3, gas ? 1.7 : 2.8), z + Math.sin(a) * d, rand(-0.35, 0.35), rand(0.02, 0.3), rand(-0.35, 0.35),
+      rand(3.2, 5), 0.7, rand(3.6, 5.6), gas ? (Math.random() < 0.5 ? C.gas : C.gas2) : (Math.random() < 0.5 ? C.smokeW : C.smokeW2), gas ? 0.32 : 0.6, -0.02, 0.25);
   }
   heal(x, y, z) {
     this.add.spawn(x + rand(-0.4, 0.4), y, z + rand(-0.4, 0.4), 0, 1.2, 0, 0.18, 0, 0.7, COL(0x70ff90), 0.8, 0, 0);

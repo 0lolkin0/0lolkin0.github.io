@@ -14,7 +14,7 @@ import { Hud } from './hud.js';
 import { Gfx, makeSky, Grass } from './gfx.js';
 import { Post, GFX_PRESETS, GFX_KEYS, SHADOW_LEVELS, GRASS_LEVELS, TONE, needsPost, LAYER_NO_GBUFFER } from './post.js';
 import { ICONS } from './icons.js';
-import { TEAMS, CLASSES, CLASS_BY_ID, DIFFICULTY, NAMES, SQUAD_NAMES, SCORE, DEFAULT_SETTINGS, MATCH_LENGTH, rankFor, WEAPONS, GADGETS, SIGHTS } from './config.js';
+import { TEAMS, CLASSES, CLASS_BY_ID, DIFFICULTY, NAMES, SQUAD_NAMES, SCORE, DEFAULT_SETTINGS, MATCH_LENGTH, rankFor, WEAPONS, GADGETS, SIGHTS, GRENADE_TYPES } from './config.js';
 import { clamp, lerp, angleDiff, yawTo, DEG, TAU, rand, pick, dirFromYawPitch, fmtTime, smoothstep } from './util.js';
 
 const $ = (id) => document.getElementById(id);
@@ -32,6 +32,7 @@ function loadSave() {
   try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; } catch (_) { return {}; }
 }
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _d = new THREE.Vector3();
+const _wc = new THREE.Color();
 
 class Game {
   constructor() {
@@ -42,6 +43,8 @@ class Game {
     if (params.get('map')) this.settings.map = params.get('map');
     if (!MAPS[this.settings.map]) this.settings.map = 'field';
     this.save.sights ||= {};
+    this.save.loadout ||= {};
+    if (!GRENADE_TYPES.some((t) => t.id === this.save.nade)) this.save.nade = 'frag';
     this.touch = matchMedia('(pointer: coarse)').matches;
     const canvas = $('game');
     // Просим у системы мощную (дискретную) видеокарту; в приложении для ПК это ещё и закреплено флагами запуска
@@ -124,8 +127,56 @@ class Game {
     return {
       sunDir: this.sunDir.clone(), sunCol: new THREE.Color(T.sun), fogCol: new THREE.Color(T.fog),
       skyTop: new THREE.Color(T.skyTop), skyHor: new THREE.Color(T.skyHorizon),
-      wet: T.weather === 'rain' ? 1 : 0, rain: T.weather === 'rain', fogDensity: T.weather === 'snow' ? 0.006 : 0.0045,
+      wet: T.weather === 'rain' ? 1 : 0, rain: T.weather === 'rain', fogDensity: T.fogDensity ?? (T.weather === 'snow' ? 0.006 : 0.0045),
     };
+  }
+  // ---------- Погода ----------
+  // Погода меняется по ходу боя: приходит фронт — туман густеет, дождь переходит в ливень (снег — в метель),
+  // темнеет, усиливается ветер, а бойцы видят хуже. Потом снова проясняется
+  initWeather() {
+    const T = this.world.theme;
+    this.wx = {
+      k: 0.15, to: 0.15, t: rand(50, 85), kind: T.weather === 'rain' ? 0 : T.weather === 'snow' ? 1 : 2,
+      skyTop: new THREE.Color(T.skyTop), skyHor: new THREE.Color(T.skyHorizon), fog: new THREE.Color(T.fog), sun: new THREE.Color(T.sun),
+      cover: T.cloudCover ?? 0.45, wind: T.wind ?? (T.weather === 'rain' ? 1.25 : 1),
+    };
+    this.applyWeather();
+  }
+  updateWeather(dt) {
+    const x = this.wx;
+    if (!x) return;
+    x.t -= dt;
+    if (x.t <= 0) {
+      const front = x.to < 0.4;
+      x.to = front ? rand(0.7, 1) : rand(0, 0.18);
+      x.t = front ? rand(75, 120) : rand(70, 110);
+      this.hud.announce([['Надвигается ливень', 'Дождь стихает'], ['Начинается метель', 'Метель стихает'], ['Опускается густой туман', 'Туман рассеивается']][x.kind][front ? 0 : 1], !front);
+    }
+    if (x.k !== x.to) {
+      x.k += clamp(x.to - x.k, -dt / 28, dt / 28);
+      this.applyWeather();
+    }
+  }
+  applyWeather() {
+    const x = this.wx, T = this.world && this.world.theme;
+    if (!x || !T || !this.scene) return;
+    const k = x.k, s = smoothstep(0.15, 1, k);
+    const fogMul = 0.8 + (x.kind === 2 ? 1.5 : 2.3) * Math.pow(k, 1.2);
+    this.scene.fog.near = T.fogNear * lerp(1.1, 0.35, k);
+    this.scene.fog.far = T.fogFar * lerp(1.08, 0.42, k);
+    this.sun.intensity = T.sunIntensity * 1.35 * (1 - 0.5 * s);
+    this.hemi.intensity = T.hemiIntensity * 0.55 * (1 - 0.12 * s);
+    // Небо затягивает: облаков больше, солнце тускнеет, горизонт сливается с туманом
+    const u = this.sky.material.uniforms;
+    u.uTop.value.copy(x.skyTop).lerp(_wc.copy(x.fog).multiplyScalar(0.8), s * 0.7);
+    u.uHorizon.value.copy(x.skyHor).lerp(x.fog, s * 0.85);
+    u.uSun.value.copy(x.sun).multiplyScalar(1 - 0.85 * s);
+    u.uCover.value = x.cover - 0.25 * s;
+    this.gfx.wind.value = x.wind * (0.85 + 0.9 * s);
+    if (this.effects && this.effects.weather) this.effects.weather.setIntensity(x.kind === 2 ? 0.55 + 0.45 * s : lerp(0.42, 1, k), 1 + 1.4 * s);
+    if (this.post) this.post.setWeather(fogMul, 1 - 0.7 * s, 1);
+    // В тумане и ливне боты замечают врага с меньшего расстояния
+    this.viewK = 1 - 0.42 * s;
   }
   // Объекты без нормалей в G-буфере (небо, частицы, трава, листва с прозрачными краями) — на отдельный слой
   markLayers() {
@@ -165,6 +216,7 @@ class Game {
     }
     if (this.post) { this.post.dispose(); this.post = null; }
     if (this.scene && this.world && needsPost(o)) this.post = new Post(this.renderer, this.scene, this.camera, this.viewmodel.scene, this.viewmodel.camera, o, this.postEnv());
+    this.applyWeather();
     if (this.scene && this.world) {
       if (this.grass && this.grass.mesh) this.scene.remove(this.grass.mesh);
       this.grass = new Grass(this.scene, this.world, GRASS_LEVELS[o.grass] || null, this.gfx, (o.shadows || 0) >= 2);
@@ -211,6 +263,7 @@ class Game {
   // ---------- Мир ----------
   prepareWorld(def) {
     if (this.world && this.world.def === def) return;
+    this.wx = null;
     const scene = (this.scene = new THREE.Scene());
     const T = THEMES[def.theme];
     this.world = new World(def, this.quality, this.gfx);
@@ -237,6 +290,29 @@ class Game {
     this.viewmodel.setEnv(this.world, this.envRT.texture);
     this.effects = new Effects(scene, this.quality, T.weather, def.theme === 'winter');
     this.effects.world = this.world;
+    this.gfx.wind.value = T.wind ?? (T.weather === 'rain' ? 1.25 : 1);
+    // Разрушения: обломки, пыль и звук; штабель снарядов детонирует с задержкой
+    this.booms = [];
+    this.world.onDestroy = (pc, fx, fz) => {
+      this.effects.shatter(pc, fx, fz);
+      this.audio.crash(pc.x, pc.y0, pc.z, pc.strength >= 3 || !!pc.roofPiece);
+      if (pc.explosive) this.booms.push({ x: pc.x, y: pc.y0 + 0.4, z: pc.z, t: 0.25 + Math.random() * 0.3 });
+    };
+    this.world.onTreeFall = (t, landed) => {
+      this.audio.treeFall(t.x, t.y, t.z, landed);
+      if (!landed) return;
+      const hx = t.x + t.fall.dx * 4.5 * t.s, hz = t.z + t.fall.dz * 4.5 * t.s, hy = this.world.height(hx, hz) + 0.3;
+      for (let i = 0; i < 7; i++) this.effects.dust(hx + rand(-1.6, 1.6), hy, hz + rand(-1.6, 1.6), 1.5);
+    };
+    this.world.onCrater = (x, z, R, deform) => {
+      if (this.grass) this.grass.invalidate(x, z, R);
+      if (!deform) return;
+      // Тела и ящики не висят над новой воронкой
+      for (const s of this.soldiers) if (s.state !== 'alive' && (s.pos.x - x) ** 2 + (s.pos.z - z) ** 2 < R * R) s.onGround = false;
+      if (this.combat) for (const d of this.combat.deployables) {
+        if ((d.x - x) ** 2 + (d.z - z) ** 2 < R * R) { d.y = this.world.groundAt(d.x, d.z, d.y + 1); d.mesh.position.y = d.y; }
+      }
+    };
     this.effects.brass.onBounce = (x, y, z) => { const c = this.camera.position; if ((c.x - x) ** 2 + (c.z - z) ** 2 < 25) this.audio.casing(); };
     this.effects.setScale(innerHeight * this.renderer.getPixelRatio(), this.camera.fov);
     for (const sm of this.world.smokers) this.effects.emitters.push({ ...sm, size: 1 });
@@ -324,16 +400,27 @@ class Game {
         const nm = isPlayer ? 'Вы' : names[t][i % names[t].length] + (i >= names[t].length ? ' ' + (i + 1) : '');
         const s = new Soldier(this, t, id++, nm, isPlayer);
         if (!isPlayer || AUTOPLAY) s.bot = new BotBrain(s, this);
-        s.setClass(isPlayer ? (this.save.lastClass || 'assault') : classPool[(i + t * 3) % classPool.length]);
+        const cid = isPlayer ? (this.save.lastClass || 'assault') : classPool[(i + t * 3) % classPool.length];
+        s.setClass(cid, isPlayer ? this.save.loadout[cid] : undefined);
         if (t === pteam && i >= 1 && i <= 3) s.squad = true;
         this.soldiers.push(s);
         if (isPlayer) { this.player = s; s.sights = this.save.sights; }
       }
     }
     this.squadName = pick(SQUAD_NAMES);
-    // Танки
-    this.tanks = [0, 1].map((t) => new Tank(this, t, this.world.def.tankSpawn[t]));
+    // Техника: лёгкий танк у каждой стороны; в больших боях ещё броневик, а позже подходит тяжёлый танк
+    this.tanks = [];
+    for (let t = 0; t < 2; t++) {
+      this.tanks.push(new Tank(this, t, this.world.def.tankSpawn[t], 'light'));
+      if (perTeam >= 10) this.tanks.push(new Tank(this, t, this.vehSpawn(t, 'car'), 'car'));
+    }
+    // Стационарные орудия у флагов: пулемётные гнёзда и полевые пушки — ничьи, пока к ним не встал расчёт
+    this.flags.forEach((f, i) => {
+      const sp = this.emplacementSpot(f, i);
+      if (sp) this.tanks.push(new Tank(this, -1, sp, i % 2 ? 'gun' : 'nest'));
+    });
     this.vehicles = [...this.tanks];
+    this.heavyAt = perTeam >= 12 ? 200 : Infinity;
     // Боты появляются в штабе
     for (const s of this.soldiers) if (!s.isPlayer || AUTOPLAY) this.spawnSoldier(s, this.botSpawnChoice(s, true));
     for (const fo of this.hqCloth) fo.material.color.setHex(0xe8e2d0);
@@ -349,6 +436,7 @@ class Game {
     $('menu').hidden = true;
     $('end').hidden = true;
     this.audio.setRain(this.world.theme.weather === 'rain');
+    this.initWeather();
     if (AUTOPLAY) { this.enterPlay(); this.audio.whistle(); }
     else this.showDeploy();
   }
@@ -387,16 +475,39 @@ class Game {
       if (Math.hypot(s.pos.x - hq.x, s.pos.z - hq.z) < 35) continue;
       opts.push({ kind: 'squad', label: s.name, x: s.pos.x, z: s.pos.z, mate: s });
     }
-    const tk = this.tanks[team];
-    if (tk && tk.alive && (!tk.driver || (forPlayer && tk.driver.bot && !tk.driver.isPlayer))) opts.push({ kind: 'tank', label: 'Танк', x: tk.pos.x, z: tk.pos.z, tank: tk });
+    for (const tk of this.tanks) {
+      if (tk.team !== team || !tk.alive || tk.cfg.static) continue;
+      if (!tk.driver || (forPlayer && tk.driver.bot && !tk.driver.isPlayer)) opts.push({ kind: 'tank', label: tk.cfg.name, x: tk.pos.x, z: tk.pos.z, tank: tk });
+    }
     return opts;
+  }
+  // Место для орудия у флага: ровная свободная площадка в 6–17 м от древка (чем ближе, тем лучше), стволом наружу
+  emplacementSpot(f, i) {
+    const w = this.world;
+    for (let k = 0; k < 160; k++) {
+      const a = i * 2.4 + k * 0.83, d = 6.5 + Math.floor(k / 8) * 0.55;
+      const x = f.x + Math.sin(a) * d, z = f.z + Math.cos(a) * d, h = w.height(x, z);
+      if (Math.abs(x) > PLAY - 6 || Math.abs(z) > PLAY - 6 || w.nearFootprint(x, z, 2.2) || w.blockedAt(x, z, h, 2.2)) continue;
+      let lo = h, hi = h;
+      for (let q = 0; q < 8; q++) { const hh = w.height(x + Math.sin(q * 0.785) * 1.8, z + Math.cos(q * 0.785) * 1.8); lo = Math.min(lo, hh); hi = Math.max(hi, hh); }
+      if (hi - lo > 0.5 || w.puddles.some((pd) => Math.hypot(x - pd.x, z - pd.z) < pd.r + 2)) continue;
+      return { x, z, yaw: yawTo(x - f.x, z - f.z) };
+    }
+    return null;
+  }
+  // Где у штаба стоит дополнительная техника: броневик — по другую сторону от танка, тяжёлый танк — дальше в ту же
+  vehSpawn(team, type) {
+    const sp = this.world.def.tankSpawn[team];
+    const x = type === 'car' ? -sp.x : sp.x * 1.9, z = sp.z;
+    const [fx, fz] = this.world.randomFreePoint(x, z, 4, true);
+    return { x: fx, z: fz, yaw: sp.yaw };
   }
   botSpawnChoice(s, initial = false) {
     const team = s.team;
     const opts = this.spawnOptions(team).filter((o) => o.kind !== 'squad' || s.squad);
     if (initial) return opts[0];
-    const tk = opts.find((o) => o.kind === 'tank');
-    if (tk && this.time - tk.tank.lastDriverExit > 8 && Math.random() < 0.4 && !s.squad) return tk;
+    const tks = opts.filter((o) => o.kind === 'tank' && this.time - o.tank.lastDriverExit > 8);
+    if (tks.length && Math.random() < 0.4 && !s.squad) return pick(tks);
     if (s.squad) {
       const pl = this.player;
       if (pl && pl.state === 'alive' && !pl.vehicle && this.time - pl.lastDamage > 4 && Math.random() < 0.6) return { kind: 'squad', x: pl.pos.x, z: pl.pos.z, mate: pl };
@@ -448,29 +559,36 @@ class Game {
   renderClassList() {
     const box = $('classList');
     box.innerHTML = '';
+    const p = this.player;
     for (const c of CLASSES) {
-      const w = WEAPONS[c.weapon], gd = GADGETS[c.gadget];
+      const w = WEAPONS[c.weapons.includes(this.save.loadout[c.id]) ? this.save.loadout[c.id] : c.weapon], gd = GADGETS[c.gadget];
       const b = document.createElement('button');
-      b.className = 'classBtn' + (this.player.cls.id === c.id ? ' sel' : '');
-      const side = WEAPONS[TEAMS[this.player.team].sidearm];
+      b.className = 'classBtn' + (p.cls.id === c.id ? ' sel' : '');
+      const side = WEAPONS[TEAMS[p.team].sidearm];
       b.innerHTML = `<b>${c.name}</b><span>${w.short} + ${side.short.toLowerCase()} · ${gd.short} ×${c.gadgetCount} · гранат ×${c.grenades}</span><small>${c.desc}</small>`;
-      b.onclick = () => { this.audio.ui(); this.player.setClass(c.id); this.save.lastClass = c.id; this.persist(); this.renderClassList(); };
+      b.onclick = () => { this.audio.ui(); p.setClass(c.id, this.save.loadout[c.id]); this.save.lastClass = c.id; this.persist(); this.renderClassList(); };
       box.appendChild(b);
     }
-    // Выбор прицела для основного оружия выбранного класса
-    const w = WEAPONS[this.player.cls.weapon];
-    const sb = $('sightList');
-    sb.innerHTML = '<span>Прицел:</span>';
+    const seg = (id, title, items, cur, pickFn) => {
+      const el = $(id);
+      el.innerHTML = `<span>${title}</span>`;
+      for (const [val, label, hint] of items) {
+        const bt = document.createElement('button');
+        bt.textContent = label;
+        if (hint) bt.title = hint;
+        bt.className = val === cur ? 'on' : '';
+        bt.onclick = () => { this.audio.ui(); pickFn(val); this.persist(); this.renderClassList(); };
+        el.appendChild(bt);
+      }
+    };
+    // Основное оружие выбранного класса
+    const cls = p.cls, w = WEAPONS[p.slots[0]];
+    seg('weaponList', 'Оружие:', cls.weapons.map((id) => [id, WEAPONS[id].short, WEAPONS[id].name]), w.id, (id) => { this.save.loadout[cls.id] = id; p.setClass(cls.id, id); });
+    // Прицел для него
     const cur = this.save.sights[w.id] && w.sights.includes(this.save.sights[w.id]) ? this.save.sights[w.id] : w.sights[0];
-    for (const id of w.sights) {
-      const sg = SIGHTS[id];
-      const bt = document.createElement('button');
-      const z = sg.optic ? sg.zoom : w.ironZoom;
-      bt.textContent = (sg.optic ? sg.name : 'Открытый') + (sg.optic ? '' : ` ×${z}`);
-      bt.className = id === cur ? 'on' : '';
-      bt.onclick = () => { this.audio.ui(); this.save.sights[w.id] = id; this.persist(); this.renderClassList(); };
-      sb.appendChild(bt);
-    }
+    seg('sightList', 'Прицел:', w.sights.map((id) => { const sg = SIGHTS[id]; return [id, sg.optic ? sg.name : `Открытый ×${w.ironZoom}`]; }), cur, (id) => { this.save.sights[w.id] = id; });
+    // Тип гранаты
+    seg('nadeList', 'Граната:', GRENADE_TYPES.map((t) => [t.id, t.name]), this.save.nade, (id) => { this.save.nade = id; });
   }
   updateDeploy() {
     const p = this.player;
@@ -555,7 +673,7 @@ class Game {
       if (o.kind !== 'flag') {
         c.fillStyle = sel ? '#ffd45c' : '#fff';
         c.font = '700 11px Oswald, sans-serif';
-        c.fillText(o.kind === 'hq' ? 'ШТАБ' : o.kind === 'tank' ? 'ТАНК' : o.label, x, o.kind === 'tank' ? y + rr + 9 : y - rr - 9);
+        c.fillText(o.kind === 'hq' ? 'ШТАБ' : o.kind === 'tank' ? o.tank.cfg.short : o.label, x, o.kind === 'tank' ? y + rr + 9 : y - rr - 9);
       }
     }
   }
@@ -592,20 +710,21 @@ class Game {
     this.input.setAds(false);
     this.input.setCrouch(false);
     this.input.setProne(false);
+    this.maskOn = false;
     this.tankZoom = false;
     this.viewmodel.set(p.team, p.weapon.id, p.sight.optic);
     this.camYaw = p.vehicle ? p.vehicle.turretYaw : p.yaw;
     this.camPitch = p.vehicle ? 0.1 : 0;
     this.updateControls();
     $('rotate').hidden = !(this.touch && innerHeight > innerWidth);
-    if (p.vehicle) this.hud.announce('Вы в танке', true);
+    if (p.vehicle) this.hud.announce(p.vehicle.cfg.inside, true);
   }
   // Кнопки точек высадки под картой: то же, что выбор на карте, но нагляднее
   renderSpawnList(opts) {
     const box = $('spawnList');
     if (!box) return;
-    const tk = this.tanks[this.player.team];
-    const tankWait = tk && !tk.alive ? Math.max(0, Math.ceil(tk.respawnT)) : -1;
+    const dead = this.tanks.filter((tk) => tk.team === this.player.team && !tk.alive);
+    const tankWait = dead.map((tk) => tk.type + Math.max(0, Math.ceil(tk.respawnT))).join(',');
     const sig = opts.map((o) => o.kind + o.label + (o.tank && o.tank.driver ? '*' : '')).join('|') + '#' + (this.deploySel ? this.deploySel.kind + this.deploySel.label : '') + '#' + tankWait;
     if (box.dataset.sig === sig) return;
     box.dataset.sig = sig;
@@ -620,10 +739,10 @@ class Game {
     };
     for (const o of opts) {
       const sel = this.deploySel && o.kind === this.deploySel.kind && o.label === this.deploySel.label;
-      const label = o.kind === 'hq' ? 'Штаб' : o.kind === 'tank' ? (o.tank.driver ? 'Танк · бот уступит' : 'Танк') : o.label;
+      const label = o.kind === 'hq' ? 'Штаб' : o.kind === 'tank' ? o.label + (o.tank.driver ? ' · бот уступит' : '') : o.label;
       add(label, o, (sel ? 'on ' : '') + (o.kind === 'tank' ? 'tank' : ''));
     }
-    if (tankWait >= 0) add(`Танк — через ${tankWait} с`, null, 'tank');
+    for (const tk of dead) add(`${tk.cfg.name} — через ${Math.max(0, Math.ceil(tk.respawnT))} с`, null, 'tank');
   }
   updateControls() {
     const p = this.player;
@@ -874,11 +993,13 @@ class Game {
     if (ev.has('grenade')) p.input.grenade = true;
     if (ev.has('gadget')) p.input.gadget = true;
     if (ev.has('melee')) p.input.melee = true;
+    if (ev.has('mask')) { this.maskOn = !this.maskOn; if (this.maskOn) this.input.setAds(false); }
+    p.input.mask = !!this.maskOn;
     // Взаимодействие
     const ctx = this.interactTarget();
     this.ctxAction = ctx;
     if (ev.has('interact') && ctx) {
-      if (ctx.kind === 'tank' && ctx.tank.takeOver(p)) { this.updateControls(); this.camYaw = ctx.tank.turretYaw; this.camPitch = 0.1; this.input.setAds(false); this.hud.announce('Вы в танке', true); }
+      if (ctx.kind === 'tank' && ctx.tank.takeOver(p)) { this.updateControls(); this.camYaw = ctx.tank.turretYaw; this.camPitch = ctx.tank.cfg.static ? 0 : 0.1; this.input.setAds(false); this.maskOn = false; this.hud.announce(ctx.tank.cfg.inside, true); }
       else if (ctx.kind === 'revive') { this.reviveT = 0; this.reviving = ctx.target; }
     }
     if (this.reviving) {
@@ -934,9 +1055,10 @@ class Game {
       if (best) return { kind: 'revive', target: best, label: 'Поднять' };
     }
     for (const t of this.tanks) {
-      if (!t || t.team !== p.team || !t.alive) continue;
-      if (t.driver && (!t.driver.bot || t.driver.isPlayer)) continue;
-      if (Math.hypot(t.pos.x - p.pos.x, t.pos.z - p.pos.z) < 5) return { kind: 'tank', tank: t, label: 'Сесть в танк' };
+      if (!t || !t.alive) continue;
+      // Свою машину можно забрать у бота; орудие у флага — ничьё, пока свободно
+      if (t.driver ? t.driver.team !== p.team || !t.driver.bot || t.driver.isPlayer : !t.cfg.static && t.team !== p.team) continue;
+      if (Math.hypot(t.pos.x - p.pos.x, t.pos.z - p.pos.z) < t.cfg.radius + 2.7) return { kind: 'tank', tank: t, label: (t.cfg.use || 'Сесть') + ': ' + t.cfg.name.toLowerCase() };
     }
     return null;
   }
@@ -962,7 +1084,7 @@ class Game {
       consider(s, 'soldier', s.pos.x, s.aimY, s.pos.z, 0.6);
     }
     for (const t of this.tanks) {
-      if (!t || t.team === p.team || !t.alive) continue;
+      if (!t || t.team === p.team || t.team < 0 || !t.alive) continue;
       consider(t, 'tank', t.pos.x, t.pos.y + 1.4, t.pos.z, 2.6);
     }
     if (!best) return;
@@ -973,7 +1095,7 @@ class Game {
     o.spotAt = this.time;
     if (best.kind === 'tank' && o.driver) { o.driver.spottedUntil = Math.max(o.driver.spottedUntil, until); o.driver.spottedBy = p; }
     this.audio.spot();
-    if (fresh) this.addScore(p, SCORE.spot, best.kind === 'tank' ? 'Танк помечен' : 'Враг помечен');
+    if (fresh) this.addScore(p, SCORE.spot, best.kind === 'tank' ? o.cfg.name + ' помечен' : 'Враг помечен');
   }
   tankControl(dt, inp, k) {
     const p = this.player, t = p.vehicle, st = this.settings;
@@ -1040,22 +1162,43 @@ class Game {
       for (const v of this.tanks) {
         if (!v) continue;
         const dx = a.pos.x - v.pos.x, dz = a.pos.z - v.pos.z, d2 = dx * dx + dz * dz;
-        if (d2 < 6.25 && d2 > 1e-6 && Math.abs(a.pos.y - v.pos.y) < 2.5) {
+        const vr = v.cfg.radius + 0.2;
+        if (d2 < vr * vr && d2 > 1e-6 && Math.abs(a.pos.y - v.pos.y) < 2.5) {
           const d = Math.sqrt(d2);
-          a.pos.x = v.pos.x + (dx / d) * 2.5; a.pos.z = v.pos.z + (dz / d) * 2.5;
+          a.pos.x = v.pos.x + (dx / d) * vr; a.pos.z = v.pos.z + (dz / d) * vr;
         }
       }
     }
     for (const v of this.vehicles) v.update(dt);
-    for (const s of S) if (s.vehicle) { s.pos.copy(s.vehicle.pos); s.pos.y += 1.5; }
+    // Машины не проезжают друг сквозь друга (и сквозь подбитые остовы)
+    const TK = this.tanks;
+    for (let i = 0; i < TK.length; i++) for (let j = i + 1; j < TK.length; j++) {
+      const a = TK[i], b = TK[j];
+      const dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z, rr = a.cfg.radius + b.cfg.radius - 0.4, d2 = dx * dx + dz * dz;
+      if (d2 >= rr * rr || d2 < 1e-6) continue;
+      const d = Math.sqrt(d2), k = (rr - d) / d;
+      // Остовы и стационарные орудия с места не сдвинуть
+      const fa = a.alive && !a.cfg.static, fb = b.alive && !b.cfg.static;
+      const wa = fa ? (fb ? b.cfg.mass / (a.cfg.mass + b.cfg.mass) : 1) : 0, wb = fb ? (fa ? 1 - wa : 1) : 0;
+      a.pos.x -= dx * k * wa; a.pos.z -= dz * k * wa; b.pos.x += dx * k * wb; b.pos.z += dz * k * wb;
+      a.speed *= 0.9; b.speed *= 0.9;
+    }
+    for (const s of S) if (s.vehicle) { if (s.vehicle.cfg.static) s.vehicle.seat(s); else { s.pos.copy(s.vehicle.pos); s.pos.y += 1.5; } }
     for (let i = this.vehicles.length - 1; i >= 0; i--) if (!this.vehicles[i].alive && this.vehicles[i].kind === 'airship') this.vehicles.splice(i, 1);
     for (const pl of this.planes) pl.update(dt);
     this.combat.updateProjectiles(dt);
+    this.combat.updateClouds(dt);
+    for (let i = this.booms.length - 1; i >= 0; i--) {
+      const b = this.booms[i];
+      b.t -= dt;
+      if (b.t <= 0) { this.booms.splice(i, 1); this.combat.explode(b.x, b.y, b.z, 6.5, 120, null, 'blast', 140, 1.4, -1); }
+    }
     this.combat.updateDeployables(dt);
     if (this.state !== 'end') {
       this.updateFlags(dt);
       this.respawnBots(dt);
       this.director(dt);
+      this.updateWeather(dt);
     }
     this.world.update(dt);
     // Смерть игрока → экран развёртывания
@@ -1160,22 +1303,52 @@ class Game {
       this.audio.announce(false);
     }
   }
+  // К свободному орудию встаёт ближайший боец, если рядом нет врага вплотную, а дальше есть в кого стрелять
+  assignCrew(gun) {
+    if (this.time - gun.lastDriverExit < 14) return;
+    const pl = this.player;
+    if (pl.state === 'alive' && !pl.vehicle && Math.hypot(pl.pos.x - gun.pos.x, pl.pos.z - gun.pos.z) < 12) return;
+    let best = null, bd = 30, near = [Infinity, Infinity];
+    for (const s of this.soldiers) {
+      if (s.state !== 'alive' || s.inside) continue;
+      const d = Math.hypot(s.pos.x - gun.pos.x, s.pos.z - gun.pos.z);
+      near[s.team] = Math.min(near[s.team], d);
+      if (s.bot && s.bot.wantTank === gun) return;
+      if (!s.bot || s.isPlayer || s.squad || s.vehicle || s.bot.wantTank || d >= bd) continue;
+      bd = d; best = s;
+    }
+    if (!best) return;
+    const foe = near[1 - best.team];
+    if (foe < 16 || foe > 130) return;
+    best.bot.wantTank = gun;
+  }
   director(dt) {
     const T = this.teams;
     // Танкисты
     this.assignT -= dt;
     if (this.assignT <= 0) {
       this.assignT = 4;
-      for (let t = 0; t < 2; t++) {
-        const tk = this.tanks[t];
-        if (!tk || !tk.alive || tk.driver) continue;
-        const has = this.soldiers.some((s) => s.team === t && s.bot && s.bot.wantTank && s.state === 'alive' && !s.isPlayer);
+      for (const tk of this.tanks) {
+        if (!tk.alive || tk.driver) continue;
+        if (tk.cfg.static) { this.assignCrew(tk); continue; }
+        const t = tk.team;
+        const has = this.soldiers.some((s) => s.bot && s.bot.wantTank === tk && s.state === 'alive' && !s.isPlayer);
         if (has || this.time - tk.lastDriverExit < 10) continue;
         const pl = this.player;
         if (pl.team === t && pl.state === 'alive' && Math.hypot(pl.pos.x - tk.pos.x, pl.pos.z - tk.pos.z) < 25) continue;
-        const cands = this.soldiers.filter((s) => s.team === t && s.bot && !s.squad && !s.isPlayer && s.state === 'alive' && s.pos.distanceTo(tk.pos) < 60);
-        if (cands.length) pick(cands).bot.wantTank = true;
+        const cands = this.soldiers.filter((s) => s.team === t && s.bot && !s.bot.wantTank && !s.squad && !s.isPlayer && !s.vehicle && s.state === 'alive' && s.pos.distanceTo(tk.pos) < 60);
+        if (cands.length) pick(cands).bot.wantTank = tk;
       }
+    }
+    // Подкрепление: к середине боя обеим сторонам подходит тяжёлый танк
+    if (this.time > this.heavyAt && this.state === 'play') {
+      this.heavyAt = Infinity;
+      for (let t = 0; t < 2; t++) {
+        const hv = new Tank(this, t, this.vehSpawn(t, 'heavy'), 'heavy');
+        this.tanks.push(hv); this.vehicles.push(hv);
+      }
+      this.hud.announce('Подошли тяжёлые танки!', true);
+      this.audio.announce(true);
     }
     // Цеппелин для отстающих
     this.airT -= dt;
@@ -1282,6 +1455,14 @@ class Game {
       cam.position.set(Math.sin(t) * r, 85, Math.cos(t) * r);
       cam.lookAt(0, 0, 0);
       this.viewYaw = cam.rotation.y;
+    } else if (p.vehicle && p.vehicle.cfg.static) {
+      // У орудия — вид глазами стрелка поверх щита; «прицел» приближает
+      const v = p.vehicle;
+      v.turret.updateWorldMatrix(true, false);
+      cam.position.set(...v.cfg.eye).applyMatrix4(v.turret.matrixWorld);
+      cam.rotation.set(this.camPitch + sy * 0.4, this.camYaw + sx * 0.4, 0);
+      this.viewYaw = this.camYaw;
+      fov = this.tankZoom ? zoomFov(st.fov, 2.2) : st.fov;
     } else if (p.vehicle && this.tankZoom) {
       // Прицел наводчика: камера на башне, приближение ×3.5
       const v = p.vehicle;
@@ -1294,7 +1475,7 @@ class Game {
     } else if (p.vehicle) {
       const v = p.vehicle;
       dirFromYawPitch(this.camYaw, this.camPitch, _d);
-      const back = 9, up = 3.6;
+      const [back, up] = v.cfg.cam;
       const target = _v.set(v.pos.x, v.pos.y + 2.6, v.pos.z);
       cam.position.set(target.x - _d.x * back, target.y + up - _d.y * back, target.z - _d.z * back);
       const gy = this.world.height(cam.position.x, cam.position.z) + 0.8;
@@ -1378,7 +1559,7 @@ class Game {
     for (const c of this.hqCloth) this.waveCloth(c, t + 1);
     this.updateCamera(dt);
     const p = this.player;
-    const hideSelf = p.state !== 'dead' && !p.vehicle ? p : null;
+    const hideSelf = p.state !== 'dead' ? p : null;
     this.soldierR.update(this.soldiers, t, (this.state === 'play' || this.state === 'pause' || this.state === 'end') && p.state === 'alive' ? hideSelf : null, this.camera.position);
     const fp = (this.state === 'play' || this.state === 'end') && p.state === 'alive' && !p.vehicle;
     if (fp) {
@@ -1386,7 +1567,7 @@ class Game {
       if (!vc || vc.wid !== p.weapon.id || vc.optic !== p.sight.optic) this.viewmodel.set(p.team, p.weapon.id, p.sight.optic);
       this.viewmodel.update(dt, p, (this.lookDX || 0) * 0.004, (this.lookDY || 0) * 0.004, this.camera.aspect);
     }
-    const scopeKind = fp && p.scoped ? p.sight.reticle : this.state === 'play' && p.vehicle && this.tankZoom ? 'tank' : null;
+    const scopeKind = fp && p.scoped ? p.sight.reticle : this.state === 'play' && p.vehicle && this.tankZoom && !p.vehicle.cfg.static ? 'tank' : null;
     this.hud.setScope(scopeKind);
     if (!$('bigmap').hidden) { this.mapT -= dt; if (this.mapT <= 0) { this.mapT = 0.3; this.hud.drawFullMap($('bigmapCv')); } }
     this.render(fp && this.viewmodel.visible);
@@ -1437,6 +1618,16 @@ class Game {
     }
     const inTank = !!p.vehicle;
     if (document.body.classList.contains('in-tank') !== inTank) this.updateControls();
+    // Противогаз и газ
+    const live = p.state === 'alive' && !p.vehicle;
+    const mk = live ? p.maskT : 0;
+    if (this._mk !== mk) { this._mk = mk; $('maskOv').style.opacity = mk; const mb = document.querySelector('[data-btn="mask"]'); if (mb) mb.classList.toggle('on', mk > 0.5); }
+    const c = this.camera.position;
+    const gas = live && this.combat.clouds.length > 0 && this.combat.gasAt(c.x, c.y, c.z);
+    const gk = gas ? (mk > 0.6 ? 0.3 : 0.7) : 0;
+    if (this._gk !== gk) { this._gk = gk; $('gasOv').style.opacity = gk; }
+    const warn = gas && mk < 0.6;
+    if ($('gasWarn').hidden === warn) $('gasWarn').hidden = !warn;
     document.body.classList.toggle('downed', p.state === 'downed');
   }
 

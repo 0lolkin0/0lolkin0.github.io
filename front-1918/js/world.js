@@ -4,6 +4,7 @@ import { GeoBuilder, Noise2D, rng, clamp, smoothstep, lerp, segDist, TAU } from 
 import { THEMES } from './maps.js';
 import { limb } from './models.js';
 
+const _fq = new THREE.Quaternion(), _fa = new THREE.Vector3(), _fm = new THREE.Matrix4(), _fp = new THREE.Vector3();
 export const HALF = 150, SIZE = 300, PLAY = 141;
 const N = 300, V = N + 1;
 const G = 10, GN = SIZE / G; // сетка коллайдеров
@@ -23,6 +24,8 @@ class MultiBuilder {
   rock(rad, x, y, z, color, ...r) { this.get(color).rock(rad, x, y, z, color, ...r); return this; }
   get vertexCount() { let n = 0; for (const k in this.b) n += this.b[k].vertexCount; return n; }
 }
+// Оттенок листвы по породам (умножается на цвета листвы темы)
+const LEAF_TINT = { birch: [1.3, 1.18, 0.55], willow: [0.92, 1.08, 0.72], bush: [0.9, 1.0, 0.8], spruce: [0.72, 0.9, 0.8], sapling: [1.08, 1.12, 0.78] };
 const MAT_OPTS = {
   stone: { scale: 0.33, roughness: 0.92 }, brick: { scale: 0.5, roughness: 0.9 }, wood: { scale: 0.55, roughness: 0.85 },
   roof: { scale: 0.5, roughness: 0.78 }, cloth: { scale: 1.3, roughness: 0.97 }, concrete: { scale: 0.4, roughness: 0.95 },
@@ -52,6 +55,11 @@ export class World {
     this.smokers = [];
     this.windmills = [];
     this.trees = [];
+    this.puddles = [];
+    this.pieces = [];
+    this.pieceCells = Array.from({ length: GN * GN }, () => []);
+    this.kindMesh = {};
+    this.falling = [];
     this.group = new THREE.Group();
     this.C = {};
     for (const k of ['stone', 'brick', 'roof', 'wood', 'woodDark', 'canvas']) this.C[k] = this.theme[k];
@@ -65,6 +73,7 @@ export class World {
     this.buildFlagPoles();
     this.buildTrees();
     this.buildRocks();
+    this.buildForestProps();
     this.buildMeshes();
     this.buildNav();
     this.buildMinimap();
@@ -94,6 +103,7 @@ export class World {
       case 'fort': return [19, 19, 9];
       case 'gun': case 'cart': case 'tankwreck': case 'logs': return [3, 3, 2];
       case 'tent': return [3, 3, 2];
+      case 'tower': return [2.4, 2.4, 2];
       default: return null;
     }
   }
@@ -246,7 +256,7 @@ export class World {
       const cell = this.cells[j * GN + i];
       for (let k = 0; k < cell.length; k++) {
         const c = cell[k];
-        if (c.st === st) continue;
+        if (c.st === st || c.dead) continue;
         c.st = st;
         if (Math.abs(c.x - x) > c.ex + r || Math.abs(c.z - z) > c.ez + r) continue;
         if (fn(c) === false) return;
@@ -296,7 +306,7 @@ export class World {
     const cell = this.cells[j * GN + i];
     for (let k = 0; k < cell.length; k++) {
       const c = cell[k];
-      if (c.top <= g || c.top > y + STEP) continue;
+      if (c.dead || c.top <= g || c.top > y + STEP) continue;
       if (c.kind === 0) {
         const dx = x - c.x, dz = z - c.z;
         const lx = dx * c.c - dz * c.s, lz = dx * c.s + dz * c.c;
@@ -397,7 +407,7 @@ export class World {
         const cell = this.cells[gz * GN + gx];
         for (let k = 0; k < cell.length; k++) {
           const c = cell[k];
-          if (c.st === st) continue;
+          if (c.st === st || c.dead) continue;
           c.st = st;
           const t = this.rayCollider(c, ox, oy, oz, dx, dy, dz, best, tmp);
           if (t >= 0 && t < best) {
@@ -457,6 +467,165 @@ export class World {
     return false;
   }
 
+  // ---------- Разрушения ----------
+  // Разрушаемый кусок: вся геометрия и коллайдеры, построенные между beginPiece и endPiece
+  beginPiece() {
+    const snap = {};
+    for (const k in this.sb.b) snap[k] = this.sb.b[k].pos.length;
+    this._pc = { snap, col0: this.colliders.length };
+  }
+  // o: strength (1 — дерево, 2 — мешки и низкие стены, 3 — стены домов), x, z, rad, y0, y1, color, house, soft, explosive
+  endPiece(o) {
+    const pc = this._pc;
+    this._pc = null;
+    const ranges = [];
+    for (const k in this.sb.b) {
+      const a = pc.snap[k] || 0, e = this.sb.b[k].pos.length;
+      if (e > a) ranges.push({ kind: k, a, e });
+    }
+    const cols = this.colliders.slice(pc.col0);
+    if (!ranges.length || (!cols.length && !o.soft)) return null;
+    const piece = { ranges, cols, dead: false, ...o };
+    for (const c of cols) c.piece = piece;
+    this.pieces.push(piece);
+    const i = clamp(Math.floor((o.x + HALF) / G), 0, GN - 1), j = clamp(Math.floor((o.z + HALF) / G), 0, GN - 1);
+    this.pieceCells[j * GN + i].push(piece);
+    if (o.house) o.house.pieces.push(piece);
+    return piece;
+  }
+  forPieces(x, z, r, fn) {
+    const R = r + 5;
+    const i0 = clamp(Math.floor((x - R + HALF) / G), 0, GN - 1), i1 = clamp(Math.floor((x + R + HALF) / G), 0, GN - 1);
+    const j0 = clamp(Math.floor((z - R + HALF) / G), 0, GN - 1), j1 = clamp(Math.floor((z + R + HALF) / G), 0, GN - 1);
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const cell = this.pieceCells[j * GN + i];
+      for (let k = 0; k < cell.length; k++) if (!cell[k].dead) fn(cell[k]);
+    }
+  }
+  // Кусок исчезает: его вершины стягиваются в точку под землёй, коллайдеры выключаются, проход открывается
+  destroyPiece(pc, fx, fz) {
+    if (pc.dead) return;
+    pc.dead = true;
+    for (const rg of pc.ranges) {
+      const m = this.kindMesh[rg.kind];
+      if (!m) continue;
+      const attr = m.geometry.attributes.position, arr = attr.array;
+      for (let i = rg.a; i < rg.e; i += 3) { arr[i] = pc.x; arr[i + 1] = -60; arr[i + 2] = pc.z; }
+      attr.addUpdateRange(rg.a, rg.e - rg.a);
+      attr.needsUpdate = true;
+    }
+    for (const c of pc.cols) c.dead = true;
+    if (pc.cols.length) this.navUpdate(pc.x - pc.rad - 3, pc.z - pc.rad - 3, pc.x + pc.rad + 3, pc.z + pc.rad + 3);
+    if (this.onDestroy) this.onDestroy(pc, fx, fz);
+    // Дом: когда выбита треть стен — рушится крыша
+    const h = pc.house;
+    if (h && pc !== h.roof) {
+      h.gone++;
+      if (h.roof && !h.roof.dead && h.gone >= h.walls * 0.34) this.destroyPiece(h.roof, fx, fz);
+    }
+  }
+  // Взрыв: ломает укрытия и стены (по силе), валит деревья, оставляет воронку.
+  // power: 1 — граната (дерево), 2 — средний (мешки, низкие стены), 3 — снаряд или бомба (стены домов)
+  // keep — шанс, что прочный кусок или дерево устоит (взрывы ботов крушат не всё подряд, иначе к концу боя не остаётся укрытий)
+  blast(x, y, z, radius, power, crater = true, keep = 0) {
+    const list = [];
+    this.forPieces(x, z, radius, (pc) => {
+      if (pc.strength > power) return;
+      if (keep && pc.strength >= 2 && Math.random() < keep) return;
+      const reach = radius * (pc.strength >= 3 ? 0.42 : pc.strength === 2 ? 0.55 : 0.7);
+      if (Math.hypot(pc.x - x, pc.z - z) - pc.rad > reach) return;
+      if (y < pc.y0 - reach || y > pc.y1 + reach) return;
+      list.push(pc);
+    });
+    for (const pc of list) this.destroyPiece(pc, x, z);
+    if (power >= 2) {
+      const tr = [];
+      this.forNear(x, z, radius * 0.5, (c) => { if (c.tree && !c.tree.fallen && Math.hypot(c.x - x, c.z - z) < radius * 0.5) tr.push(c.tree); });
+      for (const t of tr) if (!keep || Math.random() >= keep) this.fellTree(t, t.x - x, t.z - z);
+    }
+    if (crater && y - this.height(x, z) < 1.5) {
+      const cr = power <= 1 ? 1.3 : clamp(radius * 0.4, 1.4, 6);
+      this.crater(x, z, cr, cr * 0.28);
+    }
+  }
+  // Техника наехала на препятствие: валит дерево или ломает укрытие, если хватает массы
+  crush(col, dx, dz, mass) {
+    if (col.tree) {
+      const tp = col.tree.type, need = tp === 'oak' || tp === 'willow' ? 3 : tp === 'sapling' ? 1 : 2;
+      if (mass >= need) this.fellTree(col.tree, dx, dz);
+    }
+    else if (col.piece && col.piece.strength <= mass) this.destroyPiece(col.piece, col.x - dx, col.z - dz);
+  }
+  // Заборы и прочее без коллайдеров ломаются, когда по ним проезжают
+  crushAround(x, z, r) {
+    let hit = null;
+    this.forPieces(x, z, r, (pc) => { if (pc.soft && Math.hypot(pc.x - x, pc.z - z) < r + pc.rad) (hit ||= []).push(pc); });
+    if (hit) for (const pc of hit) this.destroyPiece(pc, x, z);
+  }
+  // Воронка: продавливает рельеф, выворачивает землю, выжигает траву. Рядом с постройками остаётся только копоть
+  crater(x, z, rad, depth) {
+    if (Math.abs(x) > PLAY - 3 || Math.abs(z) > PLAY - 3 || !this.terrainMesh) return false;
+    let deform = !this.nearFootprint(x, z, rad + 1) && !this.def.flags.some((f) => Math.hypot(x - f.x, z - f.z) < rad + 3.5);
+    if (deform) this.forNear(x, z, rad + 1.2, (c) => { if (!c.tree) { deform = false; return false; } });
+    // Залитую водой воронку не углубляем — вода осталась бы висеть над дном
+    if (deform && this.puddles.some((pd) => Math.hypot(x - pd.x, z - pd.z) < pd.r + rad * 1.2)) deform = false;
+    const R = rad * 1.7;
+    const H = this.H, B = this.B, T = this.trenchDist;
+    const at = this.terrainMesh.geometry.attributes;
+    const pos = at.position.array, col = at.color.array, spl = at.splat.array, nor = at.normal.array;
+    let k0 = Infinity, k1 = -1;
+    this.forEachVertex(x - R, z - R, x + R, z + R, (k, vx, vz) => {
+      const d = Math.hypot(vx - x, vz - z);
+      if (d > R) return;
+      if (deform && T[k] > 2.4) {
+        let v = 0;
+        if (d < rad) v -= depth * (1 - (d / rad) * (d / rad));
+        const q = (d - rad) / (0.32 * rad);
+        v += depth * 0.25 * Math.exp(-q * q);
+        const nh = Math.max(H[k] + v, B[k] - 3.2);
+        H[k] = nh; pos[k * 3 + 1] = nh;
+      }
+      const sc = 1 - smoothstep(rad * 0.45, R, d);
+      if (sc > 0) {
+        const dk = 1 - 0.5 * sc;
+        for (let c = 0; c < 3; c++) col[k * 3 + c] = Math.max(0.3, col[k * 3 + c] * dk);
+        const take = spl[k * 4] * sc;
+        spl[k * 4] -= take; spl[k * 4 + 1] += take;
+        this.grassW[k] *= 1 - sc;
+      }
+      if (k < k0) k0 = k;
+      if (k > k1) k1 = k;
+    });
+    if (k1 < 0) return false;
+    // Нормали в изменённой области (с запасом в один ряд)
+    k0 = Math.max(0, k0 - V - 1); k1 = Math.min(V * V - 1, k1 + V + 1);
+    if (deform) {
+      this.forEachVertex(x - R - 1, z - R - 1, x + R + 1, z + R + 1, (k) => {
+        const i = k % V, j = (k / V) | 0;
+        const nx = H[i > 0 ? k - 1 : k] - H[i < N ? k + 1 : k], nz = H[j > 0 ? k - V : k] - H[j < N ? k + V : k];
+        const l = Math.hypot(nx, 2, nz);
+        nor[k * 3] = nx / l; nor[k * 3 + 1] = 2 / l; nor[k * 3 + 2] = nz / l;
+      });
+    }
+    for (const [a, n] of [[at.position, 3], [at.normal, 3], [at.color, 3], [at.splat, 4]]) {
+      a.addUpdateRange(k0 * n, (k1 - k0 + 1) * n);
+      a.needsUpdate = true;
+    }
+    if (this.onCrater) this.onCrater(x, z, R, deform);
+    return deform;
+  }
+  // Дерево падает в сторону (dx, dz): коллайдер выключается сразу, само падение анимируется в update
+  fellTree(t, dx, dz) {
+    if (t.fallen || !t.mesh || !t.col) return;
+    t.fallen = true;
+    t.col.dead = true;
+    const l = Math.hypot(dx, dz) || 1;
+    t.fall = { dx: dx / l, dz: dz / l, a: 0, v: 0.3 + Math.random() * 0.3 };
+    this.falling.push(t);
+    this.navUpdate(t.x - 2, t.z - 2, t.x + 2, t.z + 2);
+    if (this.onTreeFall) this.onTreeFall(t, false);
+  }
+
   // ---------- Постройки ----------
   L(st, lx, lz) {
     const c = Math.cos(st.yaw || 0), s = Math.sin(st.yaw || 0);
@@ -475,13 +644,19 @@ export class World {
       const mx = ax + ux * seg * (k + 0.5), mz = az + uz * seg * (k + 0.5);
       const [wx, wz] = this.L(st, mx, mz);
       const isDoor = opt.door !== undefined && k === Math.floor(opt.door * n);
+      // Каждый кусок стены дома можно выбить снарядом (деревянные — и чем полегче)
+      const rec = opt.house;
+      let top = h, bottom = y0;
+      if (rec) this.beginPiece();
+      body: {
       if (isDoor) {
         if (ruin < 0.5 && h > 2.6) this.solid(seg, h - 2.3, t, wx, y0 + 2.3, wz, wyaw, color, opt.mat);
-        continue;
+        bottom = y0 + 2.3;
+        break body;
       }
       if (ruin && r() < ruin * 0.3) {
         if (r() < 0.5) this.rubble(wx, wz, y0, color);
-        continue;
+        break body;
       }
       let sh = h * (ruin ? 1 - r() * ruin * 0.75 : 1);
       sh = Math.max(0.6, sh);
@@ -499,6 +674,9 @@ export class World {
           this.sb.box(bw, bh, t * 0.96, wx + c * off, y0 + sh + bh / 2 - 0.05, wz - si * off, color, wyaw, 0, (r() - 0.5) * 0.3, 0.1);
         }
       }
+      top = sh;
+      }
+      if (rec) this.endPiece({ strength: opt.mat === 'wood' ? 2 : 3, x: wx, z: wz, rad: seg / 2 + 0.15, y0: bottom, y1: y0 + top, color, house: rec });
     }
     // Дверная коробка
     if (opt.door !== undefined && (opt.ruin || 0) < 0.6) {
@@ -543,7 +721,8 @@ export class World {
     const { w, d, h } = st;
     const y0 = this.height(st.x, st.z) - 0.05;
     const t = 0.4, ruin = st.ruin || 0;
-    const o = { ruin, mat };
+    const rec = { pieces: [], gone: 0, roof: null, walls: 0 };
+    const o = { ruin, mat, house: rec };
     this.wallLine(st, -w / 2, d / 2, w / 2, d / 2, y0, h, t, color, { ...o, door: 0.5 });
     this.wallLine(st, -w / 2, -d / 2, w / 2, -d / 2, y0, h, t, color, o);
     this.wallLine(st, -w / 2, -d / 2 + t / 2, -w / 2, d / 2 - t / 2, y0, h, t, color, { ...o, door: ruin > 0.5 ? undefined : 0.3 });
@@ -559,6 +738,9 @@ export class World {
         }
       }
     }
+    // Крыша (или уцелевшие балки) держится на стенах: выбьют треть стен — обрушится
+    rec.walls = rec.pieces.length;
+    this.beginPiece();
     if (st.roof && ruin < 0.5) {
       this.roof(st, w, d, y0 + h, 2.6, this.C.roof);
       this.sb.box(0.16, 0.14, d + 0.8, st.x, y0 + h + 2.62, st.z, this.C.woodDark, st.yaw || 0);
@@ -573,6 +755,7 @@ export class World {
         this.sb.box(0.18, 0.2, d, bx, y0 + h * 0.85, bz, this.C.woodDark, st.yaw || 0, 0, this.rand.range(-0.2, 0.2));
       }
     }
+    rec.roof = this.endPiece({ strength: 9, x: st.x, z: st.z, rad: Math.hypot(w, d) / 2, y0: y0 + h * 0.8, y1: y0 + h + 3, color: st.roof && ruin < 0.5 ? this.C.roof : this.C.woodDark, house: rec, soft: true, roofPiece: true });
     for (let i = 0; i < 3; i++) {
       const [rx, rz] = this.L(st, this.rand.range(-w / 2, w / 2), this.rand.range(-d / 2, d / 2));
       if (ruin > 0.3) this.rubble(rx, rz, y0, color);
@@ -583,7 +766,20 @@ export class World {
     if (!this._bag) this._bag = new THREE.IcosahedronGeometry(1, 1);
     this.sb.add(this._bag, GeoBuilder.mat(x, y, z, 0, yaw, (Math.random() - 0.5) * 0.08, half, 0.14, 0.23), col, 0.1);
   }
+  // Длинная стенка из мешков делится на секции по три метра — каждую можно разбить отдельно
   sandbags(x, z, yaw, len, rows = 3) {
+    if (len > 3.7) {
+      const n = Math.ceil(len / 3.1), part = len / n, c = Math.cos(yaw), s = Math.sin(yaw);
+      let col = null;
+      for (let i = 0; i < n; i++) { const lx = -len / 2 + part * (i + 0.5); col = this.sandbags(x + c * lx, z - s * lx, yaw, part + 0.08, rows); }
+      return col;
+    }
+    this.beginPiece();
+    const col = this.sandbagRow(x, z, yaw, len, rows);
+    this.endPiece({ strength: 2, x, z, rad: len / 2, y0: col.y, y1: col.top, color: this.def.theme === 'winter' ? 0xa79f8a : 0x9a8a62 });
+    return col;
+  }
+  sandbagRow(x, z, yaw, len, rows) {
     const c = Math.cos(yaw), s = Math.sin(yaw);
     let y0 = Infinity;
     for (const k of [-0.5, 0, 0.5]) y0 = Math.min(y0, this.height(x + c * len * k, z - s * len * k));
@@ -614,14 +810,18 @@ export class World {
         }
         case 'shed': {
           const { w, d, h } = st;
-          this.wallLine(st, -w / 2, -d / 2, w / 2, -d / 2, y, h, 0.3, C.wood, { mat: 'wood', windows: false });
-          this.wallLine(st, -w / 2, -d / 2, -w / 2, d / 2, y, h, 0.3, C.wood, { mat: 'wood', windows: false });
-          this.wallLine(st, w / 2, -d / 2, w / 2, d / 2, y, h, 0.3, C.wood, { mat: 'wood', windows: false });
+          const rec = { pieces: [], gone: 0, roof: null, walls: 0 }, wo = { mat: 'wood', windows: false, house: rec };
+          this.wallLine(st, -w / 2, -d / 2, w / 2, -d / 2, y, h, 0.3, C.wood, wo);
+          this.wallLine(st, -w / 2, -d / 2, -w / 2, d / 2, y, h, 0.3, C.wood, wo);
+          this.wallLine(st, w / 2, -d / 2, w / 2, d / 2, y, h, 0.3, C.wood, wo);
+          rec.walls = rec.pieces.length;
+          this.beginPiece();
           for (const px of [-w / 2, w / 2]) {
             const [x, z] = this.L(st, px, d / 2 - 0.2);
             this.solid(0.3, h, 0.3, x, y, z, yaw, C.woodDark, 'wood');
           }
           this.roof(st, w, d, y + h, 1.6, C.roof);
+          rec.roof = this.endPiece({ strength: 9, x: st.x, z: st.z, rad: Math.hypot(w, d) / 2, y0: y + h * 0.8, y1: y + h + 2, color: C.roof, house: rec, soft: true, roofPiece: true });
           break;
         }
         case 'church': this.church(st, y); break;
@@ -646,8 +846,10 @@ export class World {
           for (let i = 0; i < n; i++) {
             const lx = -st.len / 2 + seg * (i + 0.5);
             const [x, z] = this.L(st, lx, 0);
-            const h = st.h * (r() < 0.25 ? r.range(0.5, 0.85) : 1);
-            this.solid(seg, h, 0.55, x, this.height(x, z) - 0.1, z, yaw, C.stone, 'stone');
+            const h = st.h * (r() < 0.25 ? r.range(0.5, 0.85) : 1), gy = this.height(x, z) - 0.1;
+            this.beginPiece();
+            this.solid(seg, h, 0.55, x, gy, z, yaw, C.stone, 'stone');
+            this.endPiece({ strength: 2, x, z, rad: seg / 2, y0: gy, y1: gy + h, color: C.stone });
           }
           break;
         }
@@ -659,13 +861,18 @@ export class World {
             for (let i = 0; i <= n; i++) {
               const x = ax + ((bx - ax) * i) / n, z = az + ((bz - az) * i) / n;
               if (r() < 0.15) continue;
-              this.sb.box(0.12, 1.1, 0.12, x, this.height(x, z) + 0.5, z, C.woodDark, fy, r.range(-0.15, 0.15), 0, 0.1);
+              const fgy = this.height(x, z);
+              this.beginPiece();
+              fence: {
+              this.sb.box(0.12, 1.1, 0.12, x, fgy + 0.5, z, C.woodDark, fy, r.range(-0.15, 0.15), 0, 0.1);
               if (i < n && r() < 0.8) {
                 const mx = x + (bx - ax) / n / 2, mz = z + (bz - az) / n / 2;
                 const hy = this.height(mx, mz);
                 this.sb.box(len / n, 0.08, 0.05, mx, hy + 0.85, mz, C.wood, fy, 0, r.range(-0.08, 0.08), 0.1);
                 if (r() < 0.6) this.sb.box(len / n, 0.08, 0.05, mx, hy + 0.45, mz, C.wood, fy, 0, r.range(-0.08, 0.08), 0.1);
               }
+              }
+              this.endPiece({ strength: 1, x: x + (bx - ax) / n / 2, z: z + (bz - az) / n / 2, rad: len / n / 2 + 0.2, y0: fgy, y1: fgy + 1.1, color: C.wood, soft: true });
             }
           }
           break;
@@ -678,23 +885,30 @@ export class World {
             const stack = i > 2 && r() < 0.6;
             const gy = stack ? this.groundAt(x, z, y + 2) : this.height(x, z) - 0.05;
             const ry = r() * 3;
+            this.beginPiece();
             this.solid(s, s, s, x, gy, z, ry, i % 2 ? C.wood : C.woodDark, 'wood', 0.12);
             for (const k of [-0.42, 0.42]) this.sb.box(s * 1.02, 0.08, s * 1.02, x, gy + s / 2 + k * s, z, C.woodDark, ry, 0, 0, 0.1);
+            this.endPiece({ strength: 1, x, z, rad: s * 0.6, y0: gy, y1: gy + s, color: C.wood });
           }
           break;
         }
         case 'shells': {
+          // Штабель снарядов: от взрыва рядом детонирует
+          this.beginPiece();
           this.solid(1.6, 0.15, 1.2, st.x, y, st.z, yaw, C.woodDark, 'wood');
           for (let i = 0; i < 12; i++) {
             const x = st.x + ((i % 4) - 1.5) * 0.35, z = st.z + (Math.floor(i / 4) - 1) * 0.35;
             this.sb.cyl(0.11, 0.13, 0.7, 6, x, y + 0.5, z, 0x9a7b3f);
           }
+          this.endPiece({ strength: 1, x: st.x, z: st.z, rad: 0.9, y0: y, y1: y + 0.9, color: 0x9a7b3f, explosive: true });
           break;
         }
         case 'hay': {
+          this.beginPiece();
           this.sb.cyl(1.05, 1.15, 1.3, 8, st.x, y + 0.6, st.z, 0xb3974f, 0, r() * 3);
           this.sb.dome(1.05, st.x, y + 1.25, st.z, 0xc0a45a, 1, 0.7, 1);
           this.addCyl(st.x, st.z, y, y + 1.9, 1.1, 'sand');
+          this.endPiece({ strength: 1, x: st.x, z: st.z, rad: 1.1, y0: y, y1: y + 1.9, color: 0xb3974f, hay: true });
           break;
         }
         case 'well': {
@@ -707,6 +921,7 @@ export class World {
         }
         case 'cart': {
           const [x, z] = [st.x, st.z];
+          this.beginPiece();
           this.sb.box(1.4, 0.45, 2.6, x, y + 0.85, z, C.wood, yaw);
           for (const s of [-1, 1]) {
             const [wx, wz] = this.L(st, s * 0.8, 0.2);
@@ -715,6 +930,7 @@ export class World {
           const [sx, sz] = this.L(st, 0, -2.2);
           this.sb.box(0.9, 0.08, 1.8, sx, y + 0.55, sz, C.woodDark, yaw, -0.3);
           this.addBox(x, z, y, y + 1.1, 0.75, 1.3, yaw, 'wood');
+          this.endPiece({ strength: 1, x, z, rad: 1.4, y0: y, y1: y + 1.2, color: C.wood });
           break;
         }
         case 'gun': this.fieldGun(st, y); break;
@@ -732,6 +948,45 @@ export class World {
           break;
         }
         case 'tankwreck': this.tankWreck(st, y); break;
+        case 'tent': {
+          // Палатка: брезентовая двускатная, с растяжками и колышками; рвётся от любого взрыва
+          const w = 3.0, d = 4.0, h = 2.0;
+          this.beginPiece();
+          this.roof(st, w - 0.9, d - 0.7, y - 0.05, h, C.canvas);
+          for (const sz of [-1, 1]) {
+            const [px, pz] = this.L(st, 0, sz * (d / 2 + 0.05));
+            this.sb.box(0.07, h + 0.25, 0.07, px, y + h / 2 + 0.1, pz, C.woodDark, yaw);
+            for (const sx of [-1, 1]) {
+              const [kx, kz] = this.L(st, sx * (w / 2 + 0.5), sz * (d / 2 - 0.3));
+              this.sb.box(0.05, 0.3, 0.05, kx, this.height(kx, kz) + 0.1, kz, C.woodDark, yaw, 0.3 * sz, 0);
+            }
+          }
+          this.endPiece({ strength: 1, x: st.x, z: st.z, rad: 2.2, y0: y, y1: y + h, color: C.canvas });
+          break;
+        }
+        case 'tower': {
+          // Наблюдательная вышка: четыре столба, раскосы, площадка с перилами и крыша
+          const h = 6.2, half = 1.25;
+          for (const [lx, lz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+            const [x, z] = this.L(st, lx * half, lz * half);
+            this.solid(0.24, h + 2.3, 0.24, x, this.height(x, z) - 0.1, z, yaw, C.woodDark, 'wood');
+          }
+          this.sb.box(half * 2 + 0.9, 0.14, half * 2 + 0.9, st.x, y + h, st.z, C.wood, yaw);
+          for (const [lx, lz, len, ry] of [[0, -1, 1, 0], [0, 1, 1, 0], [-1, 0, 1, Math.PI / 2], [1, 0, 1, Math.PI / 2]]) {
+            const [x, z] = this.L(st, lx * (half + 0.4), lz * (half + 0.4));
+            this.sb.box(half * 2 + 0.9, 0.1, 0.08, x, y + h + 1.0, z, C.wood, yaw + ry);
+            this.sb.box(half * 2 + 0.9, 0.5, 0.05, x, y + h + 0.35, z, C.woodDark, yaw + ry, 0, 0, 0.1);
+            // Раскосы между столбами
+            const [bx, bz] = this.L(st, lx * half, lz * half);
+            for (const [yy, tilt] of [[1.7, 0.72], [4.4, -0.72]]) this.sb.box(0.1, 0.1, half * 2.9, bx, y + yy, bz, C.wood, yaw + ry + Math.PI / 2, tilt, 0, 0.1);
+          }
+          this.roof(st, half * 2 + 0.4, half * 2 + 0.4, y + h + 2.2, 1.3, C.roof);
+          // Лестница
+          const [ax, az] = this.L(st, 0, half + 0.55);
+          for (const sx of [-0.28, 0.28]) { const [rx, rz] = this.L(st, sx, half + 0.55); this.sb.box(0.07, h + 0.4, 0.07, rx, y + h / 2, rz, C.woodDark, yaw, 0.08, 0); }
+          for (let k = 0; k < 13; k++) this.sb.box(0.6, 0.05, 0.05, ax, y + 0.4 + k * 0.45, az, C.wood, yaw);
+          break;
+        }
       }
     }
   }
@@ -995,12 +1250,19 @@ export class World {
         if (this.def.flags.some((f) => Math.hypot(x - f.x, z - f.z) < 7)) continue;
         if (this.trenchDist[clamp(Math.round(z + HALF), 0, N) * V + clamp(Math.round(x + HALF), 0, N)] < 3) continue;
         if (this.roadDist(x, z) < 3) continue;
-        if (this.trees.some((t) => Math.abs(t.x - x) < 2.2 && Math.abs(t.z - z) < 2.2)) continue;
+        const gap = spec.type === 'bush' || spec.type === 'sapling' ? 1.3 : 2.2;
+        if (this.trees.some((t) => Math.abs(t.x - x) < gap && Math.abs(t.z - z) < gap)) continue;
         const s = r.range(0.8, 1.3);
         const y = this.height(x, z) - 0.2;
-        this.trees.push({ x, z, y, s, type: spec.type });
-        (types[spec.type] ||= []).push(this.trees[this.trees.length - 1]);
-        this.addCyl(x, z, y, y + 7 * s, 0.32 * s, 'wood');
+        const tree = { x, z, y, s, type: spec.type, fallen: false };
+        this.trees.push(tree);
+        (types[spec.type] ||= []).push(tree);
+        // Кусты проходимы; молодое деревце — тонкий ствол, который свалит даже броневик
+        if (spec.type !== 'bush') {
+          const thin = spec.type === 'sapling';
+          tree.col = this.addCyl(x, z, y, y + (thin ? 3 : 7) * s, (thin ? 0.1 : 0.32) * s, 'wood');
+          tree.col.tree = tree;
+        }
         placed++;
       }
     }
@@ -1010,6 +1272,13 @@ export class World {
     const needleMat = this.gfx ? this.gfx.foliage('needles') : this.mat('leaves');
     const plane = new THREE.PlaneGeometry(1, 1).toNonIndexed();
     const rr = rng(4242);
+    // Нормали карточек — наружу от оси кроны и вверх: листва освещается объёмно с обеих сторон
+    const outNormals = (b, start, cx, cy, cz, up) => {
+      for (let k = start; k < b.pos.length; k += 3) {
+        const nx = b.pos[k] - cx, nz = b.pos[k + 2] - cz, l = Math.hypot(nx, up, nz) || 1;
+        b.norm[k] = nx / l; b.norm[k + 1] = up / l; b.norm[k + 2] = nz / l;
+      }
+    };
     // Пучок карточек листвы; нормали смотрят от центра кроны, чтобы листва освещалась объёмно
     const clump = (b, cx, cy, cz, rad, n, size) => {
       const start = b.pos.length;
@@ -1071,6 +1340,67 @@ export class World {
           const nx = crown.pos[k], nz = crown.pos[k + 2], l = Math.hypot(nx, 0.8, nz);
           crown.norm[k] = nx / l; crown.norm[k + 1] = 0.8 / l; crown.norm[k + 2] = nz / l;
         }
+      } else if (type === 'spruce') {
+        // Ель: плотные ярусы лап конусом почти до земли
+        crownMat = needleMat;
+        limb(trunk, 0, 0, 0, 0, 9.6, 0, 0.24, 0.04, trunkCol, 9);
+        for (let i = 0; i < 9; i++) {
+          const y = 1.0 + i * 0.95, R = 2.35 * (1 - i / 10.5), n = Math.max(5, 10 - i);
+          for (let k = 0; k < n; k++) {
+            const a = (k / n) * TAU + i * 0.55 + rr() * 0.25, ca = Math.cos(a), sa = Math.sin(a);
+            crown.add(plane, GeoBuilder.mat(ca * R * 0.5, y - 0.28, sa * R * 0.5, -(Math.PI / 2 + 0.5 + rr() * 0.12), Math.atan2(-ca, -sa), Math.PI, R * 0.95, R * 1.15, 1), 0xffffff, 0.12);
+          }
+        }
+        for (let k = 0; k < 3; k++) crown.add(plane, GeoBuilder.mat(0, 9.4, 0, 0, (k * Math.PI) / 3, Math.PI, 0.9, 1.5, 1), 0xffffff, 0.08);
+        outNormals(crown, 0, 0, 0, 0, 0.8);
+      } else if (type === 'birch') {
+        // Берёза: белый ствол с тёмными отметинами, лёгкая свисающая крона
+        limb(trunk, 0, 0, 0, 0.12, 7.6, 0.06, 0.2, 0.06, 0xd9d5c8, 9);
+        for (let k = 0; k < 9; k++) {
+          const h = 0.5 + k * 0.75 + rr() * 0.3, a = rr() * TAU, rad = 0.2 - h * 0.017;
+          trunk.box(0.09, 0.05 + rr() * 0.05, 0.03, Math.cos(a) * rad + 0.12 * h / 7.6, h, Math.sin(a) * rad + 0.06 * h / 7.6, 0x2a2622, Math.PI / 2 - a, 0, 0, 0.1);
+        }
+        const ends = [];
+        for (let k = 0; k < 6; k++) {
+          const a = (k / 6) * TAU + rr() * 0.6, h = 3.2 + k * 0.62, L = 1.1 + rr() * 0.7;
+          const ex = Math.cos(a) * L, ez = Math.sin(a) * L, ey = h + 0.9 + rr() * 0.5;
+          limb(trunk, 0.06, h, 0.03, ex, ey, ez, 0.06, 0.02, 0xcfcabb, 5);
+          ends.push([ex, ey, ez]);
+        }
+        for (const [x, y, z] of ends) { clump(crown, x, y, z, 1.0, 9, 1.15); clump(crown, x * 1.25, y - 0.7, z * 1.25, 0.7, 5, 1.0); }
+        clump(crown, 0.1, 7.3, 0.05, 1.1, 10, 1.2);
+      } else if (type === 'willow') {
+        // Ива: толстый наклонный ствол, раскидистая крона и свисающие пряди
+        limb(trunk, 0, 0, 0, 0.3, 2.6, 0.1, 0.5, 0.34, trunkCol, 12);
+        const ends = [];
+        for (let k = 0; k < 6; k++) {
+          const a = (k / 6) * TAU + rr() * 0.4, L = 2.0 + rr() * 0.9;
+          const ex = 0.3 + Math.cos(a) * L, ez = 0.1 + Math.sin(a) * L, ey = 4.6 + rr() * 0.8;
+          limb(trunk, 0.3, 2.5, 0.1, ex * 0.6, ey, ez * 0.6, 0.2, 0.09, trunkCol, 7);
+          limb(trunk, ex * 0.6, ey, ez * 0.6, ex, ey - 0.3, ez, 0.09, 0.03, trunkCol, 5);
+          ends.push([ex, ey, ez]);
+        }
+        clump(crown, 0.3, 5.4, 0.1, 2.0, 16, 1.7);
+        for (const [x, y, z] of ends) {
+          clump(crown, x, y, z, 1.1, 8, 1.4);
+          const st0 = crown.pos.length;
+          for (let q2 = 0; q2 < 5; q2++) {
+            const len = 2.2 + rr() * 1.6;
+            crown.add(plane, GeoBuilder.mat(x + (rr() - 0.5) * 1.6, y - len / 2 + 0.2, z + (rr() - 0.5) * 1.6, 0, rr() * TAU, 0, 0.9, len, 1), 0xffffff, 0.14);
+          }
+          outNormals(crown, st0, 0.3, 0, 0.1, 0.7);
+        }
+      } else if (type === 'bush') {
+        // Куст: несколько прутьев и плотная листва у самой земли
+        for (let k = 0; k < 5; k++) { const a = rr() * TAU, L = 0.5 + rr() * 0.5; limb(trunk, 0, 0, 0, Math.cos(a) * L, 0.9 + rr() * 0.6, Math.sin(a) * L, 0.035, 0.012, trunkCol, 4); }
+        clump(crown, 0, 0.85, 0, 1.15, 16, 1.25);
+        clump(crown, 0.5, 0.6, 0.3, 0.8, 8, 1.0);
+        clump(crown, -0.45, 0.65, -0.3, 0.8, 8, 1.0);
+      } else if (type === 'sapling') {
+        limb(trunk, 0, 0, 0, 0.08, 3.4, 0.03, 0.07, 0.02, trunkCol, 6);
+        for (let k = 0; k < 3; k++) { const a = rr() * TAU, h = 1.6 + k * 0.5; limb(trunk, 0.04, h, 0, Math.cos(a) * 0.5, h + 0.5, Math.sin(a) * 0.5, 0.025, 0.01, trunkCol, 4); }
+        clump(crown, 0.06, 2.9, 0.02, 0.85, 10, 0.95);
+        clump(crown, 0, 2.2, 0, 0.6, 5, 0.8);
       } else if (type === 'deadpine') {
         limb(trunk, 0, 0, 0, 0, 7.5, 0, 0.26, 0.05, 0x3d342c, 8);
         for (let i = 0; i < 9; i++) {
@@ -1086,10 +1416,13 @@ export class World {
         e.set(r.range(-0.05, 0.05), r() * TAU, r.range(-0.05, 0.05));
         q.setFromEuler(e);
         m4.compose(p.set(t.x, t.y, t.z), q, sc.set(t.s, t.s * r.range(0.9, 1.15), t.s));
+        t.q = q.clone(); t.sc = sc.clone(); t.mesh = tm; t.crown = cm; t.i = i;
         tm.setMatrixAt(i, m4);
         if (cm) {
           cm.setMatrixAt(i, m4);
           const lc = leafCols[i % leafCols.length].clone();
+          const lt = LEAF_TINT[type];
+          if (lt) { lc.r *= lt[0]; lc.g *= lt[1]; lc.b *= lt[2]; }
           if (this.def.theme === 'winter') lc.lerp(new THREE.Color(0xffffff), 0.12);
           cm.setColorAt(i, lc);
         }
@@ -1113,6 +1446,39 @@ export class World {
       this.addCyl(x, z, y - 1, y + s * 0.9, s * 0.95, 'stone');
       placed++;
     }
+  }
+  // Пни и поваленные стволы
+  buildForestProps() {
+    const r = this.rand, d = this.def;
+    const place = (n, pad, fn) => {
+      let placed = 0, tries = 0;
+      while (placed < n && tries++ < n * 30) {
+        const x = r.range(-PLAY + 5, PLAY - 5), z = r.range(-PLAY + 5, PLAY - 5);
+        if (this.nearFootprint(x, z, pad) || this.roadDist(x, z) < pad) continue;
+        if (this.def.flags.some((f) => Math.hypot(x - f.x, z - f.z) < 6)) continue;
+        if (this.trenchDist[clamp(Math.round(z + HALF), 0, N) * V + clamp(Math.round(x + HALF), 0, N)] < 3.5) continue;
+        if (this.blockedAt(x, z, this.height(x, z), pad * 0.6)) continue;
+        fn(x, z, this.height(x, z));
+        placed++;
+      }
+    };
+    place(d.stumps || 0, 2, (x, z, y) => {
+      const rad = r.range(0.28, 0.5), h = r.range(0.35, 0.8);
+      this.sb.cyl(rad * 0.9, rad * 1.15, h, 9, x, y + h / 2 - 0.05, z, 0x4b4036, 0, r() * 3, 0, 0.08);
+      this.sb.cyl(rad * 0.84, rad * 0.84, 0.03, 9, x, y + h - 0.03, z, 0x7a5c3c, 0, 0, 0, 0.08);
+      this.addCyl(x, z, y - 0.2, y + h, rad, 'wood');
+    });
+    place(d.fallen || 0, 4, (x, z, y) => {
+      const L = r.range(3.5, 6.5), rad = r.range(0.2, 0.34), yaw = r() * TAU;
+      this.beginPiece();
+      this.sb.cyl(rad * 0.8, rad, L, 8, x, y + rad * 0.85, z, 0x4b4036, 0, yaw, Math.PI / 2, 0.08);
+      for (let k = 0; k < 3; k++) {
+        const t = r.range(-0.4, 0.4) * L, bx = x + Math.cos(yaw) * t, bz = z - Math.sin(yaw) * t;
+        this.sb.cyl(0.03, 0.05, 0.9, 5, bx, y + rad * 1.5 + 0.3, bz, 0x4b4036, r.range(-0.6, 0.6), 0, r.range(-0.6, 0.6), 0.08);
+      }
+      this.addBox(x, z, y - 0.2, y + rad * 1.8, L / 2, rad, yaw, 'wood');
+      this.endPiece({ strength: 2, x, z, rad: L / 2, y0: y, y1: y + rad * 2, color: 0x5b4a36 });
+    });
   }
   roadDist(x, z) {
     let best = 99;
@@ -1147,9 +1513,21 @@ export class World {
     const i = clamp(Math.round(x + HALF), 0, N), j = clamp(Math.round(z + HALF), 0, N);
     return this.grassW[j * V + i];
   }
+  // Что растёт в точке: 0 — трава, 1 — высокая трава куртинами, 2 — цветы полянами (маки), 3 — папоротник и бурьян
+  coverAt(x, z, rv) {
+    const n = this.noise, th = this.def.theme;
+    if (th === 'winter') return rv < 0.25 ? 1 : rv < 0.33 ? 2 : rv < 0.4 ? 3 : 0;
+    const patch = n.get(x * 0.045 + 77, z * 0.045 - 31), tall = n.get(x * 0.06 - 13, z * 0.06 + 55);
+    if (patch > 0.36 && rv < 0.55) return 2;
+    if (rv < 0.025) return 2;
+    if (tall > 0.22 && rv > 0.5) return 1;
+    if (rv > (th === 'forest' ? 0.7 : 0.94)) return 3;
+    return 0;
+  }
   tintAt(x, z) {
     if (this.def.theme === 'winter') return [0.62, 0.52, 0.34];
     const n = this.noise.get(x * 0.05 + 9, z * 0.05) * 0.5 + 0.5, m = this.noise.get(x * 0.2, z * 0.2 + 4) * 0.5 + 0.5;
+    if (this.def.theme === 'forest') return [lerp(0.15, 0.27, n) + m * 0.04, lerp(0.3, 0.42, n), lerp(0.06, 0.1, n)];
     return [lerp(0.2, 0.4, n) + m * 0.05, lerp(0.27, 0.36, n), lerp(0.07, 0.11, n)];
   }
 
@@ -1180,7 +1558,7 @@ export class World {
       const n1 = nz.get(x * 0.08, z * 0.08) * 0.5 + 0.5, n2 = nz.get(x * 0.03 + 50, z * 0.03) * 0.5 + 0.5;
       c.copy(cG).lerp(cG2, n1);
       let m = 1 - smoothstep(86, 112, Math.abs(z));
-      m = clamp(m * (0.6 + 0.6 * n2) + (winter ? -0.25 : 0), 0, 1);
+      m = clamp(m * (0.6 + 0.6 * n2) * (this.def.mud ?? 1) + (winter ? -0.25 : 0), 0, 1);
       c2.copy(cM).lerp(cM2, n1);
       c.lerp(c2, m * (winter ? 0.55 : 0.88));
       const dep = B[k] - H[k];
@@ -1248,6 +1626,7 @@ export class World {
         if (cr.d < 1.2 || this.rand() > this.def.puddles) continue;
         const hy = this.height(cr.x, cr.z);
         pb.add(disc, GeoBuilder.mat(cr.x, hy + Math.min(0.45, cr.d * 0.3), cr.z, 0, 0, 0, cr.r * 0.5, 1, cr.r * 0.5), T.water, 0.05);
+        this.puddles.push({ x: cr.x, z: cr.z, r: cr.r * 0.5 });
       }
       if (pb.vertexCount) {
         const wm = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.05, metalness: 0.1 });
@@ -1264,6 +1643,7 @@ export class World {
       sm.castShadow = true;
       sm.receiveShadow = true;
       this.group.add(sm);
+      this.kindMesh[kind] = sm;
     }
     this.sb = null;
   }
@@ -1272,23 +1652,33 @@ export class World {
   buildNav() {
     const nav = (this.nav = new Uint8Array(NAVN * NAVN));
     const navT = (this.navTank = new Uint8Array(NAVN * NAVN));
-    for (let j = 0; j < NAVN; j++) for (let i = 0; i < NAVN; i++) {
-      const x = -HALF + (i + 0.5) * NAVC, z = -HALF + (j + 0.5) * NAVC;
-      const k = j * NAVN + i;
-      if (Math.abs(x) > PLAY - 1 || Math.abs(z) > PLAY - 1) { nav[k] = BLOCK; navT[k] = BLOCK; continue; }
-      const gy = this.height(x, z);
-      let cost = 0, tank = 0;
-      this.forNear(x, z, 2.6, (c) => {
-        const tall = c.top - gy;
-        if (tall < 0.35 || c.y > gy + 1.9) return;
-        const d = this.distToCollider(c, x, z);
-        if (d < 0.45) cost = Math.max(cost, tall > 1.3 ? BLOCK : 6);
-        if (d < 2.3 && tall > 1.3) tank = BLOCK;
-      });
-      if (cost < BLOCK && this.inWire(x, z)) cost = Math.max(cost, 8);
-      nav[k] = cost;
-      navT[k] = tank || (this.inWire(x, z) ? 2 : 0);
-    }
+    for (let j = 0; j < NAVN; j++) for (let i = 0; i < NAVN; i++) this.navCompute(i, j);
+  }
+  navCompute(i, j) {
+    const nav = this.nav, navT = this.navTank;
+    const x = -HALF + (i + 0.5) * NAVC, z = -HALF + (j + 0.5) * NAVC;
+    const k = j * NAVN + i;
+    if (Math.abs(x) > PLAY - 1 || Math.abs(z) > PLAY - 1) { nav[k] = BLOCK; navT[k] = BLOCK; return; }
+    const gy = this.height(x, z);
+    let cost = 0, tank = 0;
+    this.forNear(x, z, 2.6, (c) => {
+      const tall = c.top - gy;
+      if (tall < 0.35 || c.y > gy + 1.9) return;
+      const d = this.distToCollider(c, x, z);
+      if (d < 0.45) cost = Math.max(cost, tall > 1.3 ? BLOCK : 6);
+      // Деревья танк валит, поэтому для него они не преграда
+      if (d < 2.3 && tall > 1.3 && !(c.tree && c.tree.type !== 'oak' && c.tree.type !== 'willow')) tank = BLOCK;
+    });
+    if (cost < BLOCK && this.inWire(x, z)) cost = Math.max(cost, 8);
+    nav[k] = cost;
+    navT[k] = tank || (this.inWire(x, z) ? 2 : 0);
+  }
+  // Пересчёт проходимости в прямоугольнике — после разрушений
+  navUpdate(x0, z0, x1, z1) {
+    if (!this.nav) return;
+    const i0 = clamp(Math.floor((x0 + HALF) / NAVC), 0, NAVN - 1), i1 = clamp(Math.floor((x1 + HALF) / NAVC), 0, NAVN - 1);
+    const j0 = clamp(Math.floor((z0 + HALF) / NAVC), 0, NAVN - 1), j1 = clamp(Math.floor((z1 + HALF) / NAVC), 0, NAVN - 1);
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) this.navCompute(i, j);
   }
   distToCollider(c, x, z) {
     if (c.kind === 1) return Math.max(0, Math.hypot(x - c.x, z - c.z) - c.r);
@@ -1471,5 +1861,19 @@ export class World {
 
   update(dt) {
     for (const m of this.windmills) m.rotation.z += dt * 0.35;
+    // Падающие деревья: наклон ускоряется, как у настоящего ствола; у земли — удар и пыль
+    for (let i = this.falling.length - 1; i >= 0; i--) {
+      const t = this.falling[i], f = t.fall;
+      f.v += dt * (0.9 + Math.sin(Math.min(f.a, 1.5)) * 4.2);
+      f.a += f.v * dt;
+      const maxA = Math.PI / 2 - 0.05;
+      const done = f.a >= maxA;
+      if (done) f.a = maxA;
+      _fq.setFromAxisAngle(_fa.set(f.dz, 0, -f.dx), f.a).multiply(t.q);
+      _fm.compose(_fp.set(t.x, t.y, t.z), _fq, t.sc);
+      t.mesh.setMatrixAt(t.i, _fm); t.mesh.instanceMatrix.needsUpdate = true;
+      if (t.crown) { t.crown.setMatrixAt(t.i, _fm); t.crown.instanceMatrix.needsUpdate = true; }
+      if (done) { this.falling.splice(i, 1); if (this.onTreeFall) this.onTreeFall(t, true); }
+    }
   }
 }

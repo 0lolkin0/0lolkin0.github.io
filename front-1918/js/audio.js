@@ -8,6 +8,10 @@ const SHOTS = {
   mg: { dur: 0.1, f: 1900, boom: 120, bd: 0.07, g: 0.5, echo: 0.25 },
   pistol: { dur: 0.12, f: 2100, boom: 135, bd: 0.08, g: 0.5, echo: 0.25 },
   aa: { dur: 0.1, f: 1700, boom: 110, bd: 0.07, g: 0.35, echo: 0.2 },
+  shotgun: { dur: 0.3, f: 1150, boom: 70, bd: 0.2, g: 1.0, echo: 0.42 },
+  rifle2: { dur: 0.16, f: 1600, boom: 105, bd: 0.1, g: 0.66, echo: 0.3 },
+  hmg: { dur: 0.13, f: 1450, boom: 92, bd: 0.1, g: 0.62, echo: 0.32 },
+  atr: { dur: 0.5, f: 1000, boom: 55, bd: 0.28, g: 1.25, echo: 0.55 },
 };
 
 export class GameAudio {
@@ -108,7 +112,7 @@ export class GameAudio {
     const lp = s.f / (1 + d / 45);
     this.noiseBurst(dest, t0, s.dur * (1 + d / 120), Math.max(220, lp), g, 'lowpass', 0.8);
     if (d < 90) this.tone(dest, t0, s.bd, s.boom, s.boom * 0.45, g * 0.9);
-    if (d > 35 || type === 'sniper' || type === 'cannon') {
+    if (d > 35 || type === 'sniper' || type === 'cannon' || type === 'atr' || type === 'shotgun') {
       this.noiseBurst(dest, t0 + 0.18 + Math.min(0.5, d / 400), s.dur * 2.2, Math.max(180, lp * 0.5), g * s.echo, 'lowpass', 0.5);
     }
   }
@@ -229,6 +233,39 @@ export class GameAudio {
     if (!this.ctx) return;
     this.tone(this.master, this.t, 0.12, 70, 45, 0.3);
     this.tone(this.master, this.t + 0.22, 0.12, 62, 40, 0.22);
+  }
+  // Грохот рухнувшей стены или треск досок
+  crash(x, y, z, heavy = false) {
+    if (!this.ctx) return;
+    const { d, pan } = this.spatial(x, y, z);
+    if (d > 160) return;
+    const att = 1 / Math.pow(1 + d / 16, 1.1), dest = this.out(pan), t0 = this.t;
+    this.noiseBurst(dest, t0, heavy ? 0.9 : 0.4, heavy ? 700 : 1500, (heavy ? 0.7 : 0.4) * att, 'lowpass', 0.7, this.brown, heavy ? 180 : 500);
+    if (heavy) this.tone(dest, t0, 0.3, 70, 38, 0.6 * att);
+    for (let i = 0; i < (heavy ? 4 : 2); i++) this.noiseBurst(dest, t0 + 0.08 + Math.random() * 0.4, 0.06, 1800 + Math.random() * 1500, 0.2 * att, 'bandpass', 2);
+  }
+  // Дерево: скрип при падении, удар и шелест веток при ударе о землю
+  treeFall(x, y, z, landed) {
+    if (!this.ctx) return;
+    const { d, pan } = this.spatial(x, y, z);
+    if (d > 140) return;
+    const att = 1 / Math.pow(1 + d / 16, 1.1), dest = this.out(pan), t0 = this.t;
+    if (!landed) {
+      for (let i = 0; i < 5; i++) this.tone(dest, t0 + i * 0.11 + Math.random() * 0.04, 0.07, 240 - i * 22 + Math.random() * 30, 150 - i * 12, 0.16 * att, 'sawtooth');
+      this.noiseBurst(dest, t0, 0.25, 2200, 0.25 * att, 'bandpass', 1.5);
+    } else {
+      this.tone(dest, t0, 0.25, 85, 42, 0.7 * att);
+      this.noiseBurst(dest, t0, 0.7, 1300, 0.4 * att, 'lowpass', 0.6, this.brown, 400);
+    }
+  }
+  // Хлопок газовой или дымовой гранаты
+  pop(x, y, z) {
+    if (!this.ctx) return;
+    const { d, pan } = this.spatial(x, y, z);
+    if (d > 120) return;
+    const att = 1 / Math.pow(1 + d / 12, 1.1), dest = this.out(pan);
+    this.tone(dest, this.t, 0.09, 190, 70, 0.45 * att);
+    this.noiseBurst(dest, this.t, 0.5, 900, 0.22 * att, 'lowpass', 0.6, this.brown);
   }
   // Гильза звякнула о землю
   casing() {

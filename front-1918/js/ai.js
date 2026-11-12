@@ -2,7 +2,7 @@
 import { clamp, lerp, angleDiff, yawTo, rand, pick, DEG, TAU } from './util.js';
 import { GRENADE } from './config.js';
 
-const PREF_RANGE = { smg: 28, semi: 60, lmg: 55, bolt: 110, revolver: 18, pistol: 18 };
+const PREF_RANGE = { smg: 28, semi: 60, lmg: 55, bolt: 110, revolver: 18, pistol: 18, shotgun: 13, auto: 45, hmg: 62, carbine: 80, atr: 110 };
 
 export class BotBrain {
   constructor(soldier, game) {
@@ -28,12 +28,13 @@ export class BotBrain {
     this.personality = Math.random();
     this.dashT = rand(2, 4.5);
     this.wanderT = 0; this.wy = 0; this.wp = 0;
-    this.wantTank = false;
+    this.wantTank = null;
   }
   onSpawn() {
     this.path = null; this.goal = null; this.target = null; this.mode = 'move';
     this.objT = 0; this.reactT = 0; this.reviveT = 0; this.heard = null;
     this.lastX = this.s.pos.x; this.lastZ = this.s.pos.z; this.stuckT = 0;
+    this.maskHold = 0; this.maskReact = rand(0.25, 0.9) * (1.6 - this.g.diff.id * 0.3);
   }
   onFired() { this.errYaw += rand(-0.3, 0.3) * DEG * this.s.weapon.recoil; this.errPitch += this.s.weapon.recoil * 0.25 * DEG; }
   onDamaged(att) {
@@ -54,11 +55,15 @@ export class BotBrain {
     const s = this.s, g = this.g;
     const inp = s.input;
     if (s.state !== 'alive') return;
-    if (s.vehicle) { this.driveTank(dt); return; }
+    if (s.vehicle) { if (s.vehicle.cfg.static) this.manGun(dt); else this.driveTank(dt); return; }
     this.thinkT -= dt;
     if (this.thinkT <= 0) { this.thinkT = 0.2 + Math.random() * 0.12; this.think(); }
     this.objT -= dt;
     this.nadeCd -= dt; this.gadgetCd -= dt;
+    // Газ: надеть противогаз (с задержкой на реакцию) и не снимать, пока облако рядом
+    if (g.combat.clouds.length && g.combat.gasAt(s.pos.x, s.pos.y + 1, s.pos.z)) { s.gasT += dt; this.maskHold = 2.5; }
+    else { this.maskHold -= dt; if (this.maskHold <= 0) s.gasT = 0; }
+    inp.mask = this.maskHold > 0 && s.gasT > this.maskReact;
 
     // Застревание
     const moved = Math.hypot(s.pos.x - this.lastX, s.pos.z - this.lastZ);
@@ -96,7 +101,8 @@ export class BotBrain {
       this.errYaw = this.wy + (this.errYaw - this.wy) * conv;
       this.errPitch = this.wp + (this.errPitch - this.wp) * conv;
       this.reactT -= dt;
-      const wid = s.weapon.id, pref = PREF_RANGE[wid];
+      const wid = s.weapon.id, pref = PREF_RANGE[wid] || 50;
+      const closeW = wid === 'smg' || wid === 'shotgun', sniperW = !!s.weapon.sniper;
       // Решения в бою: держать дистанцию, стрейф, присесть
       this.strafeT -= dt;
       if (this.strafeT <= 0) { this.strafeT = rand(0.5, 1.5); this.strafe = Math.random() < 0.35 ? 0 : (Math.random() < 0.5 ? -1 : 1); this.crouchHold = Math.random() < 0.4 ? rand(0.8, 2) : 0; }
@@ -115,22 +121,22 @@ export class BotBrain {
           this.advancing = true;
           if (this.holdT < -this.dashT) { this.holdT = undefined; this.dashT = rand(2, 4.5); }
         }
-      } else if (dist < pref * 0.4 && wid !== 'smg') {
+      } else if (dist < pref * 0.4 && !closeW) {
         moveX = -dx / dh * 0.8 + rx * this.strafe * 0.6; moveZ = -dz / dh * 0.8 + rz * this.strafe * 0.6;
-      } else if (wid === 'smg' && dist > 8 && this.personality > 0.4) {
+      } else if (closeW && dist > (wid === 'shotgun' ? 5 : 8) && (this.personality > 0.4 || wid === 'shotgun')) {
         moveX = dx / dh * 0.8 + rx * this.strafe * 0.5; moveZ = dz / dh * 0.8 + rz * this.strafe * 0.5;
       } else {
         moveX = rx * this.strafe * 0.7; moveZ = rz * this.strafe * 0.7;
       }
       sprint = false;
-      inp.crouch = !this.advancing && ((this.crouchHold > 0 && Math.hypot(moveX, moveZ) < 0.3) || (wid === 'bolt' && dist > 40));
+      inp.crouch = !this.advancing && ((this.crouchHold > 0 && Math.hypot(moveX, moveZ) < 0.3) || (sniperW && dist > 40));
       // Снайперы и часть пулемётчиков ложатся, когда стреляют издалека
-      inp.prone = !this.advancing && this.mode !== 'revive' && dist > 45 && (wid === 'bolt' || (wid === 'lmg' && this.personality < 0.4));
+      inp.prone = !this.advancing && this.mode !== 'revive' && dist > 45 && (sniperW || (s.weapon.heavy && this.personality < 0.45));
       if (inp.prone) inp.crouch = false;
       if (inp.crouch || inp.prone) { moveX *= 0.3; moveZ *= 0.3; }
       // Пусто в основном стволе — к пистолету
       if (s.slot === 0 && s.mag === 0 && (s.reserve === 0 || (dist < 12 && s.reloadT > 0.6)) && s.switchT <= 0) inp.swap = true;
-      inp.ads = dist > 18 || wid === 'bolt';
+      inp.ads = (dist > 18 || sniperW) && wid !== 'shotgun';
       // Огонь
       const aimErr = Math.abs(angleDiff(s.yaw, wantYaw - this.errYaw)) + Math.abs(s.pitch - (wantPitch - this.errPitch));
       const errMag = Math.hypot(this.errYaw, this.errPitch);
@@ -138,7 +144,7 @@ export class BotBrain {
       const steady = errMag < tol;
       const allowed = dist < pref * 2.4 && !(this.advancing && dist > 40);
       if (this.reactT <= 0 && steady && allowed && aimErr < tol + errMag + 1.5 * DEG) {
-        if (dist < 2.3) { inp.melee = true; }
+        if (dist < 2.3 && !t.kind) { inp.melee = true; }
         else if (s.weapon.auto) {
           if (this.burstPause > 0) this.burstPause -= dt;
           else {
@@ -154,12 +160,12 @@ export class BotBrain {
           if (this.burstPause > 0) this.burstPause -= dt;
           else if (s.fireCd <= 0) {
             inp.fire = true;
-            this.burstPause = wid === 'bolt' ? rand(0.5, 1.4) : rand(0.18, 0.5);
+            this.burstPause = sniperW ? rand(0.5, 1.4) : wid === 'carbine' ? rand(0.3, 0.8) : wid === 'shotgun' ? rand(0.15, 0.5) : rand(0.18, 0.5);
           }
         }
       }
       // Граната
-      if (this.nadeCd <= 0 && s.grenades > 0 && dist > 9 && dist < 26 && Math.random() < 0.02) this.throwAt(t.pos, 'frag');
+      if (this.nadeCd <= 0 && s.grenades > 0 && dist > 9 && dist < 26 && !t.kind && Math.random() < 0.02) this.throwAt(t.pos, s.nadeType || 'frag');
     } else {
       if (this.heard && g.time - this.heard.t < 3) {
         faceYaw = yawTo(this.heard.x - s.pos.x, this.heard.z - s.pos.z);
@@ -198,12 +204,12 @@ export class BotBrain {
     let best = null, bestScore = Infinity;
     const ex = s.pos.x, ey = s.eyeY, ez = s.pos.z;
     const fx = -Math.sin(s.yaw), fz = -Math.cos(s.yaw);
-    const view = s.weapon.id === 'bolt' ? diff.view * 1.5 : diff.view;
+    const view = (s.weapon.sniper ? diff.view * 1.5 : s.weapon.id === 'carbine' ? diff.view * 1.2 : diff.view) * (g.viewK ?? 1);
     const cosFov = Math.cos((diff.fov / 2) * DEG);
     let checks = 0;
     const cands = [];
     for (const o of g.soldiers) {
-      if (o.team === s.team || o.state !== 'alive' || o.vehicle) continue;
+      if (o.team === s.team || o.state !== 'alive' || o.inside) continue;
       const dx = o.pos.x - ex, dz = o.pos.z - ez;
       const d = Math.hypot(dx, dz);
       if (d > view) continue;
@@ -219,11 +225,20 @@ export class BotBrain {
       if (o.crouchT > 0.5 && d > 40) sc *= 1.4;
       cands.push([sc, o]);
     }
+    // С противотанковым ружьём — в первую очередь по вражеской технике
+    if (s.weapon.vehicleDmg && s.slot === 0) {
+      for (const v of g.tanks) {
+        if (!v.alive || v.team === s.team || !v.driver) continue;
+        const d = Math.hypot(v.pos.x - ex, v.pos.z - ez);
+        if (d < view * 1.2 && d > 6) cands.push([d * 0.35, v]);
+      }
+    }
     cands.sort((a, b) => a[0] - b[0]);
+    const smoke = g.combat.clouds.length > 0;
     for (const [sc, o] of cands) {
       if (checks++ > 3) break;
       const ty = o.aimY + 0.1;
-      if (w.los(ex, ey, ez, o.pos.x, ty, o.pos.z)) { best = o; bestScore = sc; break; }
+      if (w.los(ex, ey, ez, o.pos.x, ty, o.pos.z) && !(smoke && g.combat.smokeBlocks(ex, ey, ez, o.pos.x, ty, o.pos.z))) { best = o; bestScore = sc; break; }
     }
     if (best && best !== this.target) {
       const d = Math.hypot(best.pos.x - ex, best.pos.z - ez);
@@ -265,11 +280,12 @@ export class BotBrain {
     }
     if (this.mode === 'revive' || this.mode === 'revive-near') { this.mode = 'move'; this.objT = 0; this.reviveT = 0; }
 
-    // Танк
-    const tank = g.tanks[s.team];
-    if (this.wantTank && tank && tank.alive && !tank.driver && !best) {
+    // Назначенная машина: дойти и сесть
+    const tank = this.wantTank;
+    if (tank && (!tank.alive || tank.driver)) this.wantTank = null;
+    else if (tank && !best) {
       const d = Math.hypot(tank.pos.x - ex, tank.pos.z - ez);
-      if (d < 4.5) { tank.enter(s); this.path = null; return; }
+      if (d < tank.cfg.radius + 2.2) { tank.enter(s); this.path = null; return; }
       if (this.goalRef !== tank) this.setGoal(tank.pos.x, tank.pos.z, tank);
       return;
     }
@@ -352,8 +368,8 @@ export class BotBrain {
     let ang = 0.5 * Math.asin(clamp(k, -1, 1)) + Math.atan2(dy, d) * 0.5;
     s.yaw = yawTo(dx, dz) + rand(-0.06, 0.06);
     s.pitch = ang - 10 * DEG;
-    if (type === 'frag') { s.input.grenade = true; this.nadeCd = rand(10, 20); }
-    else s.input.gadget = true;
+    if (type === 'at') s.input.gadget = true;
+    else { s.input.grenade = true; this.nadeCd = rand(10, 20); }
   }
   useGadgets() {
     const s = this.s, g = this.g;
@@ -362,7 +378,7 @@ export class BotBrain {
     if (id === 'at') {
       // ПТ-граната по вражескому танку
       for (const v of g.tanks) {
-        if (!v || !v.alive || v.team === s.team) continue;
+        if (!v || !v.alive || v.team === s.team || v.team < 0) continue;
         const d = Math.hypot(v.pos.x - s.pos.x, v.pos.z - s.pos.z);
         if (d < 22 && d > 5 && g.world.los(s.pos.x, s.eyeY, s.pos.z, v.pos.x, v.pos.y + 1.4, v.pos.z)) {
           this.throwAt({ x: v.pos.x, y: v.pos.y + 1, z: v.pos.z }, 'at');
@@ -395,9 +411,11 @@ export class BotBrain {
     if (this.thinkT <= 0) {
       this.thinkT = 0.35;
       // Ищем цели
-      let best = null, bd = 110;
+      let best = null, bd = 110 * (g.viewK ?? 1);
       for (const o of g.soldiers) {
         if (o.team === s.team || o.state !== 'alive') continue;
+        // Броневик с одним пулемётом не лезет на бронетехнику
+        if (o.inside && !tank.cfg.shell) continue;
         const tp = o.vehicle ? o.vehicle.pos : o.pos;
         const d = Math.hypot(tp.x - tank.pos.x, tp.z - tank.pos.z);
         if (d > bd) continue;
@@ -458,8 +476,8 @@ export class BotBrain {
       this.errYaw *= Math.exp(-dt / 1.2);
       const err = Math.abs(angleDiff(tank.turretYaw, ti.aimYaw));
       if (err < 0.06) {
-        ti.fire = tank.reload <= 0 && (t.vehicle || dh > 12);
-        ti.mg = dh < 70 && !t.vehicle;
+        ti.fire = !!tank.cfg.shell && tank.reload <= 0 && (t.vehicle || dh > 12);
+        ti.mg = dh < (tank.cfg.shell ? 70 : 95) && !t.inside;
       }
     } else {
       ti.aimYaw = tank.yaw;
@@ -467,6 +485,62 @@ export class BotBrain {
       this.errYaw = rand(-0.08, 0.08);
     }
     // Вылезти, если танк едва жив
-    if (tank.hp < 150 && Math.random() < dt * 0.3) { tank.exit(); this.wantTank = false; this.path = null; this.goal = null; }
+    if (tank.hp < 150 && Math.random() < dt * 0.3) { tank.exit(); this.wantTank = null; this.path = null; this.goal = null; }
+  }
+
+  // ---------- Расчёт стационарного орудия ----------
+  manGun(dt) {
+    const s = this.s, g = this.g, gun = s.vehicle, w = g.world, ti = gun.input, cfg = gun.cfg;
+    this.thinkT -= dt;
+    if (this.thinkT <= 0) {
+      this.thinkT = 0.3;
+      const range = (cfg.shell ? 150 : 115) * (g.viewK ?? 1);
+      const ox = gun.pos.x, oy = gun.pos.y + 1.3, oz = gun.pos.z;
+      let best = null, bs = Infinity, close = false;
+      for (const o of g.soldiers) {
+        if (o.team === s.team || o.state !== 'alive') continue;
+        const armor = o.inside;
+        if (armor && !cfg.shell) continue;
+        const tp = o.vehicle ? o.vehicle.pos : o.pos;
+        const d = Math.hypot(tp.x - ox, tp.z - oz);
+        if (!o.vehicle && d < 7) close = true;
+        if (d > range) continue;
+        // Пушка — прежде всего по технике
+        const sc = d * (armor ? 0.4 : 1) * (o === this.target ? 0.7 : 1);
+        if (sc >= bs || !w.los(ox, oy, oz, tp.x, tp.y + (o.vehicle ? 1.4 : 1), tp.z)) continue;
+        bs = sc; best = o;
+      }
+      if (best !== this.target) { this.errYaw = rand(-0.09, 0.09); this.reactT = rand(0.35, 0.8); }
+      this.target = best;
+      this.idleT = best ? 0 : (this.idleT || 0) + 0.3;
+      // Враг вплотную, ранен или стрелять давно не в кого — бросаем орудие и воюем пешком
+      if (close || s.hp < 35 || this.idleT > 18) {
+        gun.exit();
+        this.wantTank = null; this.path = null; this.goal = null; this.idleT = 0; this.objT = 0; this.target = null;
+        return;
+      }
+    }
+    ti.throttle = 0; ti.steer = 0; ti.fire = false; ti.mg = false;
+    this.reactT -= dt;
+    const t = this.target;
+    if (!t || t.state !== 'alive') return;
+    // По технике и по чужому орудию пушка бьёт в корпус, по пехоте и расчёту пулемёт — в бойца
+    const hull = t.inside || (t.vehicle && cfg.shell);
+    const tp = hull ? t.vehicle.pos : t.pos;
+    const m = gun.muzzle(this._mz || (this._mz = gun.pos.clone()));
+    const dx = tp.x - m.x, dz = tp.z - m.z, dh = Math.hypot(dx, dz);
+    const drop = cfg.shell ? 0.5 * 9.8 * (dh / 150) ** 2 : 0;
+    ti.aimYaw = yawTo(dx, dz) + this.errYaw;
+    // Снаряд по пехоте кладём под ноги — достанет осколками
+    ti.aimPitch = Math.atan2((hull ? tp.y + 1.1 : cfg.shell ? t.pos.y + 0.2 : t.aimY) - m.y + drop, dh);
+    this.errYaw *= Math.exp(-dt / 1.2);
+    if (this.reactT > 0 || Math.abs(angleDiff(gun.turretYaw, ti.aimYaw)) > 0.06) return;
+    if (cfg.shell) ti.fire = gun.reload <= 0 && (hull || dh > 14);
+    else {
+      // Пулемёт бьёт очередями
+      this.burstT = (this.burstT ?? rand(0.6, 1.4)) - dt;
+      if (this.burstT > 0) ti.fire = true;
+      else if (this.burstT < -rand(0.35, 0.8)) this.burstT = rand(0.6, 1.5);
+    }
   }
 }

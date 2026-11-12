@@ -42,6 +42,13 @@ canvas#overlay { position: fixed; inset: 0; width: 100%; height: 100%; pointer-e
 #mood { background: radial-gradient(ellipse at center, transparent 55%, rgba(20, 14, 8, 0.45) 100%); }
 #vignette { background: radial-gradient(ellipse at center, transparent 40%, rgba(150, 10, 0, 0.75) 100%); opacity: 0; transition: opacity .3s; }
 #suppress { background: radial-gradient(ellipse at center, transparent 30%, rgba(0, 0, 0, 0.85) 100%); opacity: 0; }
+/* Противогаз: тёмные края «очков» и зеленоватое стекло; газ без маски — жёлтая пелена */
+#maskOv { background: radial-gradient(ellipse 60% 68% at 50% 50%, rgba(70, 90, 50, 0.07) 0%, rgba(40, 50, 30, 0.16) 52%, rgba(10, 12, 8, 0.94) 78%); opacity: 0; transition: opacity .12s; }
+#gasOv { background: radial-gradient(ellipse at center, rgba(170, 180, 60, 0.16) 0%, rgba(120, 130, 30, 0.5) 100%); opacity: 0; transition: opacity .4s; }
+#gasWarn { position: absolute; left: 50%; top: 24%; transform: translateX(-50%); padding: 6px 14px; border-radius: 8px; background: rgba(60, 64, 12, .85); border: 1px solid #c9c04a; color: #f1eda0; font: 600 16px var(--display); text-transform: uppercase; letter-spacing: .04em; animation: gasBlink .7s infinite alternate; }
+#gasWarn kbd { background: #c9c04a; color: #1c1c08; border-radius: 4px; padding: 0 6px; font: inherit; }
+body.touch #gasWarn kbd { display: none; }
+@keyframes gasBlink { from { opacity: 1; } to { opacity: .55; } }
 #dmgFlash { background: rgba(170, 20, 10, 0.45); opacity: 0; transition: opacity .25s; }
 #whiteFlash { background: #fff8e8; opacity: 0; }
 canvas#scopeCv { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
@@ -146,6 +153,8 @@ body.left-fire .cbtn.fire2 { display: grid; }
 .cbtn.gadget { width: 50px; height: 50px; right: calc(var(--R) + 66px); bottom: 236px; }
 .cbtn.spot { width: 46px; height: 46px; right: calc(var(--R) + 200px); bottom: 174px; }
 body.in-tank .cbtn.spot { right: calc(var(--R) + 210px); bottom: 190px; }
+.cbtn.mask { width: 46px; height: 46px; right: calc(var(--R) + 256px); bottom: 174px; }
+body.in-tank .cbtn.mask { display: none; }
 .cbtn.mg, .cbtn.exit { display: none; }
 body.in-tank .cbtn.mg { display: grid; width: 66px; height: 66px; right: calc(var(--R) + 120px); bottom: 104px; }
 body.in-tank .cbtn.ads { right: calc(var(--R) + 132px); bottom: 190px; }
@@ -194,8 +203,8 @@ body.touch #moveHint { display: block; }
 #dMode { color: var(--muted); font-size: 13px; }
 #classCol { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
 #classList { display: flex; flex-direction: column; gap: 6px; overflow: auto; min-height: 0; flex: 1; }
-#sightList { align-items: center; }
-#sightList span { font: 500 11px var(--display); color: var(--muted); text-transform: uppercase; margin-right: 4px; }
+.loadRow { align-items: center; }
+.loadRow span { font: 500 11px var(--display); color: var(--muted); text-transform: uppercase; margin-right: 4px; min-width: 52px; }
 .classBtn { text-align: left; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; color: var(--paper); cursor: pointer; }
 .classBtn b { display: block; font: 600 16px var(--display); text-transform: uppercase; }
 .classBtn span { display: block; font-size: 12px; color: var(--brass); }
@@ -298,6 +307,8 @@ body.ready #loading { display: none; }
 <div class="fx" id="mood"></div>
 <div class="fx" id="vignette"></div>
 <div class="fx" id="suppress"></div>
+<div class="fx" id="gasOv"></div>
+<div class="fx" id="maskOv"></div>
 <div class="fx" id="dmgFlash"></div>
 <div class="fx" id="whiteFlash"></div>
 <canvas id="scopeCv" hidden></canvas>
@@ -317,8 +328,8 @@ body.ready #loading { display: none; }
   <div id="scorepops"></div>
   <canvas id="minimap" class="noinput"></canvas>
   <div id="mapHint">карта</div>
-  <div id="pcKeys" class="pckeys" hidden><kbd>WASD</kbd> ход · <kbd>Shift</kbd> бег · <kbd>ПКМ</kbd> прицел · <kbd>C</kbd> присесть · <kbd>Alt</kbd> лечь · <kbd>Q</kbd> пометить врага · <kbd>E</kbd> сесть в танк · <kbd>1</kbd>/<kbd>2</kbd> оружие · <kbd>M</kbd> карта · <kbd>H</kbd> ещё<span class="more"><br><kbd>R</kbd> перезарядка · <kbd>Пробел</kbd> прыжок · <kbd>G</kbd> граната · <kbd>F</kbd> снаряжение · <kbd>V</kbd> штык · <kbd>E</kbd> действие · <kbd>Tab</kbd> счёт · <kbd>Shift</kbd> в оптике — задержать дыхание</span></div>
-  <div id="pcKeysTank" class="pckeys" hidden><b>Вы в танке.</b> <kbd>W</kbd>/<kbd>S</kbd> газ и задний ход · <kbd>A</kbd>/<kbd>D</kbd> поворот · мышь — башня · <kbd>ЛКМ</kbd> орудие · <kbd>Пробел</kbd>/<kbd>F</kbd> пулемёт · <kbd>ПКМ</kbd> прицел наводчика · <kbd>Q</kbd> пометить · <kbd>E</kbd> или <kbd>X</kbd> — выйти</div>
+  <div id="pcKeys" class="pckeys" hidden><kbd>WASD</kbd> ход · <kbd>Shift</kbd> бег · <kbd>ПКМ</kbd> прицел · <kbd>C</kbd> присесть · <kbd>Alt</kbd> лечь · <kbd>Q</kbd> пометить врага · <kbd>T</kbd> противогаз · <kbd>E</kbd> сесть в технику · <kbd>1</kbd>/<kbd>2</kbd> оружие · <kbd>M</kbd> карта · <kbd>H</kbd> ещё<span class="more"><br><kbd>R</kbd> перезарядка · <kbd>Пробел</kbd> прыжок · <kbd>G</kbd> граната · <kbd>F</kbd> снаряжение · <kbd>V</kbd> штык · <kbd>E</kbd> действие · <kbd>Tab</kbd> счёт · <kbd>Shift</kbd> в оптике — задержать дыхание</span></div>
+  <div id="pcKeysTank" class="pckeys" hidden><b>Вы в технике.</b> <kbd>W</kbd>/<kbd>S</kbd> газ и задний ход · <kbd>A</kbd>/<kbd>D</kbd> поворот · мышь — башня · <kbd>ЛКМ</kbd> орудие · <kbd>Пробел</kbd>/<kbd>F</kbd> пулемёт · <kbd>ПКМ</kbd> прицел наводчика · <kbd>Q</kbd> пометить · <kbd>E</kbd> или <kbd>X</kbd> — выйти</div>
   <div id="killfeed"></div>
   <div id="status">
     <div id="hpBox"><div class="lab"><span>Здоровье</span><span id="hpNum">100</span></div><div class="bar"><div id="hpFill"></div></div></div>
@@ -334,6 +345,7 @@ body.ready #loading { display: none; }
     <p class="pconly">или клавиша <b>Пробел</b> / <b>Enter</b></p>
   </div>
   <button id="btnInteract" data-btn="interact" hidden></button>
+  <div id="gasWarn" hidden>Газ! Наденьте противогаз <kbd>T</kbd></div>
   <div id="controls">
     <div id="moveHint">← двигаться →</div>
     <div id="joy" hidden><div class="base"></div><div id="knob"></div><div id="sprintHint">бег ↑</div></div>
@@ -351,6 +363,7 @@ body.ready #loading { display: none; }
     <div class="cbtn mg" data-btn="mg"><span></span><em>пулемёт</em></div>
     <div class="cbtn exit" data-btn="exit"><span></span><em>выйти</em></div>
     <div class="cbtn spot" data-btn="spot"><span></span><em>пометить</em></div>
+    <div class="cbtn mask" data-btn="mask"><span></span><em>противогаз</em></div>
   </div>
   <button id="btnPause" class="noinput">II</button>
 </div>
@@ -389,7 +402,7 @@ body.ready #loading { display: none; }
     <div class="t"><b id="dTk0">0</b> <span id="dTeam0"></span> &nbsp;·&nbsp; <b class="r" id="dTk1">0</b> <span id="dTeam1"></span></div>
     <div id="dMode"></div>
   </header>
-  <div id="classCol"><div id="classList"></div><div id="sightList" class="seg"></div></div>
+  <div id="classCol"><div id="classList"></div><div id="weaponList" class="seg loadRow"></div><div id="sightList" class="seg loadRow"></div><div id="nadeList" class="seg loadRow"></div></div>
   <div id="mapWrap"><canvas id="deployMap"></canvas></div>
   <footer>
     <button class="btn" id="btnDeployMenu">Меню</button>
@@ -433,6 +446,8 @@ body.ready #loading { display: none; }
       <li>«Пистолет» — переключение на личное оружие и обратно. Если в основном стволе кончились патроны, переключение произойдёт само.</li>
       <li>Нажмите на миникарту, чтобы открыть большую карту.</li>
       <li>Кнопка «пометить» отмечает врага в перекрестии для всей вашей стороны.</li>
+      <li>Кнопка «противогаз» надевает и снимает маску: в ней газ не страшен, но целиться через прицел нельзя.</li>
+      <li>Полевая пушка и станковый пулемёт у флагов: подойдите и нажмите «К орудию» / «К пулемёту».</li>
       <li>Танк: подойдите к своему танку и нажмите «Сесть в танк» или выберите «Танк» на экране высадки. В танке: «огонь» — орудие, «пулемёт», «оптика» — прицел наводчика с приближением ×3.5.</li>
     </ul>
     <h3>Компьютер</h3>
@@ -442,17 +457,31 @@ body.ready #loading { display: none; }
       <li><kbd>C</kbd> присесть, <kbd>Alt</kbd> лечь, <kbd>Пробел</kbd> прыжок / встать, <kbd>1</kbd> <kbd>2</kbd> или колесо мыши — смена оружия.</li>
       <li><kbd>R</kbd> перезарядка, <kbd>G</kbd> граната, <kbd>F</kbd> снаряжение, <kbd>V</kbd> штык, <kbd>E</kbd> действие (сесть в танк, поднять раненого), <kbd>M</kbd> карта, <kbd>Tab</kbd> счёт.</li>
       <li><kbd>Q</kbd> — пометить врага в перекрестии: на 7 секунд над ним загорится красный маркер, и он появится на карте у всей вашей стороны.</li>
+      <li><kbd>T</kbd> — надеть или снять противогаз. В маске газ не страшен, но целиться через прицел нельзя.</li>
+      <li>Орудия у флагов: подойдите к полевой пушке или станковому пулемёту и нажмите <kbd>E</kbd>. ЛКМ — огонь, ПКМ — приближение, <kbd>E</kbd> — отойти.</li>
       <li>Танк: подойдите к своему танку и нажмите <kbd>E</kbd> или выберите «Танк» на экране высадки. Если в танке бот, он уступит вам место. Внутри: ЛКМ — орудие, ПКМ — прицел наводчика, <kbd>Пробел</kbd> или <kbd>F</kbd> — пулемёт, <kbd>E</kbd> или <kbd>X</kbd> — выйти.</li>
     </ul>
     <h3>Прицелы</h3>
     <p>На экране высадки под классами выбирается прицел основного оружия: открытый (целик и мушка) или оптика ×2–×10. У разведчика — снайперская оптика ×6 или ×10.</p>
-    <h3>Классы</h3>
+    <h3>Классы и оружие</h3>
+    <p>На экране высадки под классами выбираются основное оружие, прицел и тип гранат.</p>
     <ul>
-      <li><b>Штурмовик</b> — пистолет-пулемёт и противотанковые гранаты.</li>
-      <li><b>Медик</b> — поднимает раненых (подойдите и нажмите «Поднять») и ставит аптечки.</li>
-      <li><b>Поддержка</b> — ручной пулемёт и ящики с патронами.</li>
-      <li><b>Разведчик</b> — снайперская винтовка (на 45–85 м убивает с одного попадания) и ракеты, подсвечивающие врагов.</li>
+      <li><b>Штурмовик</b> — пистолет-пулемёт или дробовик (вблизи убивает одним выстрелом) и противотанковые гранаты.</li>
+      <li><b>Медик</b> — самозарядная или автоматическая винтовка; поднимает раненых (подойдите и нажмите «Поднять») и ставит аптечки.</li>
+      <li><b>Поддержка</b> — ручной или тяжёлый пулемёт (точнее всего лёжа) и ящики с патронами.</li>
+      <li><b>Разведчик</b> — снайперская винтовка (на 45–85 м убивает с одного попадания), скорострельный карабин или противотанковое ружьё; ракеты подсвечивают врагов.</li>
     </ul>
+    <h3>Гранаты и газ</h3>
+    <p>Осколочная граната — урон по площади. Газовая — облако на 16 секунд: травит всех без противогаза, включая вас. Дымовая — завеса, сквозь которую боты не видят. Заметив газ, боты надевают маски.</p>
+    <h3>Техника и орудия</h3>
+    <ul>
+      <li><b>Лёгкий танк</b> — пушка и пулемёт; есть у каждой стороны с начала боя.</li>
+      <li><b>Броневик</b> — быстрый, с пулемётом в башне; пули и ПТ-ружьё его пробивают. Появляется в больших боях.</li>
+      <li><b>Тяжёлый танк</b> — медленный и очень крепкий; подходит к середине большого боя.</li>
+      <li><b>Полевая пушка и станковый пулемёт</b> стоят у флагов и не принадлежат никому, пока к ним не встанет боец. Спереди стрелка прикрывает щит или мешки, с флангов он открыт.</li>
+    </ul>
+    <h3>Поле боя</h3>
+    <p>Снаряды и гранаты пробивают стены, разносят мешки с песком, заборы и ящики, валят деревья и оставляют воронки, в которых можно укрыться. Танк ломает заборы и молодые деревья. Погода меняется по ходу боя: когда опускается туман или начинается ливень, видно хуже — и вам, и врагу.</p>
     <div style="text-align:right;margin-top:12px"><button class="btn" id="btnHelpClose">Понятно</button></div>
   </div>
 </section>

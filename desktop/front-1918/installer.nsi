@@ -8,7 +8,7 @@ SetCompressorDictSize 64
 
 !define APPNAME "Фронт 1918"
 !define APPID "Front1918"
-!define VERSION "1.4.0"
+!define VERSION "1.5.0"
 !define EXE "Front1918.exe"
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPID}"
 !define GPU_KEY "Software\Microsoft\DirectX\UserGpuPreferences"
